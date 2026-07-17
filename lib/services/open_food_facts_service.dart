@@ -1,0 +1,77 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../models/models.dart';
+import 'package:uuid/uuid.dart';
+
+class OpenFoodFactsService {
+  static const _baseUrl = 'https://world.openfoodfacts.org';
+  static const _uuid = Uuid();
+
+  /// Recherche d'articles par nom (en français)
+  Future<List<Article>> searchByName(String query) async {
+    try {
+      final uri = Uri.parse(
+        '$_baseUrl/cgi/search.pl'
+        '?search_terms=${Uri.encodeComponent(query)}'
+        '&search_simple=1&action=process&json=1&lc=fr&cc=fr&page_size=20',
+      );
+      final response = await http.get(uri);
+      if (response.statusCode != 200) return [];
+
+      final data = jsonDecode(response.body);
+      final products = data['products'] as List? ?? [];
+
+      return products
+          .where((p) => p['product_name_fr'] != null && (p['product_name_fr'] as String).isNotEmpty)
+          .map((p) => Article(
+                id: _uuid.v4(),
+                nom: p['product_name_fr'] ?? p['product_name'] ?? 'Inconnu',
+                barcode: p['code'],
+                marque: p['brands'],
+                imageUrl: p['image_front_small_url'],
+                // Tentative de mapping catégorie OFF → catégorie locale
+                categorieId: _mapCategorie(p['pnns_groups_1']),
+              ))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Recherche par code-barres
+  Future<Article?> searchByBarcode(String barcode) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/api/v0/product/$barcode.json');
+      final response = await http.get(uri);
+      if (response.statusCode != 200) return null;
+
+      final data = jsonDecode(response.body);
+      if (data['status'] != 1) return null;
+
+      final p = data['product'];
+      return Article(
+        id: _uuid.v4(),
+        nom: p['product_name_fr'] ?? p['product_name'] ?? barcode,
+        barcode: barcode,
+        marque: p['brands'],
+        imageUrl: p['image_front_small_url'],
+        categorieId: _mapCategorie(p['pnns_groups_1']),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Mapping approximatif des groupes Open Food Facts → catégories maison
+  String? _mapCategorie(String? pnns) {
+    if (pnns == null) return null;
+    final p = pnns.toLowerCase();
+    if (p.contains('dairy') || p.contains('lait') || p.contains('fromage')) return 'cat_frigo';
+    if (p.contains('surgelé') || p.contains('frozen')) return 'cat_congelateur';
+    if (p.contains('viande') || p.contains('poisson') || p.contains('fruits de mer')) return 'cat_frigo';
+    if (p.contains('boisson') || p.contains('beverage')) return 'cat_placards';
+    if (p.contains('hygiene') || p.contains('beauté')) return 'cat_hygiene';
+    if (p.contains('entretien') || p.contains('cleaning')) return 'cat_menage';
+    return 'cat_placards';
+  }
+}

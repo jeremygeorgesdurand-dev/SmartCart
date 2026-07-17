@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1055355766670",
+    "project_id": "smartcart-9f249",
+    "storage_bucket": "smartcart-9f249.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1055355766670:android:18038c40eb0e4e5072c6df",
+        "android_client_info": {
+          "package_name": "com.tonnom.smartcart"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1055355766670-un10fkem4g6bidt09mqtvmtc3fhr6h19.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tonnom.smartcart",
+            "certificate_hash": "5f7e2674f8c2fe1d5c8427888e1823249c90fc8c"
+          }
+        },
+        {
+          "client_id": "1055355766670-lacnmedh25mlkuhbsq3f34cqcfc8ed65.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDYFglkVpae171U9vFII8QZbbW6lO3Q2m8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1055355766670-lacnmedh25mlkuhbsq3f34cqcfc8ed65.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
