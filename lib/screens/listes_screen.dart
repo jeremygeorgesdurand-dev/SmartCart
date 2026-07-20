@@ -4,13 +4,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
-import '../widgets/article_tile.dart';
 import '../widgets/animated_list_item.dart';
 import '../widgets/import_liste_dialog.dart';
 import '../widgets/vocal_button.dart';
+import 'recherche_globale_screen.dart';
+import 'recettes_screen.dart';
 
 // Provider local pour le tri des listes
 final _listeSortProvider = StateProvider<String>((_) => 'date');
+
+// Message d'erreur affiché à l'utilisateur pour les actions qui échouent
+// réellement (réseau requis, pas de secours local) : rejoindre, partager,
+// quitter ou gérer une collaboration.
+void _afficherErreur(BuildContext context, Object e) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Une erreur est survenue : $e')),
+  );
+}
 
 // ================================================================
 // ÉCRAN MES LISTES
@@ -27,7 +37,31 @@ class ListesScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Mes listes'),
         actions: [
-          // Importer une liste partagée
+          // Recherche globale (catalogue + listes)
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Rechercher',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const RechercheGlobaleScreen()),
+            ),
+          ),
+          // Recettes → génération de liste de courses
+          IconButton(
+            icon: const Icon(Icons.menu_book_outlined),
+            tooltip: 'Recettes',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const RecettesScreen()),
+            ),
+          ),
+          // Rejoindre une liste collaborative via un code
+          IconButton(
+            icon: const Icon(Icons.group_add),
+            tooltip: 'Rejoindre une liste',
+            onPressed: () => _rejoindreListe(context, ref),
+          ),
+          // Importer une liste partagée (texte)
           IconButton(
             icon: const Icon(Icons.upload_file),
             tooltip: 'Importer une liste',
@@ -97,43 +131,134 @@ class ListesScreen extends ConsumerWidget {
     );
   }
 
-  void _creerListe(BuildContext context, WidgetRef ref) {
+  void _rejoindreListe(BuildContext context, WidgetRef ref) {
     final ctrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Nouvelle liste'),
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Rejoindre une liste'),
         content: TextField(
           controller: ctrl,
           decoration: const InputDecoration(
-            hintText: 'Nom de la liste…',
+            hintText: 'Code à 6 caractères…',
           ),
           autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
+          textCapitalization: TextCapitalization.characters,
+          maxLength: 6,
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Annuler')),
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Annuler'),
+          ),
           FilledButton(
-            onPressed: () {
-              if (ctrl.text.trim().isNotEmpty) {
-                ref.read(listesNotifierProvider.notifier).ajouter(
-                      ListeCourses(
-                        id: 'liste_${const Uuid().v4()}',
-                        nom: ctrl.text.trim(),
-                      ),
-                    );
-                Navigator.pop(context);
+            onPressed: () async {
+              final code = ctrl.text.trim();
+              if (code.isEmpty) return;
+              bool ok;
+              try {
+                ok = await ref
+                    .read(listesNotifierProvider.notifier)
+                    .rejoindre(code);
+              } catch (e) {
+                if (context.mounted) _afficherErreur(context, e);
+                return;
               }
+              if (!context.mounted) return;
+              Navigator.pop(dialogCtx);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(ok
+                    ? 'Liste rejointe !'
+                    : 'Code invalide ou liste introuvable'),
+                backgroundColor: ok ? Colors.green : null,
+              ));
             },
-            child: const Text('Créer'),
+            child: const Text('Rejoindre'),
           ),
         ],
       ),
     );
   }
+
+  void _creerListe(BuildContext context, WidgetRef ref) {
+    final ctrl = TextEditingController();
+    int couleurChoisie = couleursListe[0];
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (dialogCtx, setState) => AlertDialog(
+          scrollable: true,
+          title: const Text('Nouvelle liste'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: ctrl,
+                decoration: const InputDecoration(
+                  hintText: 'Nom de la liste…',
+                ),
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                maxLength: 60,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: couleursListe.map((c) {
+                  final selectionnee = c == couleurChoisie;
+                  return GestureDetector(
+                    onTap: () => setState(() => couleurChoisie = c),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Color(c),
+                        shape: BoxShape.circle,
+                        border: selectionnee
+                            ? Border.all(
+                                color: Theme.of(dialogCtx).colorScheme.onSurface,
+                                width: 2)
+                            : null,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Annuler')),
+            FilledButton(
+              onPressed: () {
+                if (ctrl.text.trim().isNotEmpty) {
+                  ref.read(listesNotifierProvider.notifier).ajouter(
+                        ListeCourses(
+                          id: 'liste_${const Uuid().v4()}',
+                          nom: ctrl.text.trim(),
+                          couleur: couleurChoisie,
+                        ),
+                      );
+                  Navigator.pop(dialogCtx);
+                }
+              },
+              child: const Text('Créer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+
+// Palette de couleurs proposée à la création d'une liste.
+const couleursListe = [
+  0xFF1ABC9C, 0xFF1565C0, 0xFFE53935, 0xFFFF8F00,
+  0xFF8E24AA, 0xFF00838F, 0xFF546E7A, 0xFFD81B60,
+];
 
 // ================================================================
 // CARTE D'UNE LISTE
@@ -173,12 +298,12 @@ class _ListeCard extends ConsumerWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
+                  color: Color(liste.couleur).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   Icons.shopping_cart,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: Color(liste.couleur),
                 ),
               ),
               const SizedBox(width: 16),
@@ -188,8 +313,21 @@ class _ListeCard extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(liste.nom,
-                        style: Theme.of(context).textTheme.titleMedium),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(liste.nom,
+                              style: Theme.of(context).textTheme.titleMedium,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        if (liste.partagee) ...[
+                          const SizedBox(width: 6),
+                          Icon(Icons.people,
+                              size: 16,
+                              color: Theme.of(context).colorScheme.primary),
+                        ],
+                      ],
+                    ),
                     if (liste.magasin != null) ...[
                       const SizedBox(height: 2),
                       Text(liste.magasin!,
@@ -215,17 +353,47 @@ class _ListeCard extends ConsumerWidget {
                 ),
               ),
 
+              // Total estimé (si des prix sont renseignés)
+              Builder(builder: (context) {
+                final total = ref.watch(totalListeProvider(liste.id));
+                if (total <= 0) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Text(
+                    '${total.toStringAsFixed(2)} €',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                  ),
+                );
+              }),
+
               // Menu contextuel
               PopupMenuButton(
                 onSelected: (action) => _onAction(context, ref, action),
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'courses', child: Text('Mode courses')),
-                  const PopupMenuItem(value: 'partager', child: Text('Partager')),
+                  const PopupMenuItem(value: 'partager', child: Text('Partager (texte)')),
+                  PopupMenuItem(
+                    value: 'collaborer',
+                    child: Text(liste.partagee
+                        ? 'Gérer la collaboration'
+                        : 'Rendre collaborative'),
+                  ),
                   const PopupMenuItem(value: 'importer', child: Text('Importer une liste')),
                   const PopupMenuItem(value: 'dupliquer', child: Text('Dupliquer')),
                   const PopupMenuItem(value: 'renommer', child: Text('Renommer')),
-                  const PopupMenuItem(value: 'vider', child: Text('Vider la liste')),
-                  const PopupMenuItem(value: 'supprimer', child: Text('Supprimer')),
+                  PopupMenuItem(
+                    value: 'vider',
+                    child: Text('Vider la liste',
+                        style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  ),
+                  PopupMenuItem(
+                    value: 'supprimer',
+                    child: Text('Supprimer',
+                        style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  ),
                 ],
               ),
             ],
@@ -244,6 +412,8 @@ class _ListeCard extends ConsumerWidget {
         );
       case 'partager':
         _partagerListe(context, ref);
+      case 'collaborer':
+        _gererCollaboration(context, ref);
       case 'importer':
         showDialog(
           context: context,
@@ -272,7 +442,27 @@ class _ListeCard extends ConsumerWidget {
                         .read(articlesListeProvider(liste.id).notifier)
                         .supprimer(item.id);
                   }
-                  if (context.mounted) Navigator.pop(context);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                            '${items.length} article(s) supprimé(s) de "${liste.nom}"'),
+                        action: SnackBarAction(
+                          label: 'Annuler',
+                          onPressed: () {
+                            for (final item in items) {
+                              ref
+                                  .read(articlesListeProvider(liste.id)
+                                      .notifier)
+                                  .ajouter(item);
+                            }
+                          },
+                        ),
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                  }
                 },
                 child: const Text('Vider'),
               ),
@@ -285,7 +475,7 @@ class _ListeCard extends ConsumerWidget {
           context: context,
           builder: (_) => AlertDialog(
             title: const Text('Dupliquer la liste'),
-            content: TextField(controller: ctrl),
+            content: TextField(controller: ctrl, maxLength: 60),
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(context),
@@ -308,7 +498,7 @@ class _ListeCard extends ConsumerWidget {
           context: context,
           builder: (_) => AlertDialog(
             title: const Text('Renommer'),
-            content: TextField(controller: ctrl),
+            content: TextField(controller: ctrl, maxLength: 60),
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(context),
@@ -338,9 +528,37 @@ class _ListeCard extends ConsumerWidget {
               FilledButton(
                 style: FilledButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.error),
-                onPressed: () {
+                onPressed: () async {
+                  // Les articles_liste sont supprimés en cascade (ON DELETE
+                  // CASCADE) avec la liste : on les capture avant pour
+                  // pouvoir les restaurer si l'utilisateur annule.
+                  final items = await ref
+                      .read(dbServiceProvider)
+                      .getArticlesListe(liste.id);
                   ref.read(listesNotifierProvider.notifier).supprimer(liste.id);
-                  Navigator.pop(context);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Liste "${liste.nom}" supprimée'),
+                        action: SnackBarAction(
+                          label: 'Annuler',
+                          onPressed: () {
+                            ref
+                                .read(listesNotifierProvider.notifier)
+                                .ajouter(liste);
+                            for (final item in items) {
+                              ref
+                                  .read(articlesListeProvider(liste.id)
+                                      .notifier)
+                                  .ajouter(item);
+                            }
+                          },
+                        ),
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                  }
                 },
                 child: const Text('Supprimer'),
               ),
@@ -350,11 +568,124 @@ class _ListeCard extends ConsumerWidget {
     }
   }
 
+  Future<void> _gererCollaboration(BuildContext context, WidgetRef ref) async {
+    if (!liste.partagee) {
+      final confirme = await showDialog<bool>(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('Rendre collaborative ?'),
+          content: Text(
+            'Toute personne avec le code pourra voir et modifier '
+            '"${liste.nom}" en temps réel. Continuer ?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogCtx, true),
+              child: const Text('Continuer'),
+            ),
+          ],
+        ),
+      );
+      if (confirme != true) return;
+
+      String code;
+      try {
+        code = await ref.read(listesNotifierProvider.notifier).partager(liste);
+      } catch (e) {
+        if (context.mounted) _afficherErreur(context, e);
+        return;
+      }
+      if (!context.mounted) return;
+      _afficherCode(context, ref, code);
+      return;
+    }
+
+    _afficherCode(context, ref, liste.code!);
+  }
+
+  void _afficherCode(BuildContext context, WidgetRef ref, String code) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Liste collaborative'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Partagez ce code pour inviter quelqu\'un :'),
+              const SizedBox(height: 16),
+              Center(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(dialogCtx).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    code,
+                    style: Theme.of(dialogCtx).textTheme.headlineSmall?.copyWith(
+                          letterSpacing: 4,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text('Membres', style: Theme.of(dialogCtx).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              _ListeMembres(listeId: liste.id),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: code));
+              if (dialogCtx.mounted) {
+                ScaffoldMessenger.of(dialogCtx).showSnackBar(
+                  const SnackBar(content: Text('Code copié')),
+                );
+              }
+            },
+            child: const Text('Copier'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+                foregroundColor: Theme.of(dialogCtx).colorScheme.error),
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              try {
+                await ref
+                    .read(listesNotifierProvider.notifier)
+                    .quitterPartage(liste);
+              } catch (e) {
+                if (context.mounted) _afficherErreur(context, e);
+              }
+            },
+            child: const Text('Quitter la collaboration'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Fermer'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _partagerListe(BuildContext context, WidgetRef ref) async {
     final items = await ref.read(dbServiceProvider).getArticlesListe(liste.id);
-    final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
-    final rayons = ref.read(rayonsNotifierProvider).valueOrNull ?? [];
-    final categories = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+    // .future (pas .valueOrNull) : garantit le chargement même si aucun
+    // autre écran n'a encore déclenché ces providers.
+    final catalogue = await ref.read(articlesNotifierProvider.future);
+    final rayons = await ref.read(rayonsNotifierProvider.future);
+    final categories = await ref.read(categoriesNotifierProvider.future);
     final service = ref.read(partageServiceProvider);
 
     final texte = service.formaterListe(
@@ -370,7 +701,94 @@ class _ListeCard extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       useSafeArea: true,
-      builder: (_) => _PartageSheet(liste: liste, texte: texte),
+      builder: (_) => _PartageSheet(
+        liste: liste,
+        texte: texte,
+        items: items,
+        catalogue: catalogue,
+        rayons: rayons,
+      ),
+    );
+  }
+}
+
+// ================================================================
+// LISTE DES MEMBRES D'UNE COLLABORATION
+// ================================================================
+class _ListeMembres extends ConsumerStatefulWidget {
+  final String listeId;
+  const _ListeMembres({required this.listeId});
+
+  @override
+  ConsumerState<_ListeMembres> createState() => _ListeMembresState();
+}
+
+class _ListeMembresState extends ConsumerState<_ListeMembres> {
+  List<({String uid, String? displayName, String? photoURL, bool estProprietaire})>?
+      _membres;
+
+  @override
+  void initState() {
+    super.initState();
+    _charger();
+  }
+
+  Future<void> _charger() async {
+    try {
+      final membres =
+          await ref.read(syncServiceProvider).getMembresListe(widget.listeId);
+      if (mounted) setState(() => _membres = membres);
+    } catch (e) {
+      if (mounted) _afficherErreur(context, e);
+    }
+  }
+
+  Future<void> _retirer(String uid) async {
+    try {
+      await ref.read(syncServiceProvider).retirerMembre(widget.listeId, uid);
+      await _charger();
+    } catch (e) {
+      if (mounted) _afficherErreur(context, e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final membres = _membres;
+    if (membres == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    final monUid = ref.read(authServiceProvider).currentUser?.uid;
+
+    return Column(
+      children: membres.map((m) {
+        final nom = m.displayName ?? 'Utilisateur';
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          leading: CircleAvatar(
+            radius: 16,
+            backgroundImage:
+                m.photoURL != null ? NetworkImage(m.photoURL!) : null,
+            child: m.photoURL == null
+                ? Text(nom.isNotEmpty ? nom[0].toUpperCase() : '?',
+                    style: const TextStyle(fontSize: 13))
+                : null,
+          ),
+          title: Text(m.uid == monUid ? '$nom (moi)' : nom),
+          subtitle: m.estProprietaire ? const Text('Propriétaire') : null,
+          trailing: m.uid == monUid
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.person_remove_outlined, size: 20),
+                  tooltip: 'Retirer',
+                  onPressed: () => _retirer(m.uid),
+                ),
+        );
+      }).toList(),
     );
   }
 }
@@ -609,9 +1027,9 @@ class DetailListeScreen extends ConsumerWidget {
 
   Future<void> _partagerDepuisDetail(BuildContext context, WidgetRef ref) async {
     final items = await ref.read(dbServiceProvider).getArticlesListe(liste.id);
-    final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
-    final rayons = ref.read(rayonsNotifierProvider).valueOrNull ?? [];
-    final categories = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
+    final catalogue = await ref.read(articlesNotifierProvider.future);
+    final rayons = await ref.read(rayonsNotifierProvider.future);
+    final categories = await ref.read(categoriesNotifierProvider.future);
     final service = ref.read(partageServiceProvider);
 
     final texte = service.formaterListe(
@@ -627,7 +1045,13 @@ class DetailListeScreen extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       useSafeArea: true,
-      builder: (_) => _PartageSheet(liste: liste, texte: texte),
+      builder: (_) => _PartageSheet(
+        liste: liste,
+        texte: texte,
+        items: items,
+        catalogue: catalogue,
+        rayons: rayons,
+      ),
     );
   }
 }
@@ -691,6 +1115,7 @@ class _ArticleListeTile extends ConsumerWidget {
                               .read(articlesListeProvider(listeId).notifier)
                               .modifierQuantite(alActuel, alActuel.quantite - 1)
                           : null,
+                      tooltip: 'Diminuer la quantité',
                       icon: Icon(
                         Icons.remove_circle_outline,
                         color: alActuel.quantite > 1
@@ -713,6 +1138,7 @@ class _ArticleListeTile extends ConsumerWidget {
                       onPressed: () => r
                           .read(articlesListeProvider(listeId).notifier)
                           .modifierQuantite(alActuel, alActuel.quantite + 1),
+                      tooltip: 'Augmenter la quantité',
                       icon: Icon(Icons.add_circle_outline,
                           color: Theme.of(ctx).colorScheme.primary),
                     ),
@@ -734,9 +1160,22 @@ class _ArticleListeTile extends ConsumerWidget {
                   title: const Text('Retirer de la liste',
                       style: TextStyle(color: Colors.red)),
                   onTap: () {
+                    final alSupprime = alActuel;
                     r.read(articlesListeProvider(listeId).notifier)
-                        .supprimer(articleListe.id);
+                        .supprimer(alSupprime.id);
                     Navigator.pop(sheetCtx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('"${article.nom}" retiré de la liste'),
+                        action: SnackBarAction(
+                          label: 'Annuler',
+                          onPressed: () => ref
+                              .read(articlesListeProvider(listeId).notifier)
+                              .ajouter(alSupprime),
+                        ),
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
                   },
                 ),
               ],
@@ -803,6 +1242,12 @@ class _SelectionArticlesSheetState
     extends ConsumerState<_SelectionArticlesSheet> {
   final _searchCtrl = TextEditingController();
   final Set<String> _selectionIds = {};
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1287,13 +1732,49 @@ class _ModeCoursesItem extends ConsumerWidget {
 // ================================================================
 // BOTTOM SHEET DE PARTAGE
 // ================================================================
-class _PartageSheet extends ConsumerWidget {
+class _PartageSheet extends ConsumerStatefulWidget {
   final ListeCourses liste;
   final String texte;
-  const _PartageSheet({required this.liste, required this.texte});
+  final List<ArticleListe> items;
+  final List<Article> catalogue;
+  final List<Rayon> rayons;
+  const _PartageSheet({
+    required this.liste,
+    required this.texte,
+    required this.items,
+    required this.catalogue,
+    required this.rayons,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PartageSheet> createState() => _PartageSheetState();
+}
+
+class _PartageSheetState extends ConsumerState<_PartageSheet> {
+  bool _generationPdfEnCours = false;
+
+  Future<void> _exporterPdf() async {
+    setState(() => _generationPdfEnCours = true);
+    final service = ref.read(partageServiceProvider);
+    try {
+      final bytes = await service.genererPdf(
+        liste: widget.liste,
+        items: widget.items,
+        catalogue: widget.catalogue,
+        rayons: widget.rayons,
+      );
+      await service.partagerPdf(liste: widget.liste, bytes: bytes);
+    } catch (e) {
+      if (mounted) _afficherErreur(context, e);
+    } finally {
+      if (mounted) setState(() => _generationPdfEnCours = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final liste = widget.liste;
+    final texte = widget.texte;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       child: Column(
@@ -1380,6 +1861,22 @@ class _PartageSheet extends ConsumerWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+
+          // Export PDF (mise en page par rayon, cases à cocher)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _generationPdfEnCours ? null : _exporterPdf,
+              icon: _generationPdfEnCours
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('Exporter en PDF'),
+            ),
           ),
         ],
       ),

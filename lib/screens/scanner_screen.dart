@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/models.dart';
@@ -43,6 +44,11 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     if (_traitement) return;
     final barcode = capture.barcodes.firstOrNull;
     if (barcode?.rawValue == null) return;
+
+    // Retour immédiat à la détection : l'utilisateur sait que le code a
+    // bien été lu sans avoir à regarder l'écran.
+    HapticFeedback.mediumImpact();
+    SystemSound.play(SystemSoundType.click);
 
     setState(() => _traitement = true);
     await _controller.stop();
@@ -170,10 +176,12 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.flashlight_on),
+            tooltip: 'Activer/désactiver le flash',
             onPressed: () => _controller.toggleTorch(),
           ),
           IconButton(
             icon: const Icon(Icons.flip_camera_ios),
+            tooltip: 'Changer de caméra',
             onPressed: () => _controller.switchCamera(),
           ),
         ],

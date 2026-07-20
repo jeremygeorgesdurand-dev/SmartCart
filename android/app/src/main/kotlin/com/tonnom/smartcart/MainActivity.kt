@@ -16,8 +16,37 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    // Appelé par Flutter après chaque modif pour rafraîchir le widget
+                    // Appelé par Flutter après chaque modif, avec les données
+                    // du widget en argument (le plugin shared_preferences
+                    // utilise Jetpack DataStore depuis la v2.3+, donc le
+                    // widget natif ne peut plus lire ce que Flutter écrirait
+                    // via SharedPreferences.getInstance() : on reçoit les
+                    // données directement et on les écrit nous-mêmes dans le
+                    // vrai fichier SharedPreferences que lit SmartCartWidget).
                     "updateWidget" -> {
+                        val args = call.arguments as? Map<*, *>
+                        if (args != null) {
+                            val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+                            prefs.edit()
+                                .putString("widget_liste_id", args["listeId"] as? String ?: "")
+                                .putString("widget_liste_nom", args["listeNom"] as? String ?: "")
+                                .putInt("widget_total", (args["total"] as? Int) ?: 0)
+                                .putInt("widget_coches", (args["coches"] as? Int) ?: 0)
+                                .putString("widget_articles_json", args["articlesJson"] as? String ?: "[]")
+                                .apply()
+                        }
+                        refreshAllWidgets()
+                        result.success(null)
+                    }
+                    "clearWidget" -> {
+                        val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+                        prefs.edit()
+                            .remove("widget_liste_id")
+                            .remove("widget_liste_nom")
+                            .remove("widget_articles_json")
+                            .remove("widget_total")
+                            .remove("widget_coches")
+                            .apply()
                         refreshAllWidgets()
                         result.success(null)
                     }

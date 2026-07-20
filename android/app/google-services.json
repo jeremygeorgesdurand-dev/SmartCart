@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "1055355766670-lrs62jjo5hgdtme9q4h80g01im9gj5an.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tonnom.smartcart",
+            "certificate_hash": "26fbfa265d9b90a41be93ab75a4361bfc7519297"
+          }
+        },
+        {
           "client_id": "1055355766670-un10fkem4g6bidt09mqtvmtc3fhr6h19.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
@@ -37,6 +45,13 @@
             {
               "client_id": "1055355766670-lacnmedh25mlkuhbsq3f34cqcfc8ed65.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "1055355766670-98hgk3e3qih424p51h1vnuadu4ddu279.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tonnom.smartcart"
+              }
             }
           ]
         }

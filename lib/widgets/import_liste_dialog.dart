@@ -96,7 +96,6 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
     final idsDejaInListe = itemsListe.map((i) => i.articleId).toSet();
 
     int nbImportes = 0;
-    int nbExistants = 0;
 
     for (int i = 0; i < _apercu!.articles.length; i++) {
       final ai = _apercu!.articles[i];
@@ -145,7 +144,6 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
           if (idx >= 0) catalogueMutable[idx] = updated;
           article = updated;
         }
-        nbExistants++;
       }
 
       // ── Étape 2 : Ajouter à la liste ────────────────────────

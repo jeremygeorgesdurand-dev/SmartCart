@@ -19,6 +19,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Démarre la synchro temps réel avec Firestore pour toute la durée
+    // de vie de l'app (voir realtimeSyncProvider).
+    ref.watch(realtimeSyncProvider);
+
     final afficherStats = ref.watch(afficherStatsProvider);
     final fondActif = ref.watch(fondActiveProvider);
     final fondOpacite = ref.watch(fondOpaciteProvider);

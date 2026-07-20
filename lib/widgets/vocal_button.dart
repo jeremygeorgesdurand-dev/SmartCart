@@ -120,61 +120,64 @@ class _VocalSheetState extends ConsumerState<VocalSheet>
     );
   }
 
-  // ── Validation et ajout au catalogue ─────────────────────────
+  // ── Validation et ajout au catalogue (un ou plusieurs articles) ──
   Future<void> _valider() async {
     if (_texteEnCours.trim().isEmpty) return;
     if (!mounted) return;
 
-    final result = VocalService.nettoyer(_texteEnCours);
+    final resultats = VocalService.nettoyerMultiple(_texteEnCours);
+    if (resultats.isEmpty) return;
 
-    final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
+    var ajoutes = 0;
+    var dejaPresents = 0;
 
-    // Chercher si l'article existe déjà dans le catalogue
-    var article = catalogue
-        .where((a) => a.nom.toLowerCase() == result.nomArticle.toLowerCase())
-        .firstOrNull;
+    for (final result in resultats) {
+      // Relire le catalogue à chaque itération : les ajouts précédents
+      // dans cette même dictée doivent être visibles pour les suivants.
+      final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
+      var article = catalogue
+          .where((a) => a.nom.toLowerCase() == result.nomArticle.toLowerCase())
+          .firstOrNull;
 
-    String msg;
+      if (article == null) {
+        article = Article(
+          id: 'article_${DateTime.now().millisecondsSinceEpoch}_$ajoutes',
+          nom: result.nomArticle,
+        );
+        await ref.read(articlesNotifierProvider.notifier).ajouter(article);
+      }
 
-    if (article == null) {
-      // Nouveau : créer et ajouter au catalogue
-      article = Article(
-        id: 'article_${DateTime.now().millisecondsSinceEpoch}',
-        nom: result.nomArticle,
-      );
-      await ref.read(articlesNotifierProvider.notifier).ajouter(article);
-      msg = widget.listeId != null
-          ? '"${result.nomArticle}" ajouté au catalogue et à la liste'
-          : '"${result.nomArticle}" ajouté au catalogue';
-    } else {
-      // Existant : ne pas recréer dans le catalogue
-      msg = widget.listeId != null
-          ? '"${result.nomArticle}" ajouté à la liste'
-          : '"${result.nomArticle}" existe déjà dans le catalogue';
-    }
-
-    // Ajouter à la liste si ciblée (qu'il soit nouveau ou existant)
-    if (widget.listeId != null) {
-      final itemsListe =
-          ref.read(articlesListeProvider(widget.listeId!)).valueOrNull ?? [];
-      final dejaInListe = itemsListe.any((i) => i.articleId == article!.id);
-      if (!dejaInListe) {
-        await ref.read(articlesListeProvider(widget.listeId!).notifier).ajouter(
-              ArticleListe(
-                id: 'al_${DateTime.now().millisecondsSinceEpoch}',
-                listeId: widget.listeId!,
-                articleId: article.id,
-                quantite: result.quantite,
-                unite: result.unite,
-              ),
-            );
+      if (widget.listeId != null) {
+        final itemsListe =
+            ref.read(articlesListeProvider(widget.listeId!)).valueOrNull ?? [];
+        final dejaInListe = itemsListe.any((i) => i.articleId == article!.id);
+        if (!dejaInListe) {
+          await ref.read(articlesListeProvider(widget.listeId!).notifier).ajouter(
+                ArticleListe(
+                  id: 'al_${DateTime.now().millisecondsSinceEpoch}_$ajoutes',
+                  listeId: widget.listeId!,
+                  articleId: article.id,
+                  quantite: result.quantite,
+                  unite: result.unite,
+                ),
+              );
+          ajoutes++;
+        } else {
+          dejaPresents++;
+        }
       } else {
-        msg = '"${result.nomArticle}" est déjà dans la liste';
+        ajoutes++;
       }
     }
 
     if (!mounted) return;
     Navigator.pop(context);
+
+    final cible = widget.listeId != null ? 'à la liste' : 'au catalogue';
+    final msg = resultats.length == 1
+        ? '"${resultats.first.nomArticle}" ajouté $cible'
+        : '$ajoutes article(s) ajouté(s) $cible'
+            '${dejaPresents > 0 ? ' ($dejaPresents déjà présent(s))' : ''}';
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
@@ -218,7 +221,7 @@ class _VocalSheetState extends ConsumerState<VocalSheet>
           ),
           const SizedBox(height: 4),
           Text(
-            'Ex: "pain", "3 yaourts", "deux litres de lait"',
+            'Ex: "pain", "3 yaourts", "pommes, lait et pain"',
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: Theme.of(context).colorScheme.outline),
           ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../providers/off_details_provider.dart';
 import 'ajouter_article_dialog.dart';
 
 class ArticleTile extends ConsumerWidget {
@@ -58,8 +59,24 @@ class ArticleTile extends ConsumerWidget {
             ),
           ) ??
           false,
-      onDismissed: (_) =>
-          ref.read(articlesNotifierProvider.notifier).supprimer(article.id),
+      onDismissed: (_) {
+        final articleSupprime = article;
+        ref
+            .read(articlesNotifierProvider.notifier)
+            .supprimer(articleSupprime.id);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"${articleSupprime.nom}" supprimé du catalogue'),
+            action: SnackBarAction(
+              label: 'Annuler',
+              onPressed: () => ref
+                  .read(articlesNotifierProvider.notifier)
+                  .ajouter(articleSupprime),
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      },
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         child: InkWell(
@@ -113,6 +130,15 @@ class ArticleTile extends ConsumerWidget {
                   ),
                 ),
 
+                if (article.barcode != null)
+                  IconButton(
+                    icon: const Icon(Icons.info_outline, size: 20),
+                    tooltip: 'Infos nutritionnelles',
+                    color: Theme.of(context).colorScheme.primary,
+                    onPressed: () => _afficherInfosNutritionnelles(
+                        context, article.barcode!),
+                  ),
+
                 // Icône modifier
                 Icon(Icons.chevron_right,
                     color:
@@ -122,6 +148,136 @@ class ArticleTile extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _afficherInfosNutritionnelles(BuildContext context, String barcode) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _NutritionSheet(barcode: barcode),
+    );
+  }
+}
+
+class _NutritionSheet extends ConsumerWidget {
+  final String barcode;
+  const _NutritionSheet({required this.barcode});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final details = ref.watch(offDetailsProvider(barcode));
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        child: details.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (_, __) => const _NutritionMessage(
+            icon: Icons.error_outline,
+            texte: 'Impossible de récupérer les informations pour le moment.',
+          ),
+          data: (produit) {
+            if (produit == null || !produit.aDesInfos) {
+              return const _NutritionMessage(
+                icon: Icons.info_outline,
+                texte: 'Aucune information nutritionnelle disponible pour ce produit.',
+              );
+            }
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Infos nutritionnelles',
+                    style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 14),
+                if (produit.nutriscore != null) ...[
+                  Row(
+                    children: [
+                      _NutriscoreBadge(lettre: produit.nutriscore!),
+                      const SizedBox(width: 10),
+                      const Text('Nutri-Score', style: TextStyle(fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                if (produit.quantite != null) ...[
+                  Text('Quantité',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.outline)),
+                  const SizedBox(height: 2),
+                  Text(produit.quantite!),
+                  const SizedBox(height: 14),
+                ],
+                if (produit.ingredients != null) ...[
+                  Text('Ingrédients',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.outline)),
+                  const SizedBox(height: 2),
+                  Text(produit.ingredients!),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _NutritionMessage extends StatelessWidget {
+  final IconData icon;
+  final String texte;
+  const _NutritionMessage({required this.icon, required this.texte});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 30),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 32, color: Theme.of(context).colorScheme.outline),
+          const SizedBox(height: 10),
+          Text(texte, textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+}
+
+class _NutriscoreBadge extends StatelessWidget {
+  final String lettre;
+  const _NutriscoreBadge({required this.lettre});
+
+  static const _couleurs = {
+    'a': Color(0xFF038141),
+    'b': Color(0xFF85BB2F),
+    'c': Color(0xFFFECB02),
+    'd': Color(0xFFEE8100),
+    'e': Color(0xFFE63E11),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final couleur = _couleurs[lettre] ?? Colors.grey;
+    return Container(
+      width: 30,
+      height: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: couleur,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        lettre.toUpperCase(),
+        style: const TextStyle(
+            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
       ),
     );
   }

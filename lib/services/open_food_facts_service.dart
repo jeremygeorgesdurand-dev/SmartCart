@@ -62,6 +62,28 @@ class OpenFoodFactsService {
     }
   }
 
+  /// Récupère les infos nutritionnelles d'un produit à la volée (non persistées)
+  Future<ProductDetails?> fetchDetails(String barcode) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/api/v0/product/$barcode.json');
+      final response = await http.get(uri);
+      if (response.statusCode != 200) return null;
+
+      final data = jsonDecode(response.body);
+      if (data['status'] != 1) return null;
+
+      final p = data['product'] as Map<String, dynamic>;
+      final ingredients = p['ingredients_text_fr'] ?? p['ingredients_text'];
+      return ProductDetails(
+        nutriscore: (p['nutriscore_grade'] as String?)?.toLowerCase(),
+        ingredients: (ingredients is String && ingredients.isNotEmpty) ? ingredients : null,
+        quantite: p['quantity'],
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Mapping approximatif des groupes Open Food Facts → catégories maison
   String? _mapCategorie(String? pnns) {
     if (pnns == null) return null;
@@ -74,4 +96,16 @@ class OpenFoodFactsService {
     if (p.contains('entretien') || p.contains('cleaning')) return 'cat_menage';
     return 'cat_placards';
   }
+}
+
+/// Infos nutritionnelles d'un produit, récupérées à la demande depuis
+/// Open Food Facts (non persistées en base, pas de champ Article associé)
+class ProductDetails {
+  final String? nutriscore; // lettre a-e, ou null si inconnu
+  final String? ingredients;
+  final String? quantite;
+
+  const ProductDetails({this.nutriscore, this.ingredients, this.quantite});
+
+  bool get aDesInfos => nutriscore != null || ingredients != null || quantite != null;
 }

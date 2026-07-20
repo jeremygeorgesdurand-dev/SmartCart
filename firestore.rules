@@ -1,0 +1,87 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Chaque utilisateur ne peut lire/écrire que ses propres données,
+    // stockées sous users/{uid} (doc + sous-collections articles,
+    // categories, rayons, listes, et listes/{id}/articles).
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      match /{collection}/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+
+        match /{subcollection}/{subDocId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+      }
+    }
+
+    // ── Listes de courses collaboratives ────────────────────────
+    // Un membre peut tout lire/modifier. Un NON-membre ne peut faire
+    // qu'une seule chose : s'ajouter lui-même à `membres` (rejoindre via
+    // un code) — rien d'autre ne doit changer dans le document.
+    match /listes_partagees/{listeId} {
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.membres;
+
+      allow create: if request.auth != null
+        && request.resource.data.membres == [request.auth.uid]
+        && request.resource.data.proprietaireId == request.auth.uid;
+
+      allow update: if request.auth != null && (
+        request.auth.uid in resource.data.membres
+        || (
+          request.resource.data.membres ==
+              resource.data.membres.concat([request.auth.uid])
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['membres'])
+        )
+      );
+
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.proprietaireId;
+
+      match /articles/{itemId} {
+        allow read, write: if request.auth != null
+          && request.auth.uid in get(
+              /databases/$(database)/documents/listes_partagees/$(listeId)
+            ).data.membres;
+      }
+    }
+
+    // ── Codes de partage : pointeur public (code → listeId) ────
+    // Lisible par tout utilisateur connecté (nécessaire pour rejoindre
+    // une liste sans en être déjà membre), mais ne révèle rien d'autre
+    // que l'id de la liste. Créable uniquement par le propriétaire de la
+    // liste visée, jamais modifiable après création.
+    match /codes_partage/{code} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['listeId'])
+        && get(
+            /databases/$(database)/documents/listes_partagees/$(request.resource.data.listeId)
+          ).data.proprietaireId == request.auth.uid;
+
+      allow delete: if request.auth != null
+        && get(
+            /databases/$(database)/documents/listes_partagees/$(resource.data.listeId)
+          ).data.proprietaireId == request.auth.uid;
+
+      allow update: if false;
+    }
+
+    // ── Profils publics : nom/photo affichés aux autres membres d'une
+    // liste collaborative. Ne contient rien de plus sensible que ce que
+    // Google Sign-In affiche déjà. Lisible par tout utilisateur connecté,
+    // modifiable uniquement par son propriétaire.
+    match /profils_publics/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Tout le reste est refusé par défaut.
+  }
+}

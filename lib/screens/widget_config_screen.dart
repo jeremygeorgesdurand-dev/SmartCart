@@ -22,24 +22,29 @@ class _WidgetConfigScreenState extends ConsumerState<WidgetConfigScreen> {
 
   Future<void> _chargerConfig() async {
     final id = await WidgetService.getListeWidgetId();
-    setState(() => _listeWidgetId = id);
+    if (mounted) setState(() => _listeWidgetId = id);
   }
 
   Future<void> _choisirListe(String listeId, String listeNom) async {
     setState(() => _saving = true);
 
     final items = await ref.read(dbServiceProvider).getArticlesListe(listeId);
-    final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
-    final listes = ref.read(listesNotifierProvider).valueOrNull ?? [];
+    final catalogue = await ref.read(articlesNotifierProvider.future);
+    final listes = await ref.read(listesNotifierProvider.future);
     final liste = listes.where((l) => l.id == listeId).firstOrNull;
 
-    if (liste == null) return;
+    if (liste == null) {
+      if (mounted) setState(() => _saving = false);
+      return;
+    }
 
     await WidgetService.mettreAJourWidget(
       liste: liste,
       items: items,
       catalogue: catalogue,
     );
+
+    if (!mounted) return;
 
     setState(() {
       _listeWidgetId = listeId;

@@ -1,6 +1,24 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
+
+// Message lisible à partir d'une erreur réseau/Firebase, plutôt que
+// d'afficher tel quel un `Exception: ...` technique à l'utilisateur.
+String _messageErreur(Object e, String contexte) {
+  if (e is SocketException ||
+      (e is FirebaseException &&
+          (e.code == 'unavailable' || e.code == 'network-request-failed'))) {
+    return 'Pas de connexion internet. Réessaie plus tard.';
+  }
+  if (e is FirebaseException) {
+    return '$contexte : ${e.message ?? e.code}';
+  }
+  return '$contexte : $e';
+}
 
 class CompteScreen extends ConsumerStatefulWidget {
   const CompteScreen({super.key});
@@ -19,27 +37,60 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
     try {
       final user = await ref.read(authServiceProvider).connecterGoogle();
       if (user == null) {
+        if (!mounted) return;
         setState(() { _syncing = false; _message = 'Connexion annulée'; _messageOk = false; });
         return;
       }
-      // Upload des données locales vers Firebase
+      // Télécharger D'ABORD ce qui existe déjà dans le cloud, avant
+      // d'envoyer l'état local : sur une install fraîche (base locale
+      // vide), uploadTout() nettoie les "orphelins" cloud absents du
+      // local — l'appeler en premier effacerait silencieusement toutes
+      // les données déjà synchronisées d'un autre appareil.
+      await ref.read(syncServiceProvider).downloadTout();
       await ref.read(syncServiceProvider).uploadTout();
+      await ref.read(syncServiceProvider).publierProfil();
+      ref.invalidate(articlesNotifierProvider);
+      ref.invalidate(listesNotifierProvider);
+      ref.invalidate(categoriesNotifierProvider);
+      ref.invalidate(rayonsNotifierProvider);
+      ref.invalidate(prixArticlesNotifierProvider);
+      // Notifications push : best-effort, un refus ne doit pas bloquer
+      // la connexion.
+      try {
+        final token = await ref
+            .read(fcmServiceProvider)
+            .demanderPermissionEtObtenirToken();
+        if (token != null) {
+          await ref.read(syncServiceProvider).enregistrerTokenFcm(token);
+        }
+      } catch (_) {}
+      if (!mounted) return;
       setState(() {
         _syncing = false;
-        _message = 'Connecté et données sauvegardées !';
+        _message = 'Connecté et données synchronisées !';
         _messageOk = true;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _syncing = false;
-        _message = 'Erreur : $e';
+        _message = _messageErreur(e, 'Erreur de connexion');
         _messageOk = false;
       });
     }
   }
 
   Future<void> _deconnecter() async {
+    // Retirer le token AVANT de se déconnecter : après, on n'est plus
+    // authentifié pour écrire dans users/{uid}.
+    try {
+      final token = await ref.read(fcmServiceProvider).tokenActuel;
+      if (token != null) {
+        await ref.read(syncServiceProvider).supprimerTokenFcm(token);
+      }
+    } catch (_) {}
     await ref.read(authServiceProvider).deconnecter();
+    if (!mounted) return;
     setState(() { _message = 'Déconnecté'; _messageOk = true; });
   }
 
@@ -52,9 +103,11 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       ref.invalidate(listesNotifierProvider);
       ref.invalidate(categoriesNotifierProvider);
       ref.invalidate(rayonsNotifierProvider);
+      if (!mounted) return;
       setState(() { _syncing = false; _message = 'Synchronisation réussie !'; _messageOk = true; });
     } catch (e) {
-      setState(() { _syncing = false; _message = 'Erreur sync : $e'; _messageOk = false; });
+      if (!mounted) return;
+      setState(() { _syncing = false; _message = _messageErreur(e, 'Erreur sync'); _messageOk = false; });
     }
   }
 
@@ -66,9 +119,50 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       ref.invalidate(listesNotifierProvider);
       ref.invalidate(categoriesNotifierProvider);
       ref.invalidate(rayonsNotifierProvider);
+      if (!mounted) return;
       setState(() { _syncing = false; _message = 'Données restaurées depuis le cloud !'; _messageOk = true; });
     } catch (e) {
-      setState(() { _syncing = false; _message = 'Erreur restauration : $e'; _messageOk = false; });
+      if (!mounted) return;
+      setState(() { _syncing = false; _message = _messageErreur(e, 'Erreur restauration'); _messageOk = false; });
+    }
+  }
+
+  Future<void> _supprimerCompte() async {
+    final confirme = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Supprimer le compte ?'),
+        content: const Text(
+          'Toutes vos données cloud seront définitivement supprimées '
+          '(catalogue, listes, prix). Vous quitterez aussi vos listes '
+          'collaboratives. Vos données locales sur cet appareil restent '
+          'intactes. Cette action est irréversible.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dialogCtx).colorScheme.error),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Supprimer définitivement'),
+          ),
+        ],
+      ),
+    );
+    if (confirme != true) return;
+
+    setState(() { _syncing = true; _message = null; });
+    try {
+      await ref.read(syncServiceProvider).supprimerToutesLesDonneesCloud();
+      await ref.read(authServiceProvider).supprimerCompte();
+      if (!mounted) return;
+      setState(() { _syncing = false; _message = 'Compte supprimé'; _messageOk = true; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _syncing = false; _message = _messageErreur(e, 'Erreur suppression'); _messageOk = false; });
     }
   }
 
@@ -119,26 +213,7 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
                             ),
                       ),
                       const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.cloud_done, color: Colors.green, size: 16),
-                            SizedBox(width: 6),
-                            Text('Synchronisation active',
-                                style: TextStyle(
-                                    color: Colors.green,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500)),
-                          ],
-                        ),
-                      ),
+                      const _IndicateurSynchro(),
                     ] else ...[
                       // Non connecté
                       Icon(Icons.account_circle_outlined,
@@ -241,6 +316,14 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
                 label: const Text('Se déconnecter',
                     style: TextStyle(color: Colors.red)),
               ),
+              TextButton.icon(
+                onPressed: _syncing ? null : _supprimerCompte,
+                icon: Icon(Icons.delete_forever,
+                    color: Theme.of(context).colorScheme.error),
+                label: Text('Supprimer mon compte',
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
+              ),
             ],
 
             const SizedBox(height: 24),
@@ -279,6 +362,62 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Indicateur d'état de synchro ─────────────────────────────────
+// S'appuie sur snapshotsInSync() : émet un événement à chaque fois que
+// le cache local Firestore est à jour avec le serveur (écritures
+// confirmées comprises). Entre deux événements, on considère qu'une
+// synchro est en cours.
+class _IndicateurSynchro extends StatefulWidget {
+  const _IndicateurSynchro();
+
+  @override
+  State<_IndicateurSynchro> createState() => _IndicateurSynchroState();
+}
+
+class _IndicateurSynchroState extends State<_IndicateurSynchro> {
+  bool _synchronise = true;
+  StreamSubscription<void>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = FirebaseFirestore.instance.snapshotsInSync().listen((_) {
+      if (mounted) setState(() => _synchronise = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final couleur = _synchronise ? Colors.green : Colors.orange;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: couleur.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_synchronise ? Icons.cloud_done : Icons.cloud_sync,
+              color: couleur, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            _synchronise ? 'Synchronisation active' : 'Synchronisation...',
+            style: TextStyle(
+                color: couleur, fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+        ],
       ),
     );
   }

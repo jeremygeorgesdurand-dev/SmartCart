@@ -1,4 +1,8 @@
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
@@ -8,6 +12,7 @@ import 'firebase_options.dart';
 import 'providers/providers.dart';
 import 'widgets/background_logo.dart';
 import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
 
 void main() async {
   final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +21,24 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Protège Firestore contre les clients non authentifiés/abusifs. En
+  // debug on utilise le provider "debug" (nécessite d'enregistrer le
+  // jeton affiché dans les logs sur la console Firebase → App Check).
+  await FirebaseAppCheck.instance.activate(
+    androidProvider:
+        kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+    appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
+  );
+
+  // Désactivé en debug pour ne pas polluer Crashlytics avec les sessions
+  // de développement (hot reload, exceptions volontaires, etc.).
+  await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(!kDebugMode);
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -27,6 +50,9 @@ void main() async {
   final couleurTheme = prefs.getString('couleur_theme') ?? 'vert';
   final fondActif = prefs.getBool('fond_actif') ?? true;
   final fondOpacite = prefs.getDouble('fond_opacite') ?? 0.06;
+  final themeMode = _themeModeDepuisPrefs(prefs.getString('theme_mode'));
+  final onboardingVu = prefs.getBool('onboarding_vu') ?? false;
+  final tailleTexte = prefs.getDouble('taille_texte') ?? 1.0;
 
   runApp(ProviderScope(
     overrides: [
@@ -34,9 +60,20 @@ void main() async {
       couleurThemeProvider.overrideWith((ref) => couleurTheme),
       fondActiveProvider.overrideWith((ref) => fondActif),
       fondOpaciteProvider.overrideWith((ref) => fondOpacite),
+      themeModeProvider.overrideWith((ref) => themeMode),
+      afficherOnboardingProvider.overrideWith((ref) => !onboardingVu),
+      tailleTexteProvider.overrideWith((ref) => tailleTexte),
     ],
     child: const SmartCartApp(),
   ));
+}
+
+ThemeMode _themeModeDepuisPrefs(String? valeur) {
+  switch (valeur) {
+    case 'clair': return ThemeMode.light;
+    case 'sombre': return ThemeMode.dark;
+    default: return ThemeMode.system;
+  }
 }
 
 class SmartCartApp extends ConsumerWidget {
@@ -45,12 +82,19 @@ class SmartCartApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final couleur = ref.watch(couleurThemeProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final tailleTexte = ref.watch(tailleTexteProvider);
     return MaterialApp(
       title: 'SmartCart',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(Brightness.light, couleur),
       darkTheme: _buildTheme(Brightness.dark, couleur),
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(tailleTexte)),
+        child: child!,
+      ),
       home: const _SplashWrapper(),
     );
   }
@@ -111,6 +155,37 @@ class SmartCartApp extends ConsumerWidget {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      dialogTheme: DialogThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        showDragHandle: true,
+      ),
+      chipTheme: ChipThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        backgroundColor: colorScheme.surfaceContainerHighest,
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        ),
+      ),
+      listTileTheme: ListTileThemeData(
+        iconColor: colorScheme.primary,
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
@@ -181,9 +256,18 @@ class _SplashWrapperState extends ConsumerState<_SplashWrapper>
 
   @override
   Widget build(BuildContext context) {
+    final afficherOnboarding = ref.watch(afficherOnboardingProvider);
     return FadeTransition(
       opacity: _fadeAnim,
-      child: SlideTransition(position: _slideAnim, child: const HomeScreen()),
+      child: SlideTransition(
+        position: _slideAnim,
+        child: afficherOnboarding
+            ? OnboardingScreen(
+                onTermine: () =>
+                    ref.read(afficherOnboardingProvider.notifier).state = false,
+              )
+            : const HomeScreen(),
+      ),
     );
   }
 }

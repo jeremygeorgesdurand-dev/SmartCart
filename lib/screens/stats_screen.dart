@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+import '../models/models.dart';
 import '../providers/providers.dart';
+import '../providers/suggestions_provider.dart';
 import '../services/stats_service.dart';
+import '../services/suggestions_service.dart';
 
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});
@@ -9,6 +13,7 @@ class StatsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(statsProvider);
+    final suggestionsAsync = ref.watch(suggestionsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -16,7 +21,11 @@ class StatsScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(statsProvider),
+            tooltip: 'Actualiser',
+            onPressed: () {
+              ref.invalidate(statsProvider);
+              ref.invalidate(suggestionsProvider);
+            },
           ),
         ],
       ),
@@ -38,10 +47,25 @@ class StatsScreen extends ConsumerWidget {
           ),
         ),
         data: (stats) => RefreshIndicator(
-          onRefresh: () => ref.refresh(statsProvider.future),
+          onRefresh: () => ref.refresh(statsProvider.future).then((_) {
+            ref.invalidate(suggestionsProvider);
+          }),
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // ── À racheter bientôt ────────────────────────
+              if (suggestionsAsync.valueOrNull?.isNotEmpty ?? false) ...[
+                _TitreSection(
+                  titre: 'À racheter bientôt',
+                  icone: Icons.autorenew,
+                  badge: '${suggestionsAsync.value!.length}',
+                  badgeColor: Colors.deepOrange,
+                ),
+                const SizedBox(height: 8),
+                _CarteSuggestions(suggestions: suggestionsAsync.value!),
+                const SizedBox(height: 20),
+              ],
+
               // ── Vue d'ensemble ──────────────────────────
               const _TitreSection(titre: 'Vue d\'ensemble', icone: Icons.dashboard),
               const SizedBox(height: 8),
@@ -529,5 +553,95 @@ class _CarteArticlesInutilises extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ── À racheter bientôt ─────────────────────────────────────────────
+class _CarteSuggestions extends ConsumerWidget {
+  final List<SuggestionReassort> suggestions;
+  const _CarteSuggestions({required this.suggestions});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Card(
+      child: Column(
+        children: suggestions.map((s) {
+          return ListTile(
+            leading: Icon(Icons.shopping_cart_checkout,
+                color: Theme.of(context).colorScheme.primary),
+            title: Text(s.article.nom),
+            subtitle: Text(
+              'En retard de ${s.joursRetard} jour${s.joursRetard > 1 ? 's' : ''}'
+              ' · habituellement tous les ${s.intervalleMoyenJours.round()} jours',
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.add_circle_outline),
+              tooltip: 'Ajouter à une liste',
+              onPressed: () => _ajouterSuggestion(context, ref, s.article),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Future<void> _ajouterSuggestion(
+      BuildContext context, WidgetRef ref, Article article) async {
+    final listesActives = (ref.read(listesNotifierProvider).valueOrNull ?? [])
+        .where((l) => !l.archivee)
+        .toList();
+
+    if (listesActives.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Créez d\'abord une liste de courses'),
+      ));
+      return;
+    }
+
+    ListeCourses? cible = listesActives.length == 1
+        ? listesActives.first
+        : await showModalBottomSheet<ListeCourses>(
+            context: context,
+            builder: (ctx) => SafeArea(
+              child: ListView(
+                shrinkWrap: true,
+                children: listesActives
+                    .map((l) => ListTile(
+                          leading: const Icon(Icons.shopping_cart),
+                          title: Text(l.nom),
+                          onTap: () => Navigator.of(ctx).pop(l),
+                        ))
+                    .toList(),
+              ),
+            ),
+          );
+
+    if (cible == null || !context.mounted) return;
+
+    final itemsExistants =
+        await ref.read(dbServiceProvider).getArticlesListe(cible.id);
+    if (itemsExistants.any((i) => i.articleId == article.id)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('"${article.nom}" est déjà dans "${cible.nom}"'),
+        ));
+      }
+      return;
+    }
+
+    await ref.read(articlesListeProvider(cible.id).notifier).ajouter(
+          ArticleListe(
+            id: 'al_${const Uuid().v4()}',
+            listeId: cible.id,
+            articleId: article.id,
+          ),
+        );
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('"${article.nom}" ajouté à "${cible.nom}"'),
+        backgroundColor: Colors.green,
+      ));
+    }
   }
 }

@@ -36,4 +36,27 @@ class AuthService {
     await _googleSignIn.signOut();
     await _auth.signOut();
   }
+
+  // Supprime le compte Firebase Auth. Firebase exige une connexion
+  // récente pour cette opération sensible : si besoin, redemande une
+  // authentification Google avant de réessayer.
+  Future<void> supprimerCompte() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    try {
+      await user.delete();
+    } on FirebaseAuthException catch (e) {
+      if (e.code != 'requires-recent-login') rethrow;
+      final googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) throw Exception('Reconnexion annulée');
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      await user.reauthenticateWithCredential(credential);
+      await user.delete();
+    }
+    await _googleSignIn.signOut();
+  }
 }

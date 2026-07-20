@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/models.dart';
@@ -6,6 +7,14 @@ class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   factory DatabaseService() => _instance;
   DatabaseService._internal();
+
+  // `flutter test` lance chaque fichier de test dans son propre isolate,
+  // mais tous partagent le même fichier sqlite par défaut (chemin fixe) :
+  // en exécution parallèle, ça provoque des conflits d'accès entre
+  // fichiers de test. Modifiable avant le premier accès à `db` pour que
+  // chaque fichier de test utilise son propre fichier.
+  @visibleForTesting
+  static String dbFileName = 'smartcart.db';
 
   Database? _db;
 
@@ -16,17 +25,93 @@ class DatabaseService {
 
   Future<Database> _initDb() async {
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'smartcart.db');
+    final path = join(dbPath, dbFileName);
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
           // Ajouter colonne couleur aux rayons existants
           await db.execute(
               'ALTER TABLE rayons ADD COLUMN couleur INTEGER DEFAULT 6296528');
+        }
+        if (oldV < 3) {
+          // Listes collaboratives (partagées entre plusieurs comptes)
+          await db.execute(
+              'ALTER TABLE listes ADD COLUMN partagee INTEGER DEFAULT 0');
+          await db.execute('ALTER TABLE listes ADD COLUMN code TEXT');
+        }
+        if (oldV < 4) {
+          // Prix par magasin (comparaison) : la clé primaire passe de
+          // articleId seul à (articleId, magasin). SQLite ne permet pas
+          // d'altérer une PRIMARY KEY : on recrée la table.
+          await db.execute(
+              'ALTER TABLE prix_articles RENAME TO prix_articles_old');
+          await db.execute('''
+            CREATE TABLE prix_articles (
+              articleId TEXT NOT NULL,
+              magasin TEXT NOT NULL DEFAULT '',
+              prix REAL NOT NULL,
+              PRIMARY KEY (articleId, magasin)
+            )
+          ''');
+          await db.execute('''
+            INSERT INTO prix_articles (articleId, magasin, prix)
+            SELECT articleId, '', prix FROM prix_articles_old
+          ''');
+          await db.execute('DROP TABLE prix_articles_old');
+        }
+        if (oldV < 5) {
+          await db.execute('''
+            CREATE TABLE prix_historique (
+              id TEXT PRIMARY KEY,
+              articleId TEXT NOT NULL,
+              magasin TEXT NOT NULL DEFAULT '',
+              prix REAL NOT NULL,
+              date TEXT NOT NULL
+            )
+          ''');
+        }
+        if (oldV < 6) {
+          await db.execute('''
+            CREATE TABLE recettes (
+              id TEXT PRIMARY KEY,
+              nom TEXT NOT NULL,
+              portions INTEGER NOT NULL DEFAULT 4,
+              ingredientsJson TEXT NOT NULL DEFAULT '[]'
+            )
+          ''');
+        }
+        if (oldV < 7) {
+          // Couleur par liste (nouveau champ, comme catégories/rayons).
+          await db.execute(
+              'ALTER TABLE listes ADD COLUMN couleur INTEGER DEFAULT 0xFF1ABC9C');
+
+          // Les rayons par défaut avaient une couleur prévue mais jamais
+          // écrite (bug d'insertion) : toutes les installs existantes ont
+          // donc la même couleur grise par défaut. On corrige uniquement
+          // les rayons par défaut encore à cette valeur (pour ne pas
+          // écraser une couleur choisie manuellement par l'utilisateur).
+          const couleursParDefaut = {
+            'ray_fruits': 0xFF4CAF50,
+            'ray_boucherie': 0xFFE53935,
+            'ray_frais': 0xFF039BE5,
+            'ray_epicerie': 0xFFFF8F00,
+            'ray_boissons': 0xFF1565C0,
+            'ray_surgeles': 0xFF00ACC1,
+            'ray_hygiene': 0xFFAB47BC,
+            'ray_menage': 0xFF78909C,
+          };
+          for (final entry in couleursParDefaut.entries) {
+            await db.update(
+              'rayons',
+              {'couleur': entry.value},
+              where: 'id = ? AND couleur = 6296528',
+              whereArgs: [entry.key],
+            );
+          }
         }
       },
     );
@@ -75,15 +160,42 @@ class DatabaseService {
         nom TEXT NOT NULL,
         createdAt TEXT NOT NULL,
         magasin TEXT,
-        archivee INTEGER DEFAULT 0
+        archivee INTEGER DEFAULT 0,
+        partagee INTEGER DEFAULT 0,
+        code TEXT,
+        couleur INTEGER DEFAULT 4279942300
       )
     ''');
 
-    // Table prix estimés par article
+    // Table prix estimés par article, un prix possible par magasin
+    // ('' = pas de magasin précisé)
     await db.execute('''
       CREATE TABLE prix_articles (
-        articleId TEXT PRIMARY KEY,
-        prix REAL NOT NULL
+        articleId TEXT NOT NULL,
+        magasin TEXT NOT NULL DEFAULT '',
+        prix REAL NOT NULL,
+        PRIMARY KEY (articleId, magasin)
+      )
+    ''');
+
+    // Historique des prix saisis dans le temps (local uniquement)
+    await db.execute('''
+      CREATE TABLE prix_historique (
+        id TEXT PRIMARY KEY,
+        articleId TEXT NOT NULL,
+        magasin TEXT NOT NULL DEFAULT '',
+        prix REAL NOT NULL,
+        date TEXT NOT NULL
+      )
+    ''');
+
+    // Recettes (local uniquement, pas synchronisé au cloud)
+    await db.execute('''
+      CREATE TABLE recettes (
+        id TEXT PRIMARY KEY,
+        nom TEXT NOT NULL,
+        portions INTEGER NOT NULL DEFAULT 4,
+        ingredientsJson TEXT NOT NULL DEFAULT '[]'
       )
     ''');
 
@@ -134,7 +246,13 @@ class DatabaseService {
       {'id': 'ray_menage', 'nom': 'Entretien', 'ordre': 7, 'magasin': null, 'couleur': 0xFF78909C},
     ];
     for (final r in defaultRayons) {
-      await db.insert('rayons', {'id': r['id'], 'nom': r['nom'], 'ordre': r['ordre'], 'magasin': r['magasin']});
+      await db.insert('rayons', {
+        'id': r['id'],
+        'nom': r['nom'],
+        'ordre': r['ordre'],
+        'magasin': r['magasin'],
+        'couleur': r['couleur'],
+      });
     }
   }
 
@@ -236,6 +354,12 @@ class DatabaseService {
     return rows.map(ListeCourses.fromMap).toList();
   }
 
+  Future<ListeCourses?> getListe(String id) async {
+    final d = await db;
+    final rows = await d.query('listes', where: 'id = ?', whereArgs: [id]);
+    return rows.isEmpty ? null : ListeCourses.fromMap(rows.first);
+  }
+
   Future<void> insertListe(ListeCourses liste) async {
     final d = await db;
     await d.insert('listes', liste.toMap(),
@@ -276,6 +400,21 @@ class DatabaseService {
     return nouvelle;
   }
 
+  // Recherche globale : articles présents dans une liste (non archivée)
+  // dont le nom correspond, avec le nom de la liste et de l'article joints.
+  Future<List<Map<String, dynamic>>> rechercherArticlesDansListes(
+      String query) async {
+    final d = await db;
+    return d.rawQuery('''
+      SELECT al.*, a.nom AS articleNom, l.nom AS listeNom
+      FROM articles_liste al
+      JOIN articles a ON a.id = al.articleId
+      JOIN listes l ON l.id = al.listeId
+      WHERE a.nom LIKE ? AND l.archivee = 0
+      ORDER BY l.nom, a.nom
+    ''', ['%$query%']);
+  }
+
   // ─── ARTICLES DANS UNE LISTE ─────────────────────────────
   Future<List<ArticleListe>> getArticlesListe(String listeId) async {
     final d = await db;
@@ -312,5 +451,62 @@ class DatabaseService {
       where: 'listeId = ?',
       whereArgs: [listeId],
     );
+  }
+
+  // ─── PRIX ARTICLES ────────────────────────────────────────
+  Future<List<PrixArticle>> getPrixArticles() async {
+    final d = await db;
+    final rows = await d.query('prix_articles');
+    return rows.map(PrixArticle.fromMap).toList();
+  }
+
+  Future<void> setPrixArticle(PrixArticle p) async {
+    final d = await db;
+    await d.insert('prix_articles', p.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> deletePrixArticle(String articleId, {String magasin = ''}) async {
+    final d = await db;
+    await d.delete('prix_articles',
+        where: 'articleId = ? AND magasin = ?', whereArgs: [articleId, magasin]);
+  }
+
+  // ─── HISTORIQUE DES PRIX ──────────────────────────────────
+  Future<void> ajouterHistoriquePrix(PrixHistorique h) async {
+    final d = await db;
+    // replace (pas juste insert) : rend une restauration de sauvegarde
+    // idempotente si on l'importe deux fois (même id → même entrée).
+    await d.insert('prix_historique', h.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<PrixHistorique>> getHistoriquePrix(String articleId) async {
+    final d = await db;
+    final rows = await d.query(
+      'prix_historique',
+      where: 'articleId = ?',
+      whereArgs: [articleId],
+      orderBy: 'date ASC',
+    );
+    return rows.map(PrixHistorique.fromMap).toList();
+  }
+
+  // ─── RECETTES ─────────────────────────────────────────────
+  Future<List<Recette>> getRecettes() async {
+    final d = await db;
+    final rows = await d.query('recettes', orderBy: 'nom COLLATE NOCASE');
+    return rows.map(Recette.fromMap).toList();
+  }
+
+  Future<void> insertRecette(Recette r) async {
+    final d = await db;
+    await d.insert('recettes', r.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> deleteRecette(String id) async {
+    final d = await db;
+    await d.delete('recettes', where: 'id = ?', whereArgs: [id]);
   }
 }

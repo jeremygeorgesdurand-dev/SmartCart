@@ -51,7 +51,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
       if (idsDejaPresents.contains(articleId)) continue;
       await ref.read(articlesListeProvider(liste.id).notifier).ajouter(
             ArticleListe(
-              id: 'al_\${const Uuid().v4()}',
+              id: 'al_${const Uuid().v4()}',
               listeId: liste.id,
               articleId: articleId,
             ),
@@ -60,7 +60,11 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
       nbAjoutes++;
     }
 
+    // Une fois l'ajout fait, on quitte complètement le mode sélection
+    // (sinon la liste reste sélectionnée et le catalogue reste affiché en
+    // mode "cocher des articles", ce qui prête à confusion).
     ref.read(articlesSelectionnesProvider.notifier).state = {};
+    ref.read(listeSelectionneeProvider.notifier).state = null;
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -103,6 +107,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
           // Recherche
           IconButton(
             icon: Icon(_searchVisible ? Icons.close : Icons.search),
+            tooltip: _searchVisible ? 'Fermer la recherche' : 'Rechercher',
             onPressed: () {
               setState(() => _searchVisible = !_searchVisible);
               if (!_searchVisible) {
@@ -120,6 +125,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
           // Scanner
           IconButton(
             icon: const Icon(Icons.qr_code_scanner),
+            tooltip: 'Scanner un code-barres',
             onPressed: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const ScannerScreen())),
           ),

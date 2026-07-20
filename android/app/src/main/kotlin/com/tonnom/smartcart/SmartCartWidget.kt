@@ -3,6 +3,7 @@ package com.tonnom.smartcart
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
@@ -183,6 +184,13 @@ class SmartCartWidget : AppWidgetProvider() {
             val listeId = intent.getStringExtra("liste_id") ?: ""
             Log.d(TAG, "Cocher: $articleListeId in $listeId")
 
+            // Retour visuel immédiat : on coche/décoche dans le cache JSON du
+            // widget et on redessine tout de suite, sans attendre que l'app
+            // s'ouvre et fasse le vrai traitement (sqlite + sync cloud).
+            // Purement cosmétique : le prochain mettreAJourWidget() envoyé par
+            // Flutter écrasera ce cache avec l'état réel de toute façon.
+            toggleCocheOptimiste(context, articleListeId)
+
             val i = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 putExtra("action", "cocher_article")
@@ -190,6 +198,37 @@ class SmartCartWidget : AppWidgetProvider() {
                 putExtra("liste_id", listeId)
             }
             context.startActivity(i)
+        }
+    }
+
+    private fun toggleCocheOptimiste(context: Context, articleListeId: String) {
+        try {
+            val prefs = context.getSharedPreferences(
+                "FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val key = if (prefs.contains("flutter.widget_articles_json"))
+                "flutter.widget_articles_json" else "widget_articles_json"
+            val json = prefs.getString(key, null) ?: return
+
+            val arr = JSONArray(json)
+            var modifie = false
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                if (obj.optString("id") == articleListeId) {
+                    obj.put("coche", !obj.optBoolean("coche", false))
+                    modifie = true
+                    break
+                }
+            }
+            if (!modifie) return
+
+            prefs.edit().putString(key, arr.toString()).apply()
+
+            val manager = AppWidgetManager.getInstance(context)
+            val ids = manager.getAppWidgetIds(
+                ComponentName(context, SmartCartWidget::class.java))
+            for (id in ids) updateWidget(context, manager, id)
+        } catch (e: Exception) {
+            Log.e(TAG, "toggleCocheOptimiste error: $e")
         }
     }
 }

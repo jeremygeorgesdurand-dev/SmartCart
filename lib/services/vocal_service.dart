@@ -71,22 +71,19 @@ class VocalService {
     _streamCtrl?.close();
     _streamCtrl = StreamController<String>.broadcast();
 
-    String dernierTexte = '';
-
     _stt.listen(
-      localeId: 'fr_FR',
       listenOptions: stt.SpeechListenOptions(
         partialResults: true,
         cancelOnError: false,
         autoPunctuation: false,
         listenMode: stt.ListenMode.dictation,
+        localeId: 'fr_FR',
+        pauseFor: const Duration(seconds: 2),
+        listenFor: const Duration(seconds: 30),
       ),
-      pauseFor: const Duration(seconds: 2),
-      listenFor: const Duration(seconds: 30),
       onResult: (result) {
         final texte = result.recognizedWords.trim();
         if (texte.isEmpty) return;
-        dernierTexte = texte;
         // Émettre chaque nouveau texte dans le stream
         if (!(_streamCtrl?.isClosed ?? true)) {
           _streamCtrl!.add(texte);
@@ -112,6 +109,21 @@ class VocalService {
     };
 
     return _streamCtrl!.stream;
+  }
+
+  // ── Découpage multi-articles ("pommes, lait et pain") ─────────
+  // Sépare sur les virgules et les "et"/"puis" isolés, puis nettoie
+  // chaque segment indépendamment. Un seul article dicté renvoie une
+  // liste à un seul élément.
+  static List<VocalResult> nettoyerMultiple(String texte) {
+    final segments = texte
+        .split(RegExp(r',|\bet\b|\bpuis\b', caseSensitive: false))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    if (segments.isEmpty) return [];
+    return segments.map(nettoyer).toList();
   }
 
   // ── Nettoyage du texte avant insertion ────────────────────────

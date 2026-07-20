@@ -56,6 +56,7 @@ class _AjouterArticleDialogState extends ConsumerState<AjouterArticleDialog> {
     final results = await ref
         .read(offServiceProvider)
         .searchByName(_nomCtrl.text.trim());
+    if (!mounted) return;
     setState(() {
       _suggestions = results.take(5).toList();
       _loadingOFF = false;
@@ -125,6 +126,7 @@ class _AjouterArticleDialogState extends ConsumerState<AjouterArticleDialog> {
                         labelText: 'Nom de l\'article *',
                       ),
                       textCapitalization: TextCapitalization.sentences,
+                      maxLength: 80,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -172,6 +174,7 @@ class _AjouterArticleDialogState extends ConsumerState<AjouterArticleDialog> {
                 decoration: const InputDecoration(
                     labelText: 'Marque (optionnel)'),
                 textCapitalization: TextCapitalization.words,
+                maxLength: 60,
               ),
 
               const SizedBox(height: 12),

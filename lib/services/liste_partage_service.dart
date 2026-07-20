@@ -1,5 +1,3 @@
-import '../models/models.dart';
-
 class ArticleImport {
   final String nom;
   final String categorieNom;

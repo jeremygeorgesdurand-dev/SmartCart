@@ -1,6 +1,8 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../services/version_info.dart';
 import '../widgets/background_logo.dart';
+import 'budget_screen.dart';
 import 'compte_screen.dart';
 import 'widget_config_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,6 +36,48 @@ class ParametresScreen extends ConsumerWidget {
       'gris': Color(0xFF455A64), 'noir': Color(0xFF212121),
     };
     return couleurs[c] ?? const Color(0xFF1ABC9C);
+  }
+
+  String _nomModeTheme(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light: return 'Clair';
+      case ThemeMode.dark: return 'Sombre';
+      case ThemeMode.system: return 'Système';
+    }
+  }
+
+  Future<void> _choisirModeTheme(BuildContext context, WidgetRef ref) async {
+    final actuel = ref.read(themeModeProvider);
+    Future<void> selectionner(BuildContext dialogCtx, ThemeMode v) async {
+      ref.read(themeModeProvider.notifier).state = v;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('theme_mode', switch (v) {
+        ThemeMode.light => 'clair',
+        ThemeMode.dark => 'sombre',
+        ThemeMode.system => 'systeme',
+      });
+      if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+    }
+
+    await showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Apparence'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final mode in ThemeMode.values)
+              ListTile(
+                title: Text(_nomModeTheme(mode)),
+                leading: Icon(actuel == mode
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked),
+                onTap: () => selectionner(dialogCtx, mode),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _choisirTheme(BuildContext context, WidgetRef ref) async {
@@ -132,6 +176,9 @@ class ParametresScreen extends ConsumerWidget {
           // Widget
           _SectionWidget(),
           const Divider(),
+          // Budget
+          const _SectionBudget(),
+          const Divider(),
           // Preferences
           const _Section(titre: 'Preferences', child: SizedBox.shrink()),
           SwitchListTile(
@@ -155,11 +202,38 @@ class ParametresScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _choisirTheme(context, ref),
           ),
+          const Divider(height: 1),
+          ListTile(
+            title: const Text('Apparence'),
+            subtitle: Text(_nomModeTheme(ref.watch(themeModeProvider))),
+            leading: const Icon(Icons.brightness_6_outlined),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _choisirModeTheme(context, ref),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            title: const Text('Taille du texte'),
+            subtitle: Slider(
+              value: ref.watch(tailleTexteProvider),
+              min: 0.85,
+              max: 1.3,
+              divisions: 9,
+              label: '${(ref.watch(tailleTexteProvider) * 100).round()} %',
+              onChanged: (v) =>
+                  ref.read(tailleTexteProvider.notifier).state = v,
+              onChangeEnd: (v) async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setDouble('taille_texte', v);
+              },
+            ),
+            leading: const Icon(Icons.text_fields),
+          ),
           const Divider(),
           const _Section(titre: 'Categories maison', child: _CategoriesManager()),
           const Divider(),
           const _Section(titre: 'Rayons magasin', child: _RayonsManager()),
           const SectionFondLogo(),
+          const _SectionSauvegarde(),
           const SectionAPropos(),
         ],
       ),
@@ -223,9 +297,8 @@ class _CategoriesManager extends ConsumerWidget {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: cats.length,
-            onReorder: (oldIndex, newIndex) {
+            onReorderItem: (oldIndex, newIndex) {
               final liste = [...cats];
-              if (newIndex > oldIndex) newIndex--;
               final item = liste.removeAt(oldIndex);
               liste.insert(newIndex, item);
               ref.read(categoriesNotifierProvider.notifier).reordonner(liste);
@@ -244,14 +317,33 @@ class _CategoriesManager extends ConsumerWidget {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.edit_outlined),
+                      tooltip: 'Modifier "${cat.nom}"',
                       onPressed: () =>
                           _editerCategorie(context, ref, cat),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => ref
-                          .read(categoriesNotifierProvider.notifier)
-                          .supprimer(cat.id),
+                      icon: Icon(Icons.delete_outline,
+                          color: Theme.of(context).colorScheme.error),
+                      tooltip: 'Supprimer "${cat.nom}"',
+                      onPressed: () {
+                        final catSupprimee = cat;
+                        ref
+                            .read(categoriesNotifierProvider.notifier)
+                            .supprimer(catSupprimee.id);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                'Catégorie "${catSupprimee.nom}" supprimée'),
+                            action: SnackBarAction(
+                              label: 'Annuler',
+                              onPressed: () => ref
+                                  .read(categoriesNotifierProvider.notifier)
+                                  .ajouter(catSupprimee),
+                            ),
+                            duration: const Duration(seconds: 4),
+                          ),
+                        );
+                      },
                     ),
                     const Icon(Icons.drag_handle),
                   ],
@@ -274,7 +366,7 @@ class _CategoriesManager extends ConsumerWidget {
 
   void _editerCategorie(BuildContext context, WidgetRef ref, Categorie? existing) {
     final ctrl = TextEditingController(text: existing?.nom ?? '');
-    int selectedColor = existing?.couleur ?? _couleurs[0].value;
+    int selectedColor = existing?.couleur ?? _couleurs[0].toARGB32();
 
     showDialog(
       context: context,
@@ -295,9 +387,9 @@ class _CategoriesManager extends ConsumerWidget {
               Wrap(
                 spacing: 8,
                 children: _couleurs.map((c) {
-                  final selected = selectedColor == c.value;
+                  final selected = selectedColor == c.toARGB32();
                   return GestureDetector(
-                    onTap: () => setState(() => selectedColor = c.value),
+                    onTap: () => setState(() => selectedColor = c.toARGB32()),
                     child: Container(
                       width: 32,
                       height: 32,
@@ -364,9 +456,8 @@ class _RayonsManager extends ConsumerWidget {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: rayons.length,
-            onReorder: (oldIndex, newIndex) {
+            onReorderItem: (oldIndex, newIndex) {
               final liste = [...rayons];
-              if (newIndex > oldIndex) newIndex--;
               final item = liste.removeAt(oldIndex);
               liste.insert(newIndex, item);
               ref.read(rayonsNotifierProvider.notifier).reordonner(liste);
@@ -394,13 +485,32 @@ class _RayonsManager extends ConsumerWidget {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.edit_outlined),
+                      tooltip: 'Modifier "${rayon.nom}"',
                       onPressed: () => _editerRayon(context, ref, rayon),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => ref
-                          .read(rayonsNotifierProvider.notifier)
-                          .supprimer(rayon.id),
+                      icon: Icon(Icons.delete_outline,
+                          color: Theme.of(context).colorScheme.error),
+                      tooltip: 'Supprimer "${rayon.nom}"',
+                      onPressed: () {
+                        final rayonSupprime = rayon;
+                        ref
+                            .read(rayonsNotifierProvider.notifier)
+                            .supprimer(rayonSupprime.id);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                'Rayon "${rayonSupprime.nom}" supprimé'),
+                            action: SnackBarAction(
+                              label: 'Annuler',
+                              onPressed: () => ref
+                                  .read(rayonsNotifierProvider.notifier)
+                                  .ajouter(rayonSupprime),
+                            ),
+                            duration: const Duration(seconds: 4),
+                          ),
+                        );
+                      },
                     ),
                     const Icon(Icons.drag_handle),
                   ],
@@ -430,7 +540,7 @@ class _RayonsManager extends ConsumerWidget {
   void _editerRayon(BuildContext context, WidgetRef ref, Rayon? existing) {
     final ctrlNom = TextEditingController(text: existing?.nom ?? '');
     final ctrlMagasin = TextEditingController(text: existing?.magasin ?? '');
-    int selectedColor = existing?.couleur ?? _couleursRayon[6].value;
+    int selectedColor = existing?.couleur ?? _couleursRayon[6].toARGB32();
 
     showDialog(
       context: context,
@@ -460,9 +570,9 @@ class _RayonsManager extends ConsumerWidget {
               Wrap(
                 spacing: 8,
                 children: _couleursRayon.map((c) {
-                  final selected = selectedColor == c.value;
+                  final selected = selectedColor == c.toARGB32();
                   return GestureDetector(
-                    onTap: () => setState(() => selectedColor = c.value),
+                    onTap: () => setState(() => selectedColor = c.toARGB32()),
                     child: Container(
                       width: 32, height: 32,
                       decoration: BoxDecoration(
@@ -509,6 +619,122 @@ class _RayonsManager extends ConsumerWidget {
   }
 }
 
+
+// ================================================================
+// SECTION SAUVEGARDE / RESTAURATION MANUELLE
+// ================================================================
+class _SectionSauvegarde extends ConsumerStatefulWidget {
+  const _SectionSauvegarde();
+
+  @override
+  ConsumerState<_SectionSauvegarde> createState() => _SectionSauvegardeState();
+}
+
+class _SectionSauvegardeState extends ConsumerState<_SectionSauvegarde> {
+  bool _enCours = false;
+
+  Future<void> _exporter() async {
+    setState(() => _enCours = true);
+    try {
+      await ref.read(backupServiceProvider).exporter();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Échec de la sauvegarde : $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _enCours = false);
+    }
+  }
+
+  Future<void> _restaurer() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      withData: true,
+    );
+    final bytes = result?.files.single.bytes;
+    if (bytes == null || !mounted) return;
+
+    final confirme = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Restaurer cette sauvegarde ?'),
+        content: const Text(
+            'Les catégories, rayons, articles, listes et prix du fichier '
+            'seront ajoutés/mis à jour dans SmartCart. Rien ne sera '
+            'supprimé de ce qui existe déjà.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Restaurer'),
+          ),
+        ],
+      ),
+    );
+    if (confirme != true || !mounted) return;
+
+    setState(() => _enCours = true);
+    try {
+      final contenu = String.fromCharCodes(bytes);
+      final res = await ref.read(backupServiceProvider).restaurer(contenu);
+
+      ref.invalidate(categoriesNotifierProvider);
+      ref.invalidate(rayonsNotifierProvider);
+      ref.invalidate(articlesNotifierProvider);
+      ref.invalidate(listesNotifierProvider);
+      ref.invalidate(prixArticlesNotifierProvider);
+      ref.invalidate(recettesNotifierProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sauvegarde restaurée : ${res.total} éléments')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Échec de la restauration : $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _enCours = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Section(
+      titre: 'Sauvegarde',
+      child: Column(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.upload_outlined),
+            title: const Text('Exporter une sauvegarde'),
+            subtitle: const Text('Catégories, rayons, articles, listes, prix'),
+            trailing: _enCours
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : null,
+            onTap: _enCours ? null : _exporter,
+          ),
+          ListTile(
+            leading: const Icon(Icons.download_outlined),
+            title: const Text('Restaurer une sauvegarde'),
+            subtitle: const Text('Depuis un fichier .json exporté'),
+            onTap: _enCours ? null : _restaurer,
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 // ================================================================
 // SECTION FOND LOGO
@@ -833,6 +1059,51 @@ class _SectionWidget extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const WidgetConfigScreen()),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ================================================================
+// SECTION BUDGET
+// ================================================================
+class _SectionBudget extends StatelessWidget {
+  const _SectionBudget();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text('Budget',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  )),
+        ),
+        Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          child: ListTile(
+            leading: Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF006B5E),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.euro, color: Colors.white, size: 22),
+            ),
+            title: const Text('Prix et budget',
+                style: TextStyle(fontWeight: FontWeight.w500)),
+            subtitle: const Text('Suivre le coût estimé de vos listes'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BudgetScreen()),
             ),
           ),
         ),

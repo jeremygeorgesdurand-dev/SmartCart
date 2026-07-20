@@ -11,19 +11,9 @@ class WidgetService {
     required List<ArticleListe> items,
     required List<Article> catalogue,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-
     final total = items.length;
     final coches = items.where((i) => i.coche).length;
 
-    // Écrire toutes les données — Flutter ajoute "flutter." automatiquement
-    // Kotlin lira "flutter.widget_liste_id" etc.
-    await prefs.setString('widget_liste_id', liste.id);
-    await prefs.setString('widget_liste_nom', liste.nom);
-    await prefs.setInt('widget_total', total);
-    await prefs.setInt('widget_coches', coches);
-
-    // JSON complet pour la liste scrollable
     final articlesJson = items.map((item) {
       final article =
           catalogue.where((a) => a.id == item.articleId).firstOrNull;
@@ -36,11 +26,24 @@ class WidgetService {
       };
     }).toList();
 
-    await prefs.setString('widget_articles_json', jsonEncode(articlesJson));
+    // On garde une copie côté Dart (pour getListeWidgetId, lu uniquement
+    // par Flutter) ET on transmet les données directement en argument du
+    // channel : depuis shared_preferences_android 2.3+, le plugin stocke
+    // via Jetpack DataStore et non plus le fichier SharedPreferences XML
+    // classique — le widget natif (Kotlin) ne peut donc plus lire ce que
+    // Flutter écrit ici. Passer les données en argument évite ce problème
+    // de raccord entre les deux mécanismes de stockage.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('widget_liste_id', liste.id);
 
-    // Forcer le rafraîchissement du widget Android
     try {
-      await _channel.invokeMethod('updateWidget');
+      await _channel.invokeMethod('updateWidget', {
+        'listeId': liste.id,
+        'listeNom': liste.nom,
+        'total': total,
+        'coches': coches,
+        'articlesJson': jsonEncode(articlesJson),
+      });
     } catch (e) {
       // Widget non installé, silencieux
     }
@@ -83,12 +86,8 @@ class WidgetService {
   static Future<void> effacerWidget() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('widget_liste_id');
-    await prefs.remove('widget_liste_nom');
-    await prefs.remove('widget_articles_json');
-    await prefs.remove('widget_total');
-    await prefs.remove('widget_coches');
     try {
-      await _channel.invokeMethod('updateWidget');
+      await _channel.invokeMethod('clearWidget');
     } catch (_) {}
   }
 }
