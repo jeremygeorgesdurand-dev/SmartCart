@@ -131,16 +131,42 @@ class _RecetteDetailSheet extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () async {
+          _BoutonGenererListe(recette: recette),
+        ],
+      ),
+    );
+  }
+}
+
+class _BoutonGenererListe extends ConsumerStatefulWidget {
+  final Recette recette;
+  const _BoutonGenererListe({required this.recette});
+
+  @override
+  ConsumerState<_BoutonGenererListe> createState() =>
+      _BoutonGenererListeState();
+}
+
+class _BoutonGenererListeState extends ConsumerState<_BoutonGenererListe> {
+  bool generation = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final recette = widget.recette;
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: generation
+            ? null
+            : () async {
+                setState(() => generation = true);
                 try {
                   await ref
                       .read(recettesNotifierProvider.notifier)
                       .genererListe(recette);
                 } catch (e) {
                   if (context.mounted) {
+                    setState(() => generation = false);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Une erreur est survenue : $e')),
                     );
@@ -156,11 +182,16 @@ class _RecetteDetailSheet extends ConsumerWidget {
                   ));
                 }
               },
-              icon: const Icon(Icons.shopping_cart_outlined),
-              label: const Text('Générer une liste de courses'),
-            ),
-          ),
-        ],
+        icon: generation
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.shopping_cart_outlined),
+        label: Text(generation
+            ? 'Génération en cours…'
+            : 'Générer une liste de courses'),
       ),
     );
   }
@@ -342,6 +373,8 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
             decoration: const InputDecoration(labelText: 'Nom de la recette'),
             textCapitalization: TextCapitalization.sentences,
             maxLength: 60,
+            maxLines: 2,
+            minLines: 1,
           ),
           Row(
             children: [
@@ -375,45 +408,58 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
 
   Widget _buildLigne(int i) {
     final ligne = _lignes[i];
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: TextField(
-              controller: ligne.nom,
-              // labelText (pas hintText) reste visible même une fois le
-              // champ rempli : "Qté" / "Unité" seuls, une fois tapés,
-              // ne rappelaient plus à quoi correspondait chaque colonne.
-              decoration:
-                  const InputDecoration(labelText: 'Ingrédient', isDense: true),
+    // Le nom sur sa propre ligne (les titres de recettes/ingrédients
+    // peuvent être longs), quantité + unité en dessous : trois champs
+    // serrés sur une seule ligne étaient illisibles sur mobile.
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: ligne.nom,
+                    decoration: const InputDecoration(
+                        labelText: 'Ingrédient', isDense: true),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: _lignes.length > 1
+                      ? () => setState(() => _lignes.removeAt(i))
+                      : null,
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: ligne.quantite,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                  labelText: 'Qté', helperText: 'ex: 200', isDense: true),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                SizedBox(
+                  width: 90,
+                  child: TextField(
+                    controller: ligne.quantite,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                        labelText: 'Qté', helperText: 'ex: 200', isDense: true),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 110,
+                  child: TextField(
+                    controller: ligne.unite,
+                    decoration: const InputDecoration(
+                        labelText: 'Unité', helperText: 'ex: g, ml', isDense: true),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: ligne.unite,
-              decoration: const InputDecoration(
-                  labelText: 'Unité', helperText: 'ex: g, ml', isDense: true),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18),
-            onPressed: _lignes.length > 1
-                ? () => setState(() => _lignes.removeAt(i))
-                : null,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

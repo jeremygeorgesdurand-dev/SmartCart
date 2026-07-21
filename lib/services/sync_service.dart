@@ -416,12 +416,18 @@ class SyncService {
     if (!codeDoc.exists) return null;
     final listeId = (codeDoc.data() as Map<String, dynamic>)['listeId'] as String;
 
-    final listeDoc = await _listesPartageesCol.doc(listeId).get();
-    if (!listeDoc.exists) return null;
-
+    // La règle de lecture de listes_partagees exige d'être déjà dans
+    // `membres` : il faut donc s'ajouter D'ABORD (la règle d'update
+    // l'autorise explicitement pour un non-membre), puis seulement
+    // ensuite lire le document — sinon ce get() échoue systématiquement
+    // avec "permission denied" pour quiconque n'est pas encore membre,
+    // ce qui est le cas de tout le monde au moment de rejoindre.
     await _listesPartageesCol.doc(listeId).update({
       'membres': FieldValue.arrayUnion([_uid]),
     });
+
+    final listeDoc = await _listesPartageesCol.doc(listeId).get();
+    if (!listeDoc.exists) return null;
 
     final liste = ListeCourses.fromMap(listeDoc.data() as Map<String, dynamic>)
         .copyWith(partagee: true);

@@ -91,6 +91,8 @@ final realtimeSyncProvider = Provider<void>((ref) {
 
 // ─── PREFERENCES ─────────────────────────────────────────────────
 final afficherStatsProvider = StateProvider<bool>((ref) => true);
+final afficherBudgetProvider = StateProvider<bool>((ref) => true);
+final afficherPrixProvider = StateProvider<bool>((ref) => true);
 final couleurThemeProvider = StateProvider<String>((ref) => 'vert');
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 final afficherOnboardingProvider = StateProvider<bool>((ref) => false);
@@ -461,14 +463,18 @@ final prixIndicatifProvider =
   final dbService = ref.read(dbServiceProvider);
 
   // Le cache local évite de refaire une recherche réseau à chaque
-  // ouverture d'écran : un résultat (trouvé ou non) reste valable 14 jours.
+  // ouverture d'écran. Un résultat TROUVÉ reste valable 14 jours. Un
+  // résultat NON trouvé n'est mis en cache que quelques heures : sinon un
+  // simple aléa réseau (timeout, coupure) bloquait l'article sans prix
+  // pendant deux semaines, même une fois la connexion revenue.
   final cache = await dbService.getPrixCacheWeb(article.id);
   if (cache != null) {
+    final trouve = (cache['trouve'] as int) == 1;
     final date = DateTime.tryParse(cache['date'] as String? ?? '');
-    final frais = date != null &&
-        DateTime.now().difference(date) < const Duration(days: 14);
+    final delaiFraicheur = trouve ? const Duration(days: 14) : const Duration(hours: 3);
+    final frais = date != null && DateTime.now().difference(date) < delaiFraicheur;
     if (frais) {
-      if ((cache['trouve'] as int) == 0) return null;
+      if (!trouve) return null;
       return PrixTrouve(
         magasin: cache['magasin'] as String,
         prix: (cache['prix'] as num).toDouble(),
@@ -532,15 +538,19 @@ final prixIndicatifProvider =
   return resultat;
 });
 
-// Total estimé d'une liste = somme(prix unitaire × quantité) pour les
-// articles ayant un prix renseigné (les autres sont ignorés du total).
-// Si la liste a un magasin renseigné et qu'un prix existe pour ce
-// magasin, on l'utilise ; sinon on prend le prix le moins cher connu.
+// Total estimé d'une liste = somme(prix unitaire × quantité). Priorité au
+// prix saisi/confirmé par l'utilisateur ; à défaut, le prix indicatif
+// (en ligne) de l'article est utilisé s'il est déjà disponible en cache —
+// pour que le total reflète une vraie estimation même sur des articles
+// jamais renseignés à la main, plutôt que de les ignorer purement et
+// simplement. Si la liste a un magasin renseigné et qu'un prix existe pour
+// ce magasin, on l'utilise ; sinon on prend le prix confirmé le moins cher.
 final totalListeProvider =
     Provider.family<double, String>((ref, listeId) {
   final items = ref.watch(articlesListeProvider(listeId)).valueOrNull ?? [];
   final prix = ref.watch(prixArticlesNotifierProvider).valueOrNull ?? [];
   final listes = ref.watch(listesNotifierProvider).valueOrNull ?? [];
+  final articles = ref.watch(articlesNotifierProvider).valueOrNull ?? [];
   final magasinListe = listes.where((l) => l.id == listeId).firstOrNull?.magasin;
 
   final prixParArticle = <String, List<PrixArticle>>{};
@@ -550,13 +560,21 @@ final totalListeProvider =
 
   return items.fold<double>(0, (total, item) {
     final options = prixParArticle[item.articleId];
-    if (options == null || options.isEmpty) return total;
-    final correspondant = magasinListe != null
-        ? options.where((p) => p.magasin == magasinListe).firstOrNull
-        : null;
-    final unitaire = correspondant?.prix ??
-        options.map((p) => p.prix).reduce((a, b) => a < b ? a : b);
-    return total + unitaire * item.quantite;
+    if (options != null && options.isNotEmpty) {
+      final correspondant = magasinListe != null
+          ? options.where((p) => p.magasin == magasinListe).firstOrNull
+          : null;
+      final unitaire = correspondant?.prix ??
+          options.map((p) => p.prix).reduce((a, b) => a < b ? a : b);
+      return total + unitaire * item.quantite;
+    }
+
+    final article =
+        articles.where((a) => a.id == item.articleId).firstOrNull;
+    if (article == null) return total;
+    final indicatif = ref.watch(prixIndicatifProvider(article)).valueOrNull;
+    if (indicatif == null) return total;
+    return total + indicatif.prix * item.quantite;
   });
 });
 
@@ -611,33 +629,45 @@ class RecettesNotifier extends AsyncNotifier<List<Recette>> {
     final catalogue = await ref.read(articlesNotifierProvider.future);
     final itemsExistants = await db.getArticlesListe(listeId);
 
-    for (var i = 0; i < recette.ingredients.length; i++) {
-      final ing = recette.ingredients[i];
-      var article = catalogue
-          .where((a) => a.nom.toLowerCase() == ing.nom.toLowerCase())
-          .firstOrNull;
+    // En parallèle plutôt qu'un await séquentiel par ingrédient : avec 15-20
+    // ingrédients et une synchro cloud par écriture, un réseau lent donnait
+    // l'impression que "rien ne se passe" (dizaines de secondes d'attente).
+    // Une erreur sur un ingrédient (ex: sync cloud en échec) ne doit pas
+    // empêcher les autres d'être ajoutés.
+    await Future.wait(
+      recette.ingredients.asMap().entries.map((entry) async {
+        final i = entry.key;
+        final ing = entry.value;
+        try {
+          var article = catalogue
+              .where((a) => a.nom.toLowerCase() == ing.nom.toLowerCase())
+              .firstOrNull;
 
-      if (article == null) {
-        article = Article(
-          id: 'article_${DateTime.now().millisecondsSinceEpoch}_$i',
-          nom: ing.nom,
-        );
-        await ref.read(articlesNotifierProvider.notifier).ajouter(article);
-      }
+          if (article == null) {
+            article = Article(
+              id: 'article_${DateTime.now().millisecondsSinceEpoch}_$i',
+              nom: ing.nom,
+            );
+            await ref.read(articlesNotifierProvider.notifier).ajouter(article);
+          }
 
-      final dejaPresent =
-          itemsExistants.any((it) => it.articleId == article!.id);
-      if (dejaPresent) continue;
+          final dejaPresent =
+              itemsExistants.any((it) => it.articleId == article!.id);
+          if (dejaPresent) return;
 
-      await ref.read(articlesListeProvider(listeId).notifier).ajouter(
-            ArticleListe(
-              id: 'al_${DateTime.now().millisecondsSinceEpoch}_$i',
-              listeId: listeId,
-              articleId: article.id,
-              quantite: ing.quantite,
-              unite: ing.unite,
-            ),
-          );
-    }
+          await ref.read(articlesListeProvider(listeId).notifier).ajouter(
+                ArticleListe(
+                  id: 'al_${DateTime.now().millisecondsSinceEpoch}_$i',
+                  listeId: listeId,
+                  articleId: article.id,
+                  quantite: ing.quantite,
+                  unite: ing.unite,
+                ),
+              );
+        } catch (_) {
+          // On continue avec les autres ingrédients.
+        }
+      }),
+    );
   }
 }

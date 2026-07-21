@@ -377,7 +377,10 @@ class _AjoutRapideDialogState extends ConsumerState<AjoutRapideDialog> {
         TextButton(
           onPressed: () {
             final nom = _ctrl.text.trim();
-            if (nom.isEmpty) return;
+            // Contrairement à "Ajouter" (qui enregistre tout de suite et a
+            // donc besoin d'un nom), "Avec options" ouvre juste le
+            // formulaire complet : un nom vide ne doit pas bloquer, on
+            // pourra le renseigner là-bas.
             // On renvoie juste le nom au lieu d'enchaîner un nouveau
             // showDialog ici : appeler showDialog avec le BuildContext de
             // CE dialogue juste après l'avoir fermé (Navigator.pop) est

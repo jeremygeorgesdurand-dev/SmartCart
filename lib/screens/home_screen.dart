@@ -25,13 +25,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.watch(realtimeSyncProvider);
 
     final afficherStats = ref.watch(afficherStatsProvider);
+    final afficherBudget = ref.watch(afficherBudgetProvider);
     final fondActif = ref.watch(fondActiveProvider);
     final fondOpacite = ref.watch(fondOpaciteProvider);
 
     final screens = [
       const ListesScreen(),
       const CatalogueScreen(),
-      const BudgetScreen(),
+      if (afficherBudget) const BudgetScreen(),
       if (afficherStats) const StatsScreen(),
       const ParametresScreen(),
     ];
@@ -47,11 +48,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         selectedIcon: Icon(Icons.inventory_2),
         label: 'Catalogue',
       ),
-      const NavigationDestination(
-        icon: Icon(Icons.euro_outlined),
-        selectedIcon: Icon(Icons.euro),
-        label: 'Budget',
-      ),
+      if (afficherBudget)
+        const NavigationDestination(
+          icon: Icon(Icons.euro_outlined),
+          selectedIcon: Icon(Icons.euro),
+          label: 'Budget',
+        ),
       if (afficherStats)
         const NavigationDestination(
           icon: Icon(Icons.bar_chart_outlined),

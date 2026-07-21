@@ -356,6 +356,7 @@ class _ListeCard extends ConsumerWidget {
 
               // Total estimé (si des prix sont renseignés)
               Builder(builder: (context) {
+                if (!ref.watch(afficherPrixProvider)) return const SizedBox.shrink();
                 final total = ref.watch(totalListeProvider(liste.id));
                 if (total <= 0) return const SizedBox.shrink();
                 return Padding(
@@ -818,7 +819,9 @@ class DetailListeScreen extends ConsumerWidget {
     final articlesListeAsync = ref.watch(articlesListeProvider(liste.id));
     final articlesAsync = ref.watch(articlesNotifierProvider);
     final sortMode = ref.watch(articleListeSortProvider);
-    final total = ref.watch(totalListeProvider(liste.id));
+    final total = ref.watch(afficherPrixProvider)
+        ? ref.watch(totalListeProvider(liste.id))
+        : 0.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -1390,7 +1393,9 @@ class ModeCoursesScreen extends ConsumerWidget {
     final catalogueAsync = ref.watch(articlesNotifierProvider);
     final rayonsAsync = ref.watch(rayonsNotifierProvider);
 
-    final total = ref.watch(totalListeProvider(liste.id));
+    final total = ref.watch(afficherPrixProvider)
+        ? ref.watch(totalListeProvider(liste.id))
+        : 0.0;
 
     return Scaffold(
       appBar: AppBar(

@@ -165,6 +165,8 @@ class ParametresScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final afficherStats = ref.watch(afficherStatsProvider);
+    final afficherBudget = ref.watch(afficherBudgetProvider);
+    final afficherPrix = ref.watch(afficherPrixProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Parametres')),
       body: ListView(
@@ -185,6 +187,29 @@ class ParametresScreen extends ConsumerWidget {
               ref.read(afficherStatsProvider.notifier).state = v;
               final prefs = await SharedPreferences.getInstance();
               await prefs.setBool('afficher_stats', v);
+            },
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            title: const Text('Afficher le budget'),
+            subtitle: const Text('Onglet Budget dans la navigation'),
+            value: afficherBudget,
+            onChanged: (v) async {
+              ref.read(afficherBudgetProvider.notifier).state = v;
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('afficher_budget', v);
+            },
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            title: const Text('Afficher les prix'),
+            subtitle: const Text(
+                'Prix des articles dans les listes et le catalogue'),
+            value: afficherPrix,
+            onChanged: (v) async {
+              ref.read(afficherPrixProvider.notifier).state = v;
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('afficher_prix', v);
             },
           ),
           const Divider(height: 1),

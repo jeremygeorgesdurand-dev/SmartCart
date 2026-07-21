@@ -131,12 +131,7 @@ class _ArticlePrixTile extends ConsumerWidget {
 
     return ExpansionTile(
       title: Text(article.nom),
-      subtitle: tries.length > 1
-          ? Text('${tries.length} magasins comparés')
-          : (indicatif != null
-              ? Text('~${indicatif.prix.toStringAsFixed(2)} € indicatif '
-                  '(${indicatif.magasin})')
-              : null),
+      subtitle: tries.length > 1 ? Text('${tries.length} magasins comparés') : null,
       trailing: tries.isEmpty && indicatif != null
           ? Text(
               '~${indicatif.prix.toStringAsFixed(2)} €',
@@ -157,15 +152,12 @@ class _ArticlePrixTile extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Prix indicatif trouvé en ligne : '
-                    '${indicatif.prix.toStringAsFixed(2)} € '
-                    '(${indicatif.magasin})',
+                    'Prix indicatif : ${indicatif.prix.toStringAsFixed(2)} €',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
                 TextButton(
                   onPressed: () => _editerPrix(context, ref,
-                      magasin: indicatif.magasin,
                       prixSuggere: indicatif.prix),
                   child: const Text('Utiliser'),
                 ),

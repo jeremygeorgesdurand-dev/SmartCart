@@ -13,6 +13,8 @@ class PrixArticleBadge extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(afficherPrixProvider)) return const SizedBox.shrink();
+
     final prixConfirmes = ref
             .watch(prixArticlesNotifierProvider)
             .valueOrNull
