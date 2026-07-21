@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../widgets/animated_list_item.dart';
 import '../widgets/import_liste_dialog.dart';
+import '../widgets/prix_article_badge.dart';
 import '../widgets/vocal_button.dart';
 import 'recherche_globale_screen.dart';
 import 'recettes_screen.dart';
@@ -384,15 +385,27 @@ class _ListeCard extends ConsumerWidget {
                   const PopupMenuItem(value: 'importer', child: Text('Importer une liste')),
                   const PopupMenuItem(value: 'dupliquer', child: Text('Dupliquer')),
                   const PopupMenuItem(value: 'renommer', child: Text('Renommer')),
-                  PopupMenuItem(
+                  const PopupMenuItem(
                     value: 'vider',
-                    child: Text('Vider la liste',
-                        style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    child: Row(children: [
+                      Icon(Icons.remove_shopping_cart,
+                          size: 18, color: Color(0xFFFFC400)),
+                      SizedBox(width: 10),
+                      Text('Vider la liste',
+                          style: TextStyle(
+                              color: Color(0xFFB38600),
+                              fontWeight: FontWeight.bold)),
+                    ]),
                   ),
-                  PopupMenuItem(
+                  const PopupMenuItem(
                     value: 'supprimer',
-                    child: Text('Supprimer',
-                        style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    child: Row(children: [
+                      Icon(Icons.delete_forever, size: 18, color: Colors.red),
+                      SizedBox(width: 10),
+                      Text('Supprimer',
+                          style: TextStyle(
+                              color: Colors.red, fontWeight: FontWeight.bold)),
+                    ]),
                   ),
                 ],
               ),
@@ -805,10 +818,25 @@ class DetailListeScreen extends ConsumerWidget {
     final articlesListeAsync = ref.watch(articlesListeProvider(liste.id));
     final articlesAsync = ref.watch(articlesNotifierProvider);
     final sortMode = ref.watch(articleListeSortProvider);
+    final total = ref.watch(totalListeProvider(liste.id));
 
     return Scaffold(
       appBar: AppBar(
         title: Text(liste.nom),
+        bottom: total > 0
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(20),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '≈ ${total.toStringAsFixed(2)} €',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ),
+              )
+            : null,
         actions: [
           PopupMenuButton<SortMode>(
             icon: const Icon(Icons.sort),
@@ -1200,9 +1228,13 @@ class _ArticleListeTile extends ConsumerWidget {
             : const TextStyle(fontWeight: FontWeight.w500),
       ),
       subtitle: article.marque != null ? Text(article.marque!) : null,
-      // Quantité uniquement (pas de boutons +/- ni supprimer)
-      trailing: articleListe.quantite > 1
-          ? Container(
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PrixArticleBadge(article: article),
+          if (articleListe.quantite > 1) ...[
+            const SizedBox(width: 8),
+            Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primaryContainer,
@@ -1216,8 +1248,10 @@ class _ArticleListeTile extends ConsumerWidget {
                   color: Theme.of(context).colorScheme.onPrimaryContainer,
                 ),
               ),
-            )
-          : null,
+            ),
+          ],
+        ],
+      ),
       onTap: () => ref
           .read(articlesListeProvider(listeId).notifier)
           .cocher(articleListe, !articleListe.coche),
@@ -1356,9 +1390,25 @@ class ModeCoursesScreen extends ConsumerWidget {
     final catalogueAsync = ref.watch(articlesNotifierProvider);
     final rayonsAsync = ref.watch(rayonsNotifierProvider);
 
+    final total = ref.watch(totalListeProvider(liste.id));
+
     return Scaffold(
       appBar: AppBar(
         title: Text(liste.nom),
+        bottom: total > 0
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(20),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '≈ ${total.toStringAsFixed(2)} €',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ),
+              )
+            : null,
         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
         actions: [
           IconButton(
@@ -1711,14 +1761,23 @@ class _ModeCoursesItem extends ConsumerWidget {
                     color: Theme.of(context).colorScheme.outline,
                     fontSize: 12))
             : null,
-        trailing: Text(
-          '× ${articleListe.quantite}',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: coche
-                    ? Theme.of(context).colorScheme.outline
-                    : null,
-              ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!coche) ...[
+              PrixArticleBadge(article: article),
+              const SizedBox(width: 8),
+            ],
+            Text(
+              '× ${articleListe.quantite}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: coche
+                        ? Theme.of(context).colorScheme.outline
+                        : null,
+                  ),
+            ),
+          ],
         ),
         onTap: () => ref
             .read(articlesListeProvider(listeId).notifier)

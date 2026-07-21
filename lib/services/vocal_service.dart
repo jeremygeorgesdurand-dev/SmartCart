@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
-enum VocalEtat { idle, demande_permission, ecoute, erreur }
+enum VocalEtat { idle, demandePermission, ecoute, erreur }
 
 class VocalResult {
   final String texteOriginal;

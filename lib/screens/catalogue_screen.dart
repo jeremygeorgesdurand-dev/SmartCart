@@ -402,9 +402,19 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
           // Ajout rapide
           FloatingActionButton.extended(
             heroTag: 'add_quick',
-            onPressed: () => showDialog(
-                context: context,
-                builder: (_) => const AjoutRapideDialog()),
+            onPressed: () async {
+              // Le contexte de cet écran reste stable même après la
+              // fermeture du dialogue d'ajout rapide : c'est lui qui doit
+              // ouvrir le dialogue "avec options" suivant, pas le dialogue
+              // qu'on vient de fermer (son contexte serait déjà invalide).
+              final nom = await showDialog<String>(
+                  context: context,
+                  builder: (_) => const AjoutRapideDialog());
+              if (nom == null || !context.mounted) return;
+              showDialog(
+                  context: context,
+                  builder: (_) => AjouterArticleDialog(nomInitial: nom));
+            },
             icon: const Icon(Icons.add),
             label: const Text('Ajout rapide'),
           ),

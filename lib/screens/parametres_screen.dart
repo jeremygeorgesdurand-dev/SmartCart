@@ -2,7 +2,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../services/version_info.dart';
 import '../widgets/background_logo.dart';
-import 'budget_screen.dart';
 import 'compte_screen.dart';
 import 'widget_config_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -174,10 +173,7 @@ class ParametresScreen extends ConsumerWidget {
           const _SectionCompte(),
           const Divider(),
           // Widget
-          _SectionWidget(),
-          const Divider(),
-          // Budget
-          const _SectionBudget(),
+          const _SectionWidget(),
           const Divider(),
           // Preferences
           const _Section(titre: 'Preferences', child: SizedBox.shrink()),
@@ -1067,47 +1063,3 @@ class _SectionWidget extends StatelessWidget {
   }
 }
 
-// ================================================================
-// SECTION BUDGET
-// ================================================================
-class _SectionBudget extends StatelessWidget {
-  const _SectionBudget();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text('Budget',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                  )),
-        ),
-        Card(
-          margin: const EdgeInsets.symmetric(horizontal: 8),
-          child: ListTile(
-            leading: Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: const Color(0xFF006B5E),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.euro, color: Colors.white, size: 22),
-            ),
-            title: const Text('Prix et budget',
-                style: TextStyle(fontWeight: FontWeight.w500)),
-            subtitle: const Text('Suivre le coût estimé de vos listes'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const BudgetScreen()),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}

@@ -23,6 +23,7 @@ class _AjouterArticleDialogState extends ConsumerState<AjouterArticleDialog> {
   late final TextEditingController _nomCtrl;
   late final TextEditingController _marqueCtrl;
   late final TextEditingController _barcodeCtrl;
+  late final TextEditingController _prixCtrl;
   String? _selectedCatId;
   String? _selectedRayonId;
 
@@ -40,6 +41,20 @@ class _AjouterArticleDialogState extends ConsumerState<AjouterArticleDialog> {
         text: widget.barcodeInitial ?? widget.articleExistant?.barcode ?? '');
     _selectedCatId = widget.articleExistant?.categorieId;
     _selectedRayonId = widget.articleExistant?.rayonId;
+
+    // Prix générique existant (sans magasin précis), s'il y en a déjà un.
+    final articleId = widget.articleExistant?.id;
+    final prixExistant = articleId == null
+        ? null
+        : ref
+            .read(prixArticlesNotifierProvider)
+            .valueOrNull
+            ?.where((p) => p.articleId == articleId && p.magasin.isEmpty)
+            .firstOrNull;
+    _prixCtrl = TextEditingController(
+        text: prixExistant != null
+            ? prixExistant.prix.toStringAsFixed(2)
+            : '');
   }
 
   @override
@@ -47,6 +62,7 @@ class _AjouterArticleDialogState extends ConsumerState<AjouterArticleDialog> {
     _nomCtrl.dispose();
     _marqueCtrl.dispose();
     _barcodeCtrl.dispose();
+    _prixCtrl.dispose();
     super.dispose();
   }
 
@@ -92,6 +108,15 @@ class _AjouterArticleDialogState extends ConsumerState<AjouterArticleDialog> {
     } else {
       ref.read(articlesNotifierProvider.notifier).modifier(article);
     }
+
+    final prixValeur =
+        double.tryParse(_prixCtrl.text.trim().replaceAll(',', '.'));
+    if (prixValeur != null && prixValeur >= 0) {
+      ref
+          .read(prixArticlesNotifierProvider.notifier)
+          .definir(article.id, prixValeur, magasin: '');
+    }
+
     Navigator.pop(context);
   }
 
@@ -187,6 +212,20 @@ class _AjouterArticleDialogState extends ConsumerState<AjouterArticleDialog> {
                   prefixIcon: Icon(Icons.barcode_reader),
                 ),
                 keyboardType: TextInputType.number,
+              ),
+
+              const SizedBox(height: 12),
+
+              // Prix estimé (optionnel)
+              TextField(
+                controller: _prixCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Prix estimé (optionnel)',
+                  prefixIcon: Icon(Icons.euro),
+                  suffixText: '€',
+                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
               ),
 
               const SizedBox(height: 12),
@@ -339,11 +378,14 @@ class _AjoutRapideDialogState extends ConsumerState<AjoutRapideDialog> {
           onPressed: () {
             final nom = _ctrl.text.trim();
             if (nom.isEmpty) return;
-            Navigator.pop(context);
-            showDialog(
-              context: context,
-              builder: (_) => AjouterArticleDialog(nomInitial: nom),
-            );
+            // On renvoie juste le nom au lieu d'enchaîner un nouveau
+            // showDialog ici : appeler showDialog avec le BuildContext de
+            // CE dialogue juste après l'avoir fermé (Navigator.pop) est
+            // un piège classique Flutter — le contexte peut déjà être
+            // désactivé, et le nouveau dialogue n'apparaît jamais. On
+            // laisse l'écran appelant (dont le contexte reste stable)
+            // ouvrir AjouterArticleDialog à la place.
+            Navigator.pop(context, nom);
           },
           child: const Text('Avec options'),
         ),

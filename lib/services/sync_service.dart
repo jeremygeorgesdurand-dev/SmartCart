@@ -384,7 +384,6 @@ class SyncService {
       'membres': [uid],
       'proprietaireId': uid,
     });
-    batch.set(_codesPartageCol.doc(code), {'listeId': liste.id});
     for (final item in items) {
       batch.set(docRef.collection('articles').doc(item.id), item.toMap());
     }
@@ -397,6 +396,15 @@ class SyncService {
     batch.delete(_col('listes').doc(liste.id));
 
     await batch.commit();
+
+    // Créé séparément, APRÈS la validation du batch ci-dessus : la règle
+    // Firestore de codes_partage vérifie le proprietaireId via un get()
+    // sur listes_partagees/{listeId}. Si ce document était créé dans le
+    // même batch, ce get() ne le verrait pas encore (les écritures d'un
+    // batch ne sont pas visibles entre elles avant validation complète),
+    // et la règle échouerait systématiquement avec "permission denied".
+    await _codesPartageCol.doc(code).set({'listeId': liste.id});
+
     return code;
   }
 

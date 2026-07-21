@@ -13,6 +13,7 @@ import '../services/stats_service.dart';
 import '../services/export_service.dart';
 import '../services/auth_service.dart';
 import '../services/fcm_service.dart';
+import '../services/recipe_import_service.dart';
 import '../services/sync_service.dart';
 import '../services/widget_service.dart';
 
@@ -22,6 +23,8 @@ final offServiceProvider =
     Provider<OpenFoodFactsService>((_) => OpenFoodFactsService());
 final openPricesServiceProvider =
     Provider<OpenPricesService>((_) => OpenPricesService());
+final recipeImportServiceProvider =
+    Provider<RecipeImportService>((_) => RecipeImportService());
 final backupServiceProvider =
     Provider<BackupService>((ref) => BackupService(ref.read(dbServiceProvider)));
 final partageServiceProvider = Provider<PartageService>((_) => PartageService());
@@ -455,17 +458,78 @@ class PrixArticlesNotifier extends AsyncNotifier<List<PrixArticle>> {
 // de vie de l'app : on ne refait pas l'appel réseau à chaque rebuild.
 final prixIndicatifProvider =
     FutureProvider.family<PrixTrouve?, Article>((ref, article) async {
-  var barcode = article.barcode;
-  if (barcode == null) {
+  final dbService = ref.read(dbServiceProvider);
+
+  // Le cache local évite de refaire une recherche réseau à chaque
+  // ouverture d'écran : un résultat (trouvé ou non) reste valable 14 jours.
+  final cache = await dbService.getPrixCacheWeb(article.id);
+  if (cache != null) {
+    final date = DateTime.tryParse(cache['date'] as String? ?? '');
+    final frais = date != null &&
+        DateTime.now().difference(date) < const Duration(days: 14);
+    if (frais) {
+      if ((cache['trouve'] as int) == 0) return null;
+      return PrixTrouve(
+        magasin: cache['magasin'] as String,
+        prix: (cache['prix'] as num).toDouble(),
+        devise: cache['devise'] as String,
+        date: date,
+      );
+    }
+  }
+
+  final openPrices = ref.read(openPricesServiceProvider);
+  PrixTrouve? resultat;
+
+  if (article.barcode != null) {
+    // Code-barres connu : produit précis, on prend le prix le moins cher.
+    final resultats = await openPrices.chercherParBarcode(article.barcode!);
+    resultat = resultats.firstOrNull;
+  } else {
+    // Article générique ("lait", "pain", "pâtes"...) : pas de produit
+    // unique à interroger. Prendre le premier résultat de recherche au
+    // hasard donnerait un prix pas du tout représentatif (une marque/
+    // format précis parmi des dizaines). On interroge plusieurs produits
+    // correspondants et on fait la moyenne de leur prix le moins cher,
+    // pour une estimation plus cohérente du rayon dans son ensemble.
     final suggestions =
         await ref.read(offServiceProvider).searchByName(article.nom);
-    barcode = suggestions.where((a) => a.barcode != null).firstOrNull?.barcode;
-  }
-  if (barcode == null) return null;
+    final barcodes = suggestions
+        .where((a) => a.barcode != null)
+        .map((a) => a.barcode!)
+        .toSet()
+        .take(5)
+        .toList();
 
-  final resultats =
-      await ref.read(openPricesServiceProvider).chercherParBarcode(barcode);
-  return resultats.firstOrNull;
+    if (barcodes.isNotEmpty) {
+      final resultatsParProduit = await Future.wait(
+          barcodes.map((b) => openPrices.chercherParBarcode(b)));
+      final prixParProduit = resultatsParProduit
+          .map((r) => r.firstOrNull)
+          .whereType<PrixTrouve>()
+          .toList();
+
+      if (prixParProduit.isNotEmpty) {
+        final moyenne = prixParProduit.fold<double>(0, (s, p) => s + p.prix) /
+            prixParProduit.length;
+        resultat = PrixTrouve(
+          magasin: 'Moyenne (${prixParProduit.length} produits)',
+          prix: moyenne,
+          devise: prixParProduit.first.devise,
+          date: null,
+        );
+      }
+    }
+  }
+
+  await dbService.setPrixCacheWeb(
+    article.id,
+    trouve: resultat != null,
+    magasin: resultat?.magasin,
+    prix: resultat?.prix,
+    devise: resultat?.devise,
+  );
+  return resultat;
 });
 
 // Total estimé d'une liste = somme(prix unitaire × quantité) pour les

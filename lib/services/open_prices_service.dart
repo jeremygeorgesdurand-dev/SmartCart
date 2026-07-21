@@ -32,7 +32,8 @@ class OpenPricesService {
       final uri = Uri.parse('$_baseUrl/prices'
           '?product_code=${Uri.encodeComponent(barcode)}'
           '&size=50');
-      final response = await _client.get(uri);
+      final response =
+          await _client.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return [];
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;

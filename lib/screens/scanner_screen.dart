@@ -140,12 +140,18 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           await ref.read(articlesNotifierProvider.notifier).ajouter(article);
           if (!mounted) return;
           Navigator.pop(context); // dialog trouvé
-          // Ouvrir personnalisation
-          showDialog(
-            context: context,
-            builder: (_) => AjouterArticleDialog(articleExistant: article),
-          ).then((_) {
-            if (mounted) Navigator.pop(context); // fermer scanner
+          // Enchaîner un nouveau showDialog juste après un pop, dans le
+          // même tick, peut ne rien afficher (la transition de fermeture
+          // n'a pas fini) : on attend la frame suivante pour être sûr que
+          // le dialogue précédent est bien retiré avant d'en ouvrir un autre.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            showDialog(
+              context: context,
+              builder: (_) => AjouterArticleDialog(articleExistant: article),
+            ).then((_) {
+              if (mounted) Navigator.pop(context); // fermer scanner
+            });
           });
         },
         onAjouterDirectement: () async {
@@ -188,7 +194,15 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       ),
       body: Stack(
         children: [
-          MobileScanner(controller: _controller, onDetect: _onBarcode),
+          // Tant qu'un dialogue de résultat est affiché, on ne garde pas
+          // l'aperçu caméra actif en dessous : sur certains appareils, la
+          // surface caméra finit par planter (écran noir, appli à
+          // relancer) si elle reste ouverte sans lecture pendant qu'on
+          // laisse le dialogue affiché longtemps.
+          if (_traitement)
+            Container(color: Colors.black)
+          else
+            MobileScanner(controller: _controller, onDetect: _onBarcode),
           Center(
             child: Container(
               width: 260, height: 160,

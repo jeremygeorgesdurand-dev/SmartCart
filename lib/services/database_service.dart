@@ -29,7 +29,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 8,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -112,6 +112,21 @@ class DatabaseService {
               whereArgs: [entry.key],
             );
           }
+        }
+        if (oldV < 8) {
+          // Cache local du prix indicatif trouvé en ligne (Open Prices) :
+          // évite de refaire une recherche réseau à chaque ouverture d'écran
+          // pour un article qui n'a pas encore de prix saisi par l'utilisateur.
+          await db.execute('''
+            CREATE TABLE prix_cache_web (
+              articleId TEXT PRIMARY KEY,
+              trouve INTEGER NOT NULL,
+              magasin TEXT,
+              prix REAL,
+              devise TEXT,
+              date TEXT NOT NULL
+            )
+          ''');
         }
       },
     );
@@ -196,6 +211,18 @@ class DatabaseService {
         nom TEXT NOT NULL,
         portions INTEGER NOT NULL DEFAULT 4,
         ingredientsJson TEXT NOT NULL DEFAULT '[]'
+      )
+    ''');
+
+    // Cache local du prix indicatif trouvé en ligne (Open Prices)
+    await db.execute('''
+      CREATE TABLE prix_cache_web (
+        articleId TEXT PRIMARY KEY,
+        trouve INTEGER NOT NULL,
+        magasin TEXT,
+        prix REAL,
+        devise TEXT,
+        date TEXT NOT NULL
       )
     ''');
 
@@ -470,6 +497,36 @@ class DatabaseService {
     final d = await db;
     await d.delete('prix_articles',
         where: 'articleId = ? AND magasin = ?', whereArgs: [articleId, magasin]);
+  }
+
+  // ─── CACHE PRIX WEB (Open Prices) ─────────────────────────
+  Future<Map<String, Object?>?> getPrixCacheWeb(String articleId) async {
+    final d = await db;
+    final rows = await d.query('prix_cache_web',
+        where: 'articleId = ?', whereArgs: [articleId], limit: 1);
+    return rows.firstOrNull;
+  }
+
+  Future<void> setPrixCacheWeb(
+    String articleId, {
+    required bool trouve,
+    String? magasin,
+    double? prix,
+    String? devise,
+  }) async {
+    final d = await db;
+    await d.insert(
+      'prix_cache_web',
+      {
+        'articleId': articleId,
+        'trouve': trouve ? 1 : 0,
+        'magasin': magasin,
+        'prix': prix,
+        'devise': devise,
+        'date': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   // ─── HISTORIQUE DES PRIX ──────────────────────────────────

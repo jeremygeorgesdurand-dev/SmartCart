@@ -72,6 +72,12 @@ class StatsScreen extends ConsumerWidget {
               _CardsVueEnsemble(stats: stats),
               const SizedBox(height: 20),
 
+              // ── Budget ────────────────────────────────────
+              const _TitreSection(titre: 'Budget', icone: Icons.euro),
+              const SizedBox(height: 8),
+              const _CarteBudget(),
+              const SizedBox(height: 20),
+
               // ── Activité courses ─────────────────────────
               const _TitreSection(titre: 'Activité des courses', icone: Icons.shopping_cart),
               const SizedBox(height: 8),
@@ -282,6 +288,78 @@ class _MiniCard extends StatelessWidget {
                           )),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Budget : total estimé des listes actives + couverture des prix ──
+class _CarteBudget extends ConsumerWidget {
+  const _CarteBudget();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final listes =
+        ref.watch(listesNotifierProvider).valueOrNull?.where((l) => !l.archivee).toList() ??
+            [];
+    final articles = ref.watch(articlesNotifierProvider).valueOrNull ?? [];
+    final prix = ref.watch(prixArticlesNotifierProvider).valueOrNull ?? [];
+
+    final totalGeneral = listes.fold<double>(
+        0, (s, l) => s + ref.watch(totalListeProvider(l.id)));
+    final articlesAvecPrix =
+        articles.map((a) => a.id).toSet().intersection(
+            prix.map((p) => p.articleId).toSet());
+    final couverture = articles.isEmpty
+        ? 0.0
+        : articlesAvecPrix.length / articles.length;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.euro, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('Total estimé (listes actives)',
+                      style: Theme.of(context).textTheme.bodyMedium),
+                ),
+                Text(
+                  '${totalGeneral.toStringAsFixed(2)} €',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: couverture,
+                      minHeight: 6,
+                      backgroundColor:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text('${(couverture * 100).round()}% des articles ont un prix',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.outline,
+                        )),
+              ],
             ),
           ],
         ),

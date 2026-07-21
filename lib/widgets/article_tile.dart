@@ -4,6 +4,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../providers/off_details_provider.dart';
 import 'ajouter_article_dialog.dart';
+import 'prix_article_badge.dart';
 
 class ArticleTile extends ConsumerWidget {
   final Article article;
@@ -128,6 +129,11 @@ class ArticleTile extends ConsumerWidget {
                       ],
                     ],
                   ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: PrixArticleBadge(article: article),
                 ),
 
                 if (article.barcode != null)

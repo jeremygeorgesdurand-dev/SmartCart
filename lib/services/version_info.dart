@@ -3,8 +3,8 @@ class VersionInfo {
   static const String buildNumber = '25';
   static const String dateMiseAJour = '18 avril 2026';
 
-  static const List<_Release> historique = [
-    _Release(
+  static const List<Release> historique = [
+    Release(
       version: '1.0.0',
       date: '18 avril 2026',
       changements: [
@@ -20,7 +20,7 @@ class VersionInfo {
         'Historique des versions',
       ],
     ),
-    _Release(
+    Release(
       version: '0.9.0',
       date: '10 avril 2026',
       changements: [
@@ -31,7 +31,7 @@ class VersionInfo {
         'Import catalogue avec mise à jour catégories',
       ],
     ),
-    _Release(
+    Release(
       version: '0.8.0',
       date: '1 avril 2026',
       changements: [
@@ -44,11 +44,11 @@ class VersionInfo {
   ];
 }
 
-class _Release {
+class Release {
   final String version;
   final String date;
   final List<String> changements;
-  const _Release({
+  const Release({
     required this.version,
     required this.date,
     required this.changements,

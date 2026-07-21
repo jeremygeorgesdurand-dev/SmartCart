@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
 import '../widgets/background_logo.dart';
+import 'budget_screen.dart';
 import 'catalogue_screen.dart';
 import 'listes_screen.dart';
 import 'parametres_screen.dart';
@@ -30,6 +31,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final screens = [
       const ListesScreen(),
       const CatalogueScreen(),
+      const BudgetScreen(),
       if (afficherStats) const StatsScreen(),
       const ParametresScreen(),
     ];
@@ -44,6 +46,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         icon: Icon(Icons.inventory_2_outlined),
         selectedIcon: Icon(Icons.inventory_2),
         label: 'Catalogue',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.euro_outlined),
+        selectedIcon: Icon(Icons.euro),
+        label: 'Budget',
       ),
       if (afficherStats)
         const NavigationDestination(

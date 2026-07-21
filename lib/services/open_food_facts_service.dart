@@ -15,7 +15,7 @@ class OpenFoodFactsService {
         '?search_terms=${Uri.encodeComponent(query)}'
         '&search_simple=1&action=process&json=1&lc=fr&cc=fr&page_size=20',
       );
-      final response = await http.get(uri);
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return [];
 
       final data = jsonDecode(response.body);
@@ -42,7 +42,7 @@ class OpenFoodFactsService {
   Future<Article?> searchByBarcode(String barcode) async {
     try {
       final uri = Uri.parse('$_baseUrl/api/v0/product/$barcode.json');
-      final response = await http.get(uri);
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
 
       final data = jsonDecode(response.body);
@@ -66,7 +66,7 @@ class OpenFoodFactsService {
   Future<ProductDetails?> fetchDetails(String barcode) async {
     try {
       final uri = Uri.parse('$_baseUrl/api/v0/product/$barcode.json');
-      final response = await http.get(uri);
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
 
       final data = jsonDecode(response.body);

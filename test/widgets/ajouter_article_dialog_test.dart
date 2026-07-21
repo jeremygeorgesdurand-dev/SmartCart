@@ -85,6 +85,10 @@ void main() {
 
     await tester.runAsync(() async {
       await tester.enterText(find.byType(TextField).first, 'Pommes');
+      // Le dialogue a grandi (nouveau champ prix) : sur la taille d'écran
+      // fixe du test, "Enregistrer" peut être hors-vue dans le
+      // SingleChildScrollView tant qu'on ne le scrolle pas explicitement.
+      await tester.ensureVisible(find.text('Enregistrer'));
       await tester.tap(find.text('Enregistrer'));
       await _laisserRetomber(tester);
 
@@ -97,6 +101,10 @@ void main() {
     await pomperDialog(tester);
 
     await tester.runAsync(() async {
+      // Le dialogue a grandi (nouveau champ prix) : sur la taille d'écran
+      // fixe du test, "Enregistrer" peut être hors-vue dans le
+      // SingleChildScrollView tant qu'on ne le scrolle pas explicitement.
+      await tester.ensureVisible(find.text('Enregistrer'));
       await tester.tap(find.text('Enregistrer'));
       await _laisserRetomber(tester);
 
@@ -112,6 +120,10 @@ void main() {
     await tester.runAsync(() async {
       await tester.enterText(find.byType(TextField).at(0), 'Lait');
       await tester.enterText(find.byType(TextField).at(1), 'Lactel');
+      // Le dialogue a grandi (nouveau champ prix) : sur la taille d'écran
+      // fixe du test, "Enregistrer" peut être hors-vue dans le
+      // SingleChildScrollView tant qu'on ne le scrolle pas explicitement.
+      await tester.ensureVisible(find.text('Enregistrer'));
       await tester.tap(find.text('Enregistrer'));
       await _laisserRetomber(tester);
 

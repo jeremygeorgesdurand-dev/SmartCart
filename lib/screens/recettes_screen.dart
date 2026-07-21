@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../services/vocal_service.dart';
 
 // ================================================================
 // ÉCRAN RECETTES — liste, création, et génération de liste de courses
@@ -239,12 +240,93 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
     Navigator.pop(context);
   }
 
+  bool _import = false;
+
+  Future<void> _importerDepuisUrl() async {
+    final ctrl = TextEditingController();
+    final url = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Importer depuis une URL'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            hintText: 'https://www.marmiton.org/recettes/...',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: const Text('Importer'),
+          ),
+        ],
+      ),
+    );
+    if (url == null || url.isEmpty || !mounted) return;
+
+    setState(() => _import = true);
+    final recette =
+        await ref.read(recipeImportServiceProvider).importerDepuisUrl(url);
+    if (!mounted) return;
+    setState(() => _import = false);
+
+    if (recette == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+            "Impossible de récupérer cette recette (site non compatible ou page invalide)"),
+      ));
+      return;
+    }
+
+    setState(() {
+      _nomCtrl.text = recette.nom;
+      _portions = recette.portions;
+      for (final l in _lignes) {
+        l.nom.dispose();
+        l.quantite.dispose();
+        l.unite.dispose();
+      }
+      _lignes = recette.ingredientsBruts.isNotEmpty
+          ? recette.ingredientsBruts.map((brut) {
+              final parsed = VocalService.nettoyer(brut);
+              return _LigneIngredient(
+                nom: TextEditingController(text: parsed.nomArticle),
+                quantite:
+                    TextEditingController(text: '${parsed.quantite}'),
+                unite: TextEditingController(text: parsed.unite ?? ''),
+              );
+            }).toList()
+          : [_LigneIngredient.vide()];
+    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+          '"${recette.nom}" importée — vérifie les quantités avant d\'enregistrer'),
+      backgroundColor: Colors.green,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.recette == null ? 'Nouvelle recette' : 'Modifier la recette'),
         actions: [
+          if (widget.recette == null)
+            IconButton(
+              icon: _import
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.link),
+              tooltip: 'Importer depuis une URL',
+              onPressed: _import ? null : _importerDepuisUrl,
+            ),
           IconButton(
             icon: const Icon(Icons.check),
             tooltip: 'Enregistrer',
@@ -301,7 +383,11 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
             flex: 3,
             child: TextField(
               controller: ligne.nom,
-              decoration: const InputDecoration(hintText: 'Ingrédient', isDense: true),
+              // labelText (pas hintText) reste visible même une fois le
+              // champ rempli : "Qté" / "Unité" seuls, une fois tapés,
+              // ne rappelaient plus à quoi correspondait chaque colonne.
+              decoration:
+                  const InputDecoration(labelText: 'Ingrédient', isDense: true),
             ),
           ),
           const SizedBox(width: 8),
@@ -309,14 +395,16 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
             child: TextField(
               controller: ligne.quantite,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(hintText: 'Qté', isDense: true),
+              decoration: const InputDecoration(
+                  labelText: 'Qté', helperText: 'ex: 200', isDense: true),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: ligne.unite,
-              decoration: const InputDecoration(hintText: 'Unité', isDense: true),
+              decoration: const InputDecoration(
+                  labelText: 'Unité', helperText: 'ex: g, ml', isDense: true),
             ),
           ),
           IconButton(
