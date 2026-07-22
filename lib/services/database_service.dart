@@ -314,6 +314,13 @@ class DatabaseService {
 
   Future<void> deleteArticle(String id) async {
     final d = await db;
+    // articles_liste n'a pas de ON DELETE CASCADE sur articleId (seulement
+    // listeId) : sans ce nettoyage explicite, supprimer un article laisse
+    // des lignes orphelines dans les listes qui le référençaient encore.
+    await d.delete('articles_liste', where: 'articleId = ?', whereArgs: [id]);
+    await d.delete('prix_articles', where: 'articleId = ?', whereArgs: [id]);
+    await d.delete('prix_historique', where: 'articleId = ?', whereArgs: [id]);
+    await d.delete('prix_cache_web', where: 'articleId = ?', whereArgs: [id]);
     await d.delete('articles', where: 'id = ?', whereArgs: [id]);
   }
 

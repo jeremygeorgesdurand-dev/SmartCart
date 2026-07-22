@@ -451,11 +451,14 @@ class _ListeCard extends ConsumerWidget {
                   final items = await ref
                       .read(dbServiceProvider)
                       .getArticlesListe(liste.id);
-                  for (final item in items) {
-                    await ref
-                        .read(articlesListeProvider(liste.id).notifier)
-                        .supprimer(item.id);
-                  }
+                  // En parallèle plutôt qu'un await par article : sur une
+                  // liste avec beaucoup d'articles, la version séquentielle
+                  // donnait l'impression qu'il fallait rappuyer plusieurs
+                  // fois sur "Vider" (ça continuait de vider en arrière-plan
+                  // pendant qu'on retentait).
+                  await Future.wait(items.map((item) => ref
+                      .read(articlesListeProvider(liste.id).notifier)
+                      .supprimer(item.id)));
                   if (context.mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(

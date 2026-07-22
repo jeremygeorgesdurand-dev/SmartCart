@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../services/database_service.dart';
+import '../services/doublons_service.dart';
 import '../services/open_food_facts_service.dart';
 import '../services/open_prices_service.dart';
 import '../services/backup_service.dart';
@@ -55,6 +57,13 @@ final statsProvider = FutureProvider<StatsData>((ref) {
   ref.watch(listesNotifierProvider);
   ref.watch(articlesNotifierProvider);
   return ref.read(statsServiceProvider).calculer();
+});
+
+// Groupes d'articles du catalogue probablement en double (même nom
+// normalisé, ou noms très proches).
+final doublonsProvider = Provider<List<List<Article>>>((ref) {
+  final articles = ref.watch(articlesNotifierProvider).valueOrNull ?? [];
+  return DoublonsService.detecter(articles);
 });
 
 // ─── AUTH STATE ───────────────────────────────────────────────────
@@ -357,18 +366,22 @@ class ArticlesListeNotifier
 
   Future<void> ajouter(ArticleListe al) async {
     await ref.read(dbServiceProvider).insertArticleListe(al);
-    await _syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(al));
     ref.invalidateSelf();
     _syncWidget();
+    // La synchro cloud tourne en fond sans bloquer l'affichage : sur un
+    // réseau lent, attendre ce round-trip avant de rafraîchir l'écran
+    // donnait l'impression d'un ajout d'article très lent alors que
+    // l'écriture locale (ce qui compte pour l'UI) est instantanée.
+    unawaited(_syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(al)));
   }
 
   Future<void> cocher(ArticleListe al, bool valeur) async {
     final updated = al.copyWith(coche: valeur);
     await ref.read(dbServiceProvider).updateArticleListe(updated);
-    await _syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(updated));
     ref.invalidateSelf();
     // Sync widget si c'est la liste configurée
     _syncWidget();
+    unawaited(_syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(updated)));
   }
 
   Future<void> _syncWidget() async {
@@ -400,11 +413,11 @@ class ArticlesListeNotifier
         await ref.read(dbServiceProvider).getArticlesListe(arg);
     final item = items.where((i) => i.id == id).firstOrNull;
     await ref.read(dbServiceProvider).deleteArticleListe(id);
-    if (item != null) {
-      await _syncSilencieux(
-          () => ref.read(syncServiceProvider).supprimerArticleListe(item.listeId, id));
-    }
     ref.invalidateSelf();
+    if (item != null) {
+      unawaited(_syncSilencieux(
+          () => ref.read(syncServiceProvider).supprimerArticleListe(item.listeId, id)));
+    }
   }
 
   Future<void> cocherTous(bool valeur) async {
@@ -608,8 +621,11 @@ class RecettesNotifier extends AsyncNotifier<List<Recette>> {
 
   // Génère (ou complète) une liste de courses à partir d'une recette :
   // les ingrédients sans article catalogue correspondant sont créés à la
-  // volée, matché par nom insensible à la casse.
-  Future<void> genererListe(Recette recette, {String? listeIdExistante}) async {
+  // volée, matché par nom insensible à la casse. Retourne (réussis, total)
+  // pour que l'écran puisse signaler clairement un échec partiel plutôt que
+  // d'afficher un succès trompeur si des ingrédients ont échoué.
+  Future<(int, int)> genererListe(Recette recette,
+      {String? listeIdExistante}) async {
     final db = ref.read(dbServiceProvider);
     String listeId;
 
@@ -629,31 +645,44 @@ class RecettesNotifier extends AsyncNotifier<List<Recette>> {
     final catalogue = await ref.read(articlesNotifierProvider.future);
     final itemsExistants = await db.getArticlesListe(listeId);
 
+    // Les articles créés à la volée pendant CE traitement (matché par nom,
+    // insensible à la casse) : évite de créer un doublon quand la même
+    // recette référence deux fois le même ingrédient (ex: "Sel" utilisé à
+    // deux endroits), le catalogue snapshot initial ne le voyant pas encore
+    // puisque tout tourne en parallèle.
+    final creesPendantCetteGeneration = <String, Article>{};
+
     // En parallèle plutôt qu'un await séquentiel par ingrédient : avec 15-20
     // ingrédients et une synchro cloud par écriture, un réseau lent donnait
     // l'impression que "rien ne se passe" (dizaines de secondes d'attente).
     // Une erreur sur un ingrédient (ex: sync cloud en échec) ne doit pas
-    // empêcher les autres d'être ajoutés.
+    // empêcher les autres d'être ajoutés, mais on la retient pour ne pas
+    // afficher un succès trompeur si tout a en fait échoué.
+    var reussis = 0;
     await Future.wait(
       recette.ingredients.asMap().entries.map((entry) async {
         final i = entry.key;
         final ing = entry.value;
+        final nomCle = ing.nom.toLowerCase();
         try {
-          var article = catalogue
-              .where((a) => a.nom.toLowerCase() == ing.nom.toLowerCase())
-              .firstOrNull;
+          var article = catalogue.where((a) => a.nom.toLowerCase() == nomCle).firstOrNull ??
+              creesPendantCetteGeneration[nomCle];
 
           if (article == null) {
             article = Article(
               id: 'article_${DateTime.now().millisecondsSinceEpoch}_$i',
               nom: ing.nom,
             );
+            creesPendantCetteGeneration[nomCle] = article;
             await ref.read(articlesNotifierProvider.notifier).ajouter(article);
           }
 
           final dejaPresent =
               itemsExistants.any((it) => it.articleId == article!.id);
-          if (dejaPresent) return;
+          if (dejaPresent) {
+            reussis++;
+            return;
+          }
 
           await ref.read(articlesListeProvider(listeId).notifier).ajouter(
                 ArticleListe(
@@ -664,10 +693,13 @@ class RecettesNotifier extends AsyncNotifier<List<Recette>> {
                   unite: ing.unite,
                 ),
               );
-        } catch (_) {
-          // On continue avec les autres ingrédients.
+          reussis++;
+        } catch (e, st) {
+          FirebaseCrashlytics.instance.recordError(e, st,
+              reason: 'Échec ajout ingrédient "${ing.nom}" depuis une recette');
         }
       }),
     );
+    return (reussis, recette.ingredients.length);
   }
 }

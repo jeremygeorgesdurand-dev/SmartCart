@@ -160,8 +160,9 @@ class _BoutonGenererListeState extends ConsumerState<_BoutonGenererListe> {
             ? null
             : () async {
                 setState(() => generation = true);
+                (int, int) resultat;
                 try {
-                  await ref
+                  resultat = await ref
                       .read(recettesNotifierProvider.notifier)
                       .genererListe(recette);
                 } catch (e) {
@@ -175,10 +176,13 @@ class _BoutonGenererListeState extends ConsumerState<_BoutonGenererListe> {
                 }
                 if (context.mounted) {
                   Navigator.pop(context);
+                  final (reussis, total) = resultat;
+                  final incomplet = reussis < total;
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(
-                        'Liste "${recette.nom}" créée avec ${recette.ingredients.length} ingrédient(s)'),
-                    backgroundColor: Colors.green,
+                    content: Text(incomplet
+                        ? 'Liste "${recette.nom}" créée, mais seulement $reussis/$total ingrédient(s) ajoutés — vérifie la liste'
+                        : 'Liste "${recette.nom}" créée avec $total ingrédient(s)'),
+                    backgroundColor: incomplet ? Colors.orange : Colors.green,
                   ));
                 }
               },

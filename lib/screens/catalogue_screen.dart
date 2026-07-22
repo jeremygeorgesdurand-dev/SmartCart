@@ -10,6 +10,7 @@ import '../widgets/vocal_button.dart';
 import '../widgets/animated_list_item.dart';
 import 'scanner_screen.dart';
 import '../widgets/import_liste_dialog.dart' show ImportListeDialog, ExportDialog;
+import 'doublons_screen.dart';
 
 class CatalogueScreen extends ConsumerStatefulWidget {
   const CatalogueScreen({super.key});
@@ -149,6 +150,9 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                   showDialog(
                       context: context,
                       builder: (_) => const ImportListeDialog());
+                case 'doublons':
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const DoublonsScreen()));
               }
             },
             itemBuilder: (_) => [
@@ -187,6 +191,26 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                     Icon(Icons.upload_file, size: 18),
                     SizedBox(width: 10),
                     Text('Importer des articles')
+                  ])),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                  value: 'doublons',
+                  child: Row(children: [
+                    const Icon(Icons.content_copy, size: 18),
+                    const SizedBox(width: 10),
+                    const Text('Détecter les doublons'),
+                    if (ref.watch(doublonsProvider).isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      CircleAvatar(
+                        radius: 9,
+                        backgroundColor: Colors.orange,
+                        child: Text(
+                          '${ref.watch(doublonsProvider).length}',
+                          style: const TextStyle(
+                              fontSize: 10, color: Colors.white),
+                        ),
+                      ),
+                    ],
                   ])),
             ],
           ),
