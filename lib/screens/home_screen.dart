@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/widget_service.dart';
 import '../widgets/background_logo.dart';
@@ -43,24 +44,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       String action, String listeId, String articleListeId) async {
     if (listeId.isEmpty) return;
 
-    if (action == 'cocher_article' && articleListeId.isNotEmpty) {
-      final items = await ref.read(dbServiceProvider).getArticlesListe(listeId);
-      final item = items.where((i) => i.id == articleListeId).firstOrNull;
-      if (item != null) {
-        await ref
-            .read(articlesListeProvider(listeId).notifier)
-            .cocher(item, !item.coche);
-      }
-      // On ne veut pas que cocher un article depuis le widget prenne toute
-      // la place de l'app au premier plan : retour direct à l'écran
-      // d'accueil du téléphone une fois l'action effectuée.
-      SystemNavigator.pop();
-    } else if (action == 'add_article') {
+    // Cocher un article se fait maintenant entièrement côté widget natif
+    // (écriture SQLite directe, voir SmartCartWidget.kt) sans jamais
+    // ouvrir l'app : seul "add_article" atteint encore ce pont.
+    if (action == 'add_article') {
       final listes = await ref.read(listesNotifierProvider.future);
       final liste = listes.where((l) => l.id == listeId).firstOrNull;
       if (liste != null && mounted) {
-        Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => DetailListeScreen(liste: liste)));
+        // Un dialogue léger plutôt que d'ouvrir tout l'écran de la liste :
+        // on tape un nom, on valide, l'app repart en arrière-plan aussitôt
+        // (annuler renvoie aussi à l'accueil : toute ouverture ici vient du
+        // widget, pas d'un choix de l'utilisateur d'utiliser l'app).
+        await showDialog<bool>(
+          context: context,
+          builder: (_) => _AjoutRapideWidgetDialog(liste: liste),
+        );
+        if (mounted) SystemNavigator.pop();
       }
     }
   }
@@ -148,6 +147,81 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onDestinationSelected: (i) => setState(() => _currentIndex = i),
         destinations: destinations,
       ),
+    );
+  }
+}
+
+// Ajout rapide déclenché depuis le bouton "+" du widget écran d'accueil :
+// juste un nom, réutilise un article existant du catalogue si le nom
+// correspond déjà (évite les doublons), sinon en crée un nouveau.
+class _AjoutRapideWidgetDialog extends ConsumerStatefulWidget {
+  final ListeCourses liste;
+  const _AjoutRapideWidgetDialog({required this.liste});
+
+  @override
+  ConsumerState<_AjoutRapideWidgetDialog> createState() =>
+      _AjoutRapideWidgetDialogState();
+}
+
+class _AjoutRapideWidgetDialogState
+    extends ConsumerState<_AjoutRapideWidgetDialog> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _ajouter() async {
+    final nom = _ctrl.text.trim();
+    if (nom.isEmpty) return;
+
+    final catalogue = await ref.read(articlesNotifierProvider.future);
+    var article = catalogue
+        .where((a) => a.nom.toLowerCase() == nom.toLowerCase())
+        .firstOrNull;
+
+    if (article == null) {
+      article = Article(
+        id: 'article_${DateTime.now().millisecondsSinceEpoch}',
+        nom: nom,
+      );
+      await ref.read(articlesNotifierProvider.notifier).ajouter(article);
+    }
+
+    await ref.read(articlesListeProvider(widget.liste.id).notifier).ajouter(
+          ArticleListe(
+            id: 'al_${DateTime.now().millisecondsSinceEpoch}',
+            listeId: widget.liste.id,
+            articleId: article.id,
+          ),
+        );
+
+    if (mounted) Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Ajouter à "${widget.liste.nom}"'),
+      content: TextField(
+        controller: _ctrl,
+        autofocus: true,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(hintText: "Nom de l'article"),
+        onSubmitted: (_) => _ajouter(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: _ajouter,
+          child: const Text('Ajouter'),
+        ),
+      ],
     );
   }
 }

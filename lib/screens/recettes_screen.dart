@@ -88,6 +88,12 @@ class RecettesScreen extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       useSafeArea: true,
+      // Sans ça, le contenu (nom + portions + ingrédients + bouton) est
+      // limité à une hauteur fixe et non scrollable : pour une recette
+      // avec beaucoup d'ingrédients (import depuis une URL), le bouton
+      // "Générer une liste de courses" finissait poussé hors de l'écran
+      // visible, avec l'air de ne plus exister.
+      isScrollControlled: true,
       builder: (_) => _RecetteDetailSheet(recette: r),
     );
   }
@@ -102,37 +108,35 @@ class _RecetteDetailSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(recette.nom, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 4),
-          Text('${recette.portions} portions',
-              style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 16),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 280),
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                for (final ing in recette.ingredients)
-                  ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.circle, size: 8),
-                    title: Text(ing.nom),
-                    trailing: Text(ing.unite != null
-                        ? '${ing.quantite} ${ing.unite}'
-                        : '${ing.quantite}'),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          _BoutonGenererListe(recette: recette),
-        ],
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      minChildSize: 0.3,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) => SingleChildScrollView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(recette.nom, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 4),
+            Text('${recette.portions} portions',
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 16),
+            for (final ing in recette.ingredients)
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.circle, size: 8),
+                title: Text(ing.nom),
+                trailing: Text(ing.unite != null
+                    ? '${ing.quantite} ${ing.unite}'
+                    : '${ing.quantite}'),
+              ),
+            const SizedBox(height: 20),
+            _BoutonGenererListe(recette: recette),
+          ],
+        ),
       ),
     );
   }

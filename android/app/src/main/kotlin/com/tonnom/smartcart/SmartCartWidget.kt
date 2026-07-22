@@ -203,23 +203,32 @@ class SmartCartWidget : AppWidgetProvider() {
         super.onReceive(context, intent)
         if (intent.action == ACTION_COCHER) {
             val articleListeId = intent.getStringExtra(EXTRA_ARTICLE_ID) ?: return
-            val listeId = intent.getStringExtra("liste_id") ?: ""
-            Log.d(TAG, "Cocher: $articleListeId in $listeId")
+            Log.d(TAG, "Cocher: $articleListeId")
 
-            // Retour visuel immédiat : on coche/décoche dans le cache JSON du
-            // widget et on redessine tout de suite, sans attendre que l'app
-            // s'ouvre et fasse le vrai traitement (sqlite + sync cloud).
-            // Purement cosmétique : le prochain mettreAJourWidget() envoyé par
-            // Flutter écrasera ce cache avec l'état réel de toute façon.
+            // Coché directement (base SQLite + cache du widget), sans jamais
+            // lancer l'app : PendingIntent.getBroadcast permet de répondre à
+            // un tap sans ouvrir d'Activity, mais le code précédent lançait
+            // quand même MainActivity juste pour faire le "vrai" traitement
+            // Flutter — d'où le flash d'ouverture/fermeture à chaque tap. La
+            // synchro cloud de ce changement se fera à la prochaine ouverture
+            // normale de l'app (l'état local fait foi entre-temps).
+            cocherEnBase(context, articleListeId)
             toggleCocheOptimiste(context, articleListeId)
+        }
+    }
 
-            val i = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("action", "cocher_article")
-                putExtra("article_liste_id", articleListeId)
-                putExtra("liste_id", listeId)
-            }
-            context.startActivity(i)
+    private fun cocherEnBase(context: Context, articleListeId: String) {
+        try {
+            val dbFile = context.getDatabasePath("smartcart.db")
+            if (!dbFile.exists()) return
+            val db = android.database.sqlite.SQLiteDatabase.openDatabase(
+                dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READWRITE)
+            db.execSQL(
+                "UPDATE articles_liste SET coche = CASE coche WHEN 1 THEN 0 ELSE 1 END WHERE id = ?",
+                arrayOf(articleListeId))
+            db.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "cocherEnBase error: $e")
         }
     }
 
@@ -227,23 +236,27 @@ class SmartCartWidget : AppWidgetProvider() {
         try {
             val prefs = context.getSharedPreferences(
                 "FlutterSharedPreferences", Context.MODE_PRIVATE)
-            val key = if (prefs.contains("flutter.widget_articles_json"))
-                "flutter.widget_articles_json" else "widget_articles_json"
-            val json = prefs.getString(key, null) ?: return
+            val json = findString(prefs, "widget_articles_json") ?: return
 
             val arr = JSONArray(json)
             var modifie = false
+            var coches = 0
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
                 if (obj.optString("id") == articleListeId) {
                     obj.put("coche", !obj.optBoolean("coche", false))
                     modifie = true
-                    break
                 }
+                if (obj.optBoolean("coche", false)) coches++
             }
             if (!modifie) return
 
-            prefs.edit().putString(key, arr.toString()).apply()
+            // Toujours en clé brute : nos propres lectures/écritures ne
+            // passent plus par le préfixe "flutter." (voir findString/findInt).
+            prefs.edit()
+                .putString("widget_articles_json", arr.toString())
+                .putInt("widget_coches", coches)
+                .apply()
 
             val manager = AppWidgetManager.getInstance(context)
             val ids = manager.getAppWidgetIds(
