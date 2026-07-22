@@ -16,6 +16,7 @@
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.tonnom.smartcart.ACTION_COCHER" />
+                <action android:name="com.tonnom.smartcart.ACTION_TRI" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -24,7 +25,7 @@
 
         <!-- Service pour la liste scrollable du widget -->
         <service
-            android:name=".WidgetListService"
+            android:name=".SmartCartWidgetService"
             android:permission="android.permission.BIND_REMOTEVIEWS"
             android:exported="false" />
 

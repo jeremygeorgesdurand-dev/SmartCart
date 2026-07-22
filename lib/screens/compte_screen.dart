@@ -41,19 +41,15 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
         setState(() { _syncing = false; _message = 'Connexion annulée'; _messageOk = false; });
         return;
       }
-      // Télécharger D'ABORD ce qui existe déjà dans le cloud, avant
-      // d'envoyer l'état local : sur une install fraîche (base locale
-      // vide), uploadTout() nettoie les "orphelins" cloud absents du
-      // local — l'appeler en premier effacerait silencieusement toutes
-      // les données déjà synchronisées d'un autre appareil.
-      await ref.read(syncServiceProvider).downloadTout();
-      await ref.read(syncServiceProvider).uploadTout();
+      // Se connecter ne synchronise plus AUCUNE donnée automatiquement : en
+      // changeant de compte sur le même appareil sans avoir vidé la base
+      // locale au préalable, un download+upload automatique mélangeait
+      // silencieusement les données du compte précédent dans le nouveau
+      // (et vice-versa), les deux comptes finissant avec le même contenu.
+      // La synchro reste disponible, mais seulement via les boutons
+      // "Sauvegarder maintenant"/"Restaurer depuis le cloud" ci-dessous,
+      // que l'utilisateur déclenche lui-même en connaissance de cause.
       await ref.read(syncServiceProvider).publierProfil();
-      ref.invalidate(articlesNotifierProvider);
-      ref.invalidate(listesNotifierProvider);
-      ref.invalidate(categoriesNotifierProvider);
-      ref.invalidate(rayonsNotifierProvider);
-      ref.invalidate(prixArticlesNotifierProvider);
       // Notifications push : best-effort, un refus ne doit pas bloquer
       // la connexion.
       try {
@@ -67,7 +63,8 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       if (!mounted) return;
       setState(() {
         _syncing = false;
-        _message = 'Connecté et données synchronisées !';
+        _message = 'Connecté ! Utilisez "Sauvegarder" ou "Restaurer" '
+            'ci-dessous pour synchroniser vos données.';
         _messageOk = true;
       });
     } catch (e) {

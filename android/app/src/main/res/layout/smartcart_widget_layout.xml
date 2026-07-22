@@ -41,6 +41,18 @@
             android:textColor="#CCFFFFFF"
             android:layout_marginEnd="10dp"/>
 
+        <!-- Bascule le tri alphabétique / par rayon (voir SmartCartWidget.ACTION_TRI) -->
+        <TextView
+            android:id="@+id/widget_btn_tri"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:text="⇅"
+            android:textSize="15sp"
+            android:textColor="#FFFFFF"
+            android:gravity="center"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/widget_btn_background"/>
+
         <TextView
             android:id="@+id/widget_btn_add"
             android:layout_width="30dp"
@@ -63,95 +75,25 @@
         android:progressTint="#FFFFFF"
         android:progressBackgroundTint="#33FFFFFF"/>
 
-    <!-- Articles statiques (max 6, scrollable via StackView non nécessaire) -->
-    <LinearLayout
-        android:id="@+id/widget_articles_container"
+    <!-- Articles : liste réellement défilable (RemoteViewsService), plus la
+         limite fixe à 6 lignes d'avant qui masquait le reste sans recours. -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp">
+        android:layout_weight="1">
 
-        <LinearLayout android:id="@+id/row_0"
-            android:layout_width="match_parent" android:layout_height="34dp"
-            android:orientation="horizontal" android:gravity="center_vertical"
-            android:paddingStart="12dp" android:paddingEnd="12dp"
-            android:visibility="gone">
-            <TextView android:id="@+id/check_0" android:layout_width="22dp" android:layout_height="22dp"
-                android:text="○" android:textSize="14sp" android:textColor="#CCFFFFFF" android:gravity="center" android:layout_marginEnd="8dp"/>
-            <TextView android:id="@+id/nom_0" android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:textSize="12sp" android:textColor="#EEFFFFFF" android:maxLines="1" android:ellipsize="end"/>
-            <TextView android:id="@+id/qte_0" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:textSize="10sp" android:textColor="#88FFFFFF"/>
-        </LinearLayout>
+        <ListView
+            android:id="@+id/widget_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:scrollbars="none"/>
 
-        <LinearLayout android:id="@+id/row_1"
-            android:layout_width="match_parent" android:layout_height="34dp"
-            android:orientation="horizontal" android:gravity="center_vertical"
-            android:paddingStart="12dp" android:paddingEnd="12dp"
-            android:visibility="gone">
-            <TextView android:id="@+id/check_1" android:layout_width="22dp" android:layout_height="22dp"
-                android:text="○" android:textSize="14sp" android:textColor="#CCFFFFFF" android:gravity="center" android:layout_marginEnd="8dp"/>
-            <TextView android:id="@+id/nom_1" android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:textSize="12sp" android:textColor="#EEFFFFFF" android:maxLines="1" android:ellipsize="end"/>
-            <TextView android:id="@+id/qte_1" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:textSize="10sp" android:textColor="#88FFFFFF"/>
-        </LinearLayout>
-
-        <LinearLayout android:id="@+id/row_2"
-            android:layout_width="match_parent" android:layout_height="34dp"
-            android:orientation="horizontal" android:gravity="center_vertical"
-            android:paddingStart="12dp" android:paddingEnd="12dp"
-            android:visibility="gone">
-            <TextView android:id="@+id/check_2" android:layout_width="22dp" android:layout_height="22dp"
-                android:text="○" android:textSize="14sp" android:textColor="#CCFFFFFF" android:gravity="center" android:layout_marginEnd="8dp"/>
-            <TextView android:id="@+id/nom_2" android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:textSize="12sp" android:textColor="#EEFFFFFF" android:maxLines="1" android:ellipsize="end"/>
-            <TextView android:id="@+id/qte_2" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:textSize="10sp" android:textColor="#88FFFFFF"/>
-        </LinearLayout>
-
-        <LinearLayout android:id="@+id/row_3"
-            android:layout_width="match_parent" android:layout_height="34dp"
-            android:orientation="horizontal" android:gravity="center_vertical"
-            android:paddingStart="12dp" android:paddingEnd="12dp"
-            android:visibility="gone">
-            <TextView android:id="@+id/check_3" android:layout_width="22dp" android:layout_height="22dp"
-                android:text="○" android:textSize="14sp" android:textColor="#CCFFFFFF" android:gravity="center" android:layout_marginEnd="8dp"/>
-            <TextView android:id="@+id/nom_3" android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:textSize="12sp" android:textColor="#EEFFFFFF" android:maxLines="1" android:ellipsize="end"/>
-            <TextView android:id="@+id/qte_3" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:textSize="10sp" android:textColor="#88FFFFFF"/>
-        </LinearLayout>
-
-        <LinearLayout android:id="@+id/row_4"
-            android:layout_width="match_parent" android:layout_height="34dp"
-            android:orientation="horizontal" android:gravity="center_vertical"
-            android:paddingStart="12dp" android:paddingEnd="12dp"
-            android:visibility="gone">
-            <TextView android:id="@+id/check_4" android:layout_width="22dp" android:layout_height="22dp"
-                android:text="○" android:textSize="14sp" android:textColor="#CCFFFFFF" android:gravity="center" android:layout_marginEnd="8dp"/>
-            <TextView android:id="@+id/nom_4" android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:textSize="12sp" android:textColor="#EEFFFFFF" android:maxLines="1" android:ellipsize="end"/>
-            <TextView android:id="@+id/qte_4" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:textSize="10sp" android:textColor="#88FFFFFF"/>
-        </LinearLayout>
-
-        <LinearLayout android:id="@+id/row_5"
-            android:layout_width="match_parent" android:layout_height="34dp"
-            android:orientation="horizontal" android:gravity="center_vertical"
-            android:paddingStart="12dp" android:paddingEnd="12dp"
-            android:visibility="gone">
-            <TextView android:id="@+id/check_5" android:layout_width="22dp" android:layout_height="22dp"
-                android:text="○" android:textSize="14sp" android:textColor="#CCFFFFFF" android:gravity="center" android:layout_marginEnd="8dp"/>
-            <TextView android:id="@+id/nom_5" android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:textSize="12sp" android:textColor="#EEFFFFFF" android:maxLines="1" android:ellipsize="end"/>
-            <TextView android:id="@+id/qte_5" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:textSize="10sp" android:textColor="#88FFFFFF"/>
-        </LinearLayout>
-
-        <!-- Message vide / suite -->
+        <!-- Message vide, affiché automatiquement par setEmptyView() quand
+             l'adaptateur n'a aucune ligne. -->
         <TextView
             android:id="@+id/widget_empty"
             android:layout_width="match_parent"
@@ -159,9 +101,8 @@
             android:text="Configurez dans\nParamètres → Widget"
             android:textSize="11sp"
             android:textColor="#AAFFFFFF"
-            android:gravity="center"
-            android:visibility="visible"/>
+            android:gravity="center"/>
 
-    </LinearLayout>
+    </FrameLayout>
 
 </LinearLayout>

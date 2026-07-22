@@ -144,9 +144,9 @@ class ListesScreen extends ConsumerWidget {
             final code = ctrl.text.trim();
             if (code.isEmpty || enCours) return;
             setState(() => enCours = true);
-            bool ok;
+            ({bool ok, bool dejaMembre}) resultat;
             try {
-              ok = await ref
+              resultat = await ref
                   .read(listesNotifierProvider.notifier)
                   .rejoindre(code);
             } catch (e) {
@@ -157,11 +157,14 @@ class ListesScreen extends ConsumerWidget {
             }
             if (!dialogCtx.mounted) return;
             Navigator.pop(dialogCtx);
+            final message = !resultat.ok
+                ? 'Code invalide ou liste introuvable'
+                : resultat.dejaMembre
+                    ? 'Vous étiez déjà dans cette liste'
+                    : 'Liste rejointe !';
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(ok
-                  ? 'Liste rejointe !'
-                  : 'Code invalide ou liste introuvable'),
-              backgroundColor: ok ? Colors.green : null,
+              content: Text(message),
+              backgroundColor: resultat.ok ? Colors.green : null,
             ));
           }
 
@@ -800,10 +803,19 @@ class _ListeMembresState extends ConsumerState<_ListeMembres> {
       );
     }
     final monUid = ref.read(authServiceProvider).currentUser?.uid;
+    // Seul le propriétaire peut retirer un AUTRE membre, et le propriétaire
+    // lui-même ne peut jamais être retiré par personne — un membre non
+    // propriétaire pouvait auparavant retirer n'importe qui, y compris le
+    // propriétaire de la liste, ce qui n'a pas de sens.
+    final jeSuisProprietaire =
+        membres.where((m) => m.uid == monUid).firstOrNull?.estProprietaire ??
+            false;
 
     return Column(
       children: membres.map((m) {
         final nom = m.displayName ?? 'Utilisateur';
+        final peutRetirer =
+            jeSuisProprietaire && !m.estProprietaire && m.uid != monUid;
         return ListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
@@ -818,13 +830,13 @@ class _ListeMembresState extends ConsumerState<_ListeMembres> {
           ),
           title: Text(m.uid == monUid ? '$nom (moi)' : nom),
           subtitle: m.estProprietaire ? const Text('Propriétaire') : null,
-          trailing: m.uid == monUid
-              ? null
-              : IconButton(
+          trailing: peutRetirer
+              ? IconButton(
                   icon: const Icon(Icons.person_remove_outlined, size: 20),
                   tooltip: 'Retirer',
                   onPressed: () => _retirer(m.uid),
-                ),
+                )
+              : null,
         );
       }).toList(),
     );

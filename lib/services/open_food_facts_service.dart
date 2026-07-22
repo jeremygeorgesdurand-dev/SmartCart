@@ -21,8 +21,16 @@ class OpenFoodFactsService {
       final data = jsonDecode(response.body);
       final products = data['products'] as List? ?? [];
 
+      // Exiger `product_name_fr` spécifiquement écartait silencieusement
+      // une bonne partie des résultats (beurre, basilic, etc.) : beaucoup
+      // de produits n'ont qu'un `product_name` générique renseigné sur Open
+      // Food Facts, sans traduction française dédiée, alors qu'ils ont bien
+      // un nom exploitable. On accepte les deux, comme le fait déjà le
+      // mapping juste en dessous.
       return products
-          .where((p) => p['product_name_fr'] != null && (p['product_name_fr'] as String).isNotEmpty)
+          .where((p) =>
+              ((p['product_name_fr'] as String?)?.isNotEmpty ?? false) ||
+              ((p['product_name'] as String?)?.isNotEmpty ?? false))
           .map((p) => Article(
                 id: _uuid.v4(),
                 nom: p['product_name_fr'] ?? p['product_name'] ?? 'Inconnu',

@@ -90,6 +90,13 @@ final realtimeSyncProvider = Provider<void>((ref) {
         ref.invalidate(articlesListeProvider);
         ref.invalidate(prixArticlesNotifierProvider);
       });
+      // Republier le profil (nom/photo affichés aux autres membres d'une
+      // liste collaborative) à chaque démarrage authentifié, pas seulement
+      // juste après un login explicite depuis CompteScreen : un utilisateur
+      // déjà connecté d'une session précédente (redémarrage de l'app) ne
+      // repasse jamais par ce chemin, et son profil public resterait donc
+      // vide ou périmé sinon.
+      _syncSilencieux(sync.publierProfil);
     } else {
       sync.arreterEcouteTempsReel();
     }
@@ -346,21 +353,24 @@ class ListesNotifier extends AsyncNotifier<List<ListeCourses>> {
     }
   }
 
-  // Rejoint une liste collaborative via son code. Retourne false si le
-  // code est invalide.
-  Future<bool> rejoindre(String code) async {
+  // Rejoint une liste collaborative via son code. `ok` est faux si le code
+  // est invalide ; `dejaMembre` indique si cet appareil faisait déjà partie
+  // de la liste (pour distinguer "liste rejointe" de "vous y étiez déjà"
+  // dans le message affiché à l'utilisateur).
+  Future<({bool ok, bool dejaMembre})> rejoindre(String code) async {
     final resultat =
         await ref.read(syncServiceProvider).rejoindreListeParCode(code);
-    if (resultat == null) return false;
+    if (resultat == null) return (ok: false, dejaMembre: false);
 
     final db = ref.read(dbServiceProvider);
+    final dejaMembre = await db.getListe(resultat.liste.id) != null;
     await db.insertListe(resultat.liste);
     for (final item in resultat.items) {
       await db.insertArticleListe(item);
     }
     ref.invalidateSelf();
     ref.invalidate(articlesListeProvider(resultat.liste.id));
-    return true;
+    return (ok: true, dejaMembre: dejaMembre);
   }
 
   Future<void> quitterPartage(ListeCourses liste) async {
@@ -534,11 +544,19 @@ final prixIndicatifProvider =
     // pour une estimation plus cohérente du rayon dans son ensemble.
     final suggestions =
         await ref.read(offServiceProvider).searchByName(article.nom);
+    // Un article générique ("beurre", "basilic"...) matche souvent des
+    // dizaines de produits sur Open Food Facts, mais Open Prices (base de
+    // prix communautaire, bien plus petite) n'a de données que pour une
+    // fraction d'entre eux. Se limiter aux 5 premiers résultats ratait
+    // fréquemment tout prix existant simplement parce qu'aucun des 5
+    // premiers barcodes n'avait de prix renseigné. On élargit le nombre de
+    // candidats interrogés pour augmenter les chances d'en trouver au moins
+    // un, sans pour autant interroger les dizaines de résultats (coût réseau).
     final barcodes = suggestions
         .where((a) => a.barcode != null)
         .map((a) => a.barcode!)
         .toSet()
-        .take(5)
+        .take(15)
         .toList();
 
     if (barcodes.isNotEmpty) {

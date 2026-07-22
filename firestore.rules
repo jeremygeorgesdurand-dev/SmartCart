@@ -31,12 +31,34 @@ service cloud.firestore {
         && request.resource.data.proprietaireId == request.auth.uid;
 
       allow update: if request.auth != null && (
-        request.auth.uid in resource.data.membres
+        // Modifier des champs non sensibles (nom, magasin, archivee,
+        // lastModifiedBy) : `membres` doit rester identique.
+        (
+          request.auth.uid in resource.data.membres
+          && request.resource.data.membres == resource.data.membres
+        )
+        // Rejoindre : un non-membre s'ajoute lui-même, rien d'autre ne change.
         || (
           request.resource.data.membres ==
               resource.data.membres.concat([request.auth.uid])
           && request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['membres'])
+        )
+        // Retirer un membre : le propriétaire ne peut jamais être retiré, et
+        // seul lui peut retirer quelqu'un D'AUTRE que lui-même (n'importe
+        // quel membre peut toujours se retirer lui-même = quitter).
+        || (
+          request.auth.uid in resource.data.membres
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['membres'])
+          && request.resource.data.membres.size() ==
+              resource.data.membres.size() - 1
+          && request.resource.data.membres.hasAll([resource.data.proprietaireId])
+          && (
+            request.auth.uid == resource.data.proprietaireId
+            || request.resource.data.membres ==
+                resource.data.membres.removeAll([request.auth.uid])
+          )
         )
       );
 
