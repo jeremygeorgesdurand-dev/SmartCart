@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
+import '../services/widget_service.dart';
 import '../widgets/background_logo.dart';
 import 'budget_screen.dart';
 import 'catalogue_screen.dart';
@@ -17,6 +18,31 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Le widget écran d'accueil ouvre l'app avec l'id de la liste tapée
+    // (tap sur le nom/l'en-tête) via un extra d'intent : sans ce pont, on
+    // atterrissait juste sur le dernier écran affiché, pas sur la liste
+    // choisie.
+    WidgetService.ecouterIntents((_, listeId, __) => _ouvrirListe(listeId));
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final intent = await WidgetService.getWidgetIntent();
+      final listeId = intent['liste_id'] ?? '';
+      if (listeId.isNotEmpty) _ouvrirListe(listeId);
+    });
+  }
+
+  Future<void> _ouvrirListe(String listeId) async {
+    if (listeId.isEmpty) return;
+    final listes = await ref.read(listesNotifierProvider.future);
+    final liste = listes.where((l) => l.id == listeId).firstOrNull;
+    if (liste != null && mounted) {
+      Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => DetailListeScreen(liste: liste)));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

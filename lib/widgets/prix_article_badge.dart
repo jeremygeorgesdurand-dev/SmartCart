@@ -34,15 +34,34 @@ class PrixArticleBadge extends ConsumerWidget {
       );
     }
 
-    final indicatif = ref.watch(prixIndicatifProvider(article)).valueOrNull;
-    if (indicatif == null) return const SizedBox.shrink();
+    final indicatifAsync = ref.watch(prixIndicatifProvider(article));
+    final indicatif = indicatifAsync.valueOrNull;
 
-    return Text(
-      '~${indicatif.prix.toStringAsFixed(2)} €',
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.outline,
-            fontStyle: FontStyle.italic,
-          ),
-    );
+    if (indicatif != null) {
+      return Text(
+        '~${indicatif.prix.toStringAsFixed(2)} €',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.outline,
+              fontStyle: FontStyle.italic,
+            ),
+      );
+    }
+
+    // Recherche en cours : un petit indicateur évite de confondre "en train
+    // de chercher" avec "rien trouvé" (les deux étaient visuellement
+    // identiques — un vide — ce qui donnait l'impression que rien ne se
+    // passait pour beaucoup d'articles).
+    if (indicatifAsync.isLoading) {
+      return SizedBox(
+        width: 12,
+        height: 12,
+        child: CircularProgressIndicator(
+          strokeWidth: 1.5,
+          color: Theme.of(context).colorScheme.outline,
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 }

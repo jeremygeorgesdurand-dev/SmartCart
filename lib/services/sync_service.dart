@@ -396,9 +396,6 @@ class SyncService {
       'membres': [uid],
       'proprietaireId': uid,
     });
-    for (final item in items) {
-      batch.set(docRef.collection('articles').doc(item.id), item.toMap());
-    }
     // Nettoyer l'ancienne copie personnelle (désormais dans listes_partagees)
     final ancienItemsSnap =
         await _col('listes').doc(liste.id).collection('articles').get();
@@ -409,12 +406,23 @@ class SyncService {
 
     await batch.commit();
 
-    // Créé séparément, APRÈS la validation du batch ci-dessus : la règle
-    // Firestore de codes_partage vérifie le proprietaireId via un get()
-    // sur listes_partagees/{listeId}. Si ce document était créé dans le
-    // même batch, ce get() ne le verrait pas encore (les écritures d'un
-    // batch ne sont pas visibles entre elles avant validation complète),
-    // et la règle échouerait systématiquement avec "permission denied".
+    // Les articles (sous-collection de listes_partagees) sont écrits dans
+    // un batch SÉPARÉ, après la validation du batch ci-dessus : leur règle
+    // Firestore vérifie via get() que l'appelant est membre du document
+    // PARENT listes_partagees/{listeId}. Si ce parent était créé dans le
+    // même batch que ces écritures, ce get() ne le verrait pas encore (les
+    // écritures d'un batch ne sont pas visibles entre elles avant
+    // validation complète) → permission denied systématique. Même piège
+    // que pour codes_partage juste en dessous, mais raté une première fois
+    // ici pour les articles.
+    if (items.isNotEmpty) {
+      final batchArticles = _db.batch();
+      for (final item in items) {
+        batchArticles.set(docRef.collection('articles').doc(item.id), item.toMap());
+      }
+      await batchArticles.commit();
+    }
+
     await _codesPartageCol.doc(code).set({'listeId': liste.id});
 
     return code;
