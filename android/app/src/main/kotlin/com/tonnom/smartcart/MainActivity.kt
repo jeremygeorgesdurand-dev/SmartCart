@@ -40,13 +40,12 @@ class MainActivity : FlutterActivity() {
                     }
                     "clearWidget" -> {
                         val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
-                        prefs.edit()
-                            .remove("widget_liste_id")
-                            .remove("widget_liste_nom")
-                            .remove("widget_articles_json")
-                            .remove("widget_total")
-                            .remove("widget_coches")
-                            .apply()
+                        val editor = prefs.edit()
+                        for (key in listOf("widget_liste_id", "widget_liste_nom",
+                                "widget_articles_json", "widget_total", "widget_coches")) {
+                            editor.remove(key).remove("flutter.$key")
+                        }
+                        editor.apply()
                         refreshAllWidgets()
                         result.success(null)
                     }
@@ -55,11 +54,15 @@ class MainActivity : FlutterActivity() {
                         val action = intent?.getStringExtra("action")
                         val listeId = intent?.getStringExtra("open_liste_id")
                             ?: intent?.getStringExtra("liste_id")
-                        val articleId = intent?.getStringExtra("article_id")
+                        // La clé posée par SmartCartWidget pour un tap de case
+                        // à cocher est "article_liste_id" (l'id de la ligne
+                        // articles_liste, pas de l'article catalogue) : lire
+                        // "article_id" ici renvoyait toujours vide côté Dart.
+                        val articleListeId = intent?.getStringExtra("article_liste_id")
                         result.success(mapOf(
                             "action" to (action ?: ""),
                             "liste_id" to (listeId ?: ""),
-                            "article_id" to (articleId ?: ""),
+                            "article_liste_id" to (articleListeId ?: ""),
                         ))
                     }
                     else -> result.notImplemented()
@@ -75,7 +78,7 @@ class MainActivity : FlutterActivity() {
             MethodChannel(it, CHANNEL).invokeMethod("onNewIntent", mapOf(
                 "action" to (intent.getStringExtra("action") ?: ""),
                 "liste_id" to (intent.getStringExtra("open_liste_id") ?: intent.getStringExtra("liste_id") ?: ""),
-                "article_id" to (intent.getStringExtra("article_id") ?: ""),
+                "article_liste_id" to (intent.getStringExtra("article_liste_id") ?: ""),
             ))
         }
     }

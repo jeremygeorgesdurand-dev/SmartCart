@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
+import '../services/widget_service.dart';
 import '../widgets/background_logo.dart';
 import 'budget_screen.dart';
 import 'catalogue_screen.dart';
@@ -17,6 +19,51 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Le widget écran d'accueil ouvre l'app en lui passant une action
+    // (cocher un article, en ajouter un) via des extras d'intent — sans ce
+    // pont, l'app s'ouvrait juste sur son dernier écran sans rien faire de
+    // l'action demandée, ce qui donnait l'impression que le widget "ouvre
+    // juste l'app" pour rien.
+    WidgetService.ecouterIntents(_gererIntentWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final intent = await WidgetService.getWidgetIntent();
+      final action = intent['action'] ?? '';
+      if (action.isNotEmpty) {
+        _gererIntentWidget(
+            action, intent['liste_id'] ?? '', intent['article_liste_id'] ?? '');
+      }
+    });
+  }
+
+  Future<void> _gererIntentWidget(
+      String action, String listeId, String articleListeId) async {
+    if (listeId.isEmpty) return;
+
+    if (action == 'cocher_article' && articleListeId.isNotEmpty) {
+      final items = await ref.read(dbServiceProvider).getArticlesListe(listeId);
+      final item = items.where((i) => i.id == articleListeId).firstOrNull;
+      if (item != null) {
+        await ref
+            .read(articlesListeProvider(listeId).notifier)
+            .cocher(item, !item.coche);
+      }
+      // On ne veut pas que cocher un article depuis le widget prenne toute
+      // la place de l'app au premier plan : retour direct à l'écran
+      // d'accueil du téléphone une fois l'action effectuée.
+      SystemNavigator.pop();
+    } else if (action == 'add_article') {
+      final listes = await ref.read(listesNotifierProvider.future);
+      final liste = listes.where((l) => l.id == listeId).firstOrNull;
+      if (liste != null && mounted) {
+        Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => DetailListeScreen(liste: liste)));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

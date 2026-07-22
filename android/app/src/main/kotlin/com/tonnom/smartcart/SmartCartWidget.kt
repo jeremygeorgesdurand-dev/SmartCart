@@ -41,8 +41,16 @@ class SmartCartWidget : AppWidgetProvider() {
             val coche: Boolean
         )
 
+        // Notre code (MainActivity) écrit toujours la clé "brute" (sans le
+        // préfixe "flutter."). Ce préfixe n'existe que pour d'anciennes
+        // valeurs laissées par une version antérieure de l'app qui écrivait
+        // directement depuis Dart — il faut donc lire la clé brute EN
+        // PRIORITÉ : sinon une vieille valeur "flutter.$key" jamais nettoyée
+        // est relue indéfiniment et masque toute mise à jour ultérieure
+        // (ex: changer la liste choisie dans Paramètres → Widget n'avait
+        // alors plus aucun effet visible).
         private fun findString(prefs: android.content.SharedPreferences, key: String): String? {
-            val v = prefs.all["flutter.$key"] ?: prefs.all[key]
+            val v = prefs.all[key] ?: prefs.all["flutter.$key"]
             return v as? String
         }
 
@@ -54,7 +62,7 @@ class SmartCartWidget : AppWidgetProvider() {
         // plutôt que de supposer qu'elle a toujours été écrite par notre
         // propre code (putInt) côté Kotlin.
         private fun findInt(prefs: android.content.SharedPreferences, key: String): Int {
-            val v = prefs.all["flutter.$key"] ?: prefs.all[key]
+            val v = prefs.all[key] ?: prefs.all["flutter.$key"]
             return when (v) {
                 is Int -> v
                 is Long -> v.toInt()

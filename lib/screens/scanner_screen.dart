@@ -194,15 +194,14 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       ),
       body: Stack(
         children: [
-          // Tant qu'un dialogue de résultat est affiché, on ne garde pas
-          // l'aperçu caméra actif en dessous : sur certains appareils, la
-          // surface caméra finit par planter (écran noir, appli à
-          // relancer) si elle reste ouverte sans lecture pendant qu'on
-          // laisse le dialogue affiché longtemps.
-          if (_traitement)
-            Container(color: Colors.black)
-          else
-            MobileScanner(controller: _controller, onDetect: _onBarcode),
+          // Le widget MobileScanner reste toujours monté (démonter/remonter
+          // pendant que les dialogues de résultat s'affichaient cassait la
+          // reprise du scan : "Ignorer" laissait un écran noir impossible à
+          // relancer, le contrôleur étant démarré avant que le widget ne
+          // soit réattaché). On masque juste l'aperçu par un calque noir
+          // pendant le traitement, sans toucher au cycle de vie caméra.
+          MobileScanner(controller: _controller, onDetect: _onBarcode),
+          if (_traitement) Positioned.fill(child: Container(color: Colors.black)),
           Center(
             child: Container(
               width: 260, height: 160,
