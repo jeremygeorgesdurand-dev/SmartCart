@@ -41,12 +41,26 @@ class SmartCartWidget : AppWidgetProvider() {
             val coche: Boolean
         )
 
-        private fun findString(prefs: android.content.SharedPreferences, key: String): String? =
-            prefs.getString("flutter.$key", null) ?: prefs.getString(key, null)
+        private fun findString(prefs: android.content.SharedPreferences, key: String): String? {
+            val v = prefs.all["flutter.$key"] ?: prefs.all[key]
+            return v as? String
+        }
 
+        // Le plugin Flutter shared_preferences stocke les int Dart comme des
+        // Long en interne (sous la clé "flutter.$key") — une ancienne version
+        // de l'app écrivait directement ces clés depuis Dart. getInt() plante
+        // avec un ClassCastException si la valeur existante est un Long : on
+        // lit donc la valeur brute et on convertit selon son type réel,
+        // plutôt que de supposer qu'elle a toujours été écrite par notre
+        // propre code (putInt) côté Kotlin.
         private fun findInt(prefs: android.content.SharedPreferences, key: String): Int {
-            if (prefs.contains("flutter.$key")) return prefs.getInt("flutter.$key", 0)
-            return prefs.getInt(key, 0)
+            val v = prefs.all["flutter.$key"] ?: prefs.all[key]
+            return when (v) {
+                is Int -> v
+                is Long -> v.toInt()
+                is String -> v.toIntOrNull() ?: 0
+                else -> 0
+            }
         }
 
         fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int) {
