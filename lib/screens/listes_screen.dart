@@ -136,47 +136,68 @@ class ListesScreen extends ConsumerWidget {
     final ctrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text('Rejoindre une liste'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(
-            hintText: 'Code à 6 caractères…',
-          ),
-          autofocus: true,
-          textCapitalization: TextCapitalization.characters,
-          maxLength: 6,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final code = ctrl.text.trim();
-              if (code.isEmpty) return;
-              bool ok;
-              try {
-                ok = await ref
-                    .read(listesNotifierProvider.notifier)
-                    .rejoindre(code);
-              } catch (e) {
-                if (context.mounted) _afficherErreur(context, e);
-                return;
-              }
-              if (!context.mounted) return;
-              Navigator.pop(dialogCtx);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(ok
-                    ? 'Liste rejointe !'
-                    : 'Code invalide ou liste introuvable'),
-                backgroundColor: ok ? Colors.green : null,
-              ));
-            },
-            child: const Text('Rejoindre'),
-          ),
-        ],
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setState) {
+          bool enCours = false;
+
+          Future<void> rejoindre() async {
+            final code = ctrl.text.trim();
+            if (code.isEmpty || enCours) return;
+            setState(() => enCours = true);
+            bool ok;
+            try {
+              ok = await ref
+                  .read(listesNotifierProvider.notifier)
+                  .rejoindre(code);
+            } catch (e) {
+              if (context.mounted) _afficherErreur(context, e);
+              return;
+            } finally {
+              setState(() => enCours = false);
+            }
+            if (!dialogCtx.mounted) return;
+            Navigator.pop(dialogCtx);
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(ok
+                  ? 'Liste rejointe !'
+                  : 'Code invalide ou liste introuvable'),
+              backgroundColor: ok ? Colors.green : null,
+            ));
+          }
+
+          return AlertDialog(
+            title: const Text('Rejoindre une liste'),
+            content: TextField(
+              controller: ctrl,
+              decoration: const InputDecoration(
+                hintText: 'Code à 6 caractères…',
+              ),
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              maxLength: 6,
+              enabled: !enCours,
+            ),
+            actions: [
+              TextButton(
+                onPressed: enCours ? null : () => Navigator.pop(dialogCtx),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                // Désactivé pendant la requête : sans ça, appuyer plusieurs
+                // fois de suite (le premier appui ne montrait aucun retour
+                // visuel) déclenchait plusieurs tentatives concurrentes.
+                onPressed: enCours ? null : rejoindre,
+                child: enCours
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Rejoindre'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

@@ -16,12 +16,14 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Le widget écran d'accueil ouvre l'app avec l'id de la liste tapée
     // (tap sur le nom/l'en-tête) via un extra d'intent : sans ce pont, on
     // atterrissait juste sur le dernier écran affiché, pas sur la liste
@@ -32,6 +34,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final listeId = intent['liste_id'] ?? '';
       if (listeId.isNotEmpty) _ouvrirListe(listeId);
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Le "+" du widget écran d'accueil écrit un article/liste directement en
+    // SQLite depuis du code natif (QuickAddActivity), sans jamais passer par
+    // le moteur Flutter : les providers Riverpod (catalogue, articles d'une
+    // liste) ne le savent pas et continuent de servir leurs données mises en
+    // cache depuis avant la mise en arrière-plan. Sans invalidation ici, un
+    // article ajouté par le widget peut être compté (une liste jamais visitée
+    // depuis reconstruit son provider à jour) mais rester invisible dans le
+    // détail de la liste (dont le provider catalogue était déjà construit,
+    // donc périmé). Invalider au retour au premier plan force une relecture
+    // fraîche de la base dans tous les cas.
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(articlesNotifierProvider);
+      ref.invalidate(listesNotifierProvider);
+      ref.invalidate(articlesListeProvider);
+    }
   }
 
   Future<void> _ouvrirListe(String listeId) async {

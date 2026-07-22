@@ -317,12 +317,33 @@ class ListesNotifier extends AsyncNotifier<List<ListeCourses>> {
   // ── Collaboration ─────────────────────────────────────────────
   // Rend une liste collaborative et retourne le code à partager.
   Future<String> partager(ListeCourses liste) async {
-    final items = await ref.read(dbServiceProvider).getArticlesListe(liste.id);
-    final code = await ref.read(syncServiceProvider).partagerListe(liste, items);
-    final misAJour = liste.copyWith(partagee: true, code: code);
-    await ref.read(dbServiceProvider).updateListe(misAJour);
+    final db = ref.read(dbServiceProvider);
+    final items = await db.getArticlesListe(liste.id);
+
+    // Marquer la liste `partagee` en LOCAL avant l'appel Firestore, et non
+    // après : `syncServiceProvider.partagerListe` supprime le doc cloud de
+    // la copie personnelle dans le même appel, ce qui peut faire arriver
+    // l'événement de suppression du listener temps réel (voir
+    // SyncService.demarrerEcouteTempsReel) AVANT que cet `await` ne
+    // revienne. Ce listener ne supprime la ligne locale que si elle n'est
+    // PAS déjà marquée `partagee` — la marquer ici, avant l'appel réseau,
+    // élimine la course quel que soit l'ordre d'arrivée serveur/local (la
+    // liste ne disparaît plus jamais, même transitoirement).
+    await db.updateListe(liste.copyWith(partagee: true));
     ref.invalidateSelf();
-    return code;
+
+    try {
+      final code = await ref.read(syncServiceProvider).partagerListe(liste, items);
+      await db.updateListe(liste.copyWith(partagee: true, code: code));
+      ref.invalidateSelf();
+      return code;
+    } catch (e) {
+      // Échec : annuler le marquage optimiste pour ne pas laisser la liste
+      // dans un état incohérent (partagee=true sans code ni doc cloud).
+      await db.updateListe(liste.copyWith(partagee: false));
+      ref.invalidateSelf();
+      rethrow;
+    }
   }
 
   // Rejoint une liste collaborative via son code. Retourne false si le
