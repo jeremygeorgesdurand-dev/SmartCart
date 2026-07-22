@@ -236,7 +236,19 @@ class SyncService {
         if (change.doc.metadata.hasPendingWrites) continue;
         final listeId = change.doc.id;
         if (change.type == DocumentChangeType.removed) {
-          await _localDb.deleteListe(listeId);
+          // Rendre une liste collaborative supprime son doc personnel
+          // (users/{uid}/listes/{id}) dans le même batch que sa création
+          // dans listes_partagees — avec le MÊME id local. Si on supprime
+          // aveuglément la ligne locale ici, on efface la version qui vient
+          // d'être marquée `partagee` juste avant (ListesNotifier.partager),
+          // créant une disparition transitoire jusqu'à ce que l'écouteur
+          // listes_partagees la réinsère. On ne supprime donc que si la
+          // ligne locale n'est PAS déjà une liste collaborative.
+          final locale = await _localDb.getListes();
+          final existante = locale.where((l) => l.id == listeId).firstOrNull;
+          if (existante == null || !existante.partagee) {
+            await _localDb.deleteListe(listeId);
+          }
           await _subs.remove('liste_articles_$listeId')?.cancel();
           continue;
         }

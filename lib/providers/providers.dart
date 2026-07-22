@@ -551,6 +551,25 @@ final prixIndicatifProvider =
   return resultat;
 });
 
+// Un prix saisi/trouvé pour un article est par convention un prix "au kilo"
+// ou "au litre" (comme affiché en rayon, ex: "8,00 €/kg" pour de la viande)
+// quand l'ingrédient est exprimé en poids/volume plutôt qu'en unités
+// comptables. Sans cette conversion, "600 g" à 8 €/kg calculait 600 × 8 €
+// (4800 €) au lieu de 0,6 × 8 € (4,80 €).
+double _facteurPrix(String? unite, int quantite) {
+  switch (unite?.toLowerCase().trim()) {
+    case 'g':
+      return quantite / 1000.0;
+    case 'ml':
+      return quantite / 1000.0;
+    case 'kg':
+    case 'l':
+      return quantite.toDouble();
+    default:
+      return quantite.toDouble();
+  }
+}
+
 // Total estimé d'une liste = somme(prix unitaire × quantité). Priorité au
 // prix saisi/confirmé par l'utilisateur ; à défaut, le prix indicatif
 // (en ligne) de l'article est utilisé s'il est déjà disponible en cache —
@@ -579,7 +598,7 @@ final totalListeProvider =
           : null;
       final unitaire = correspondant?.prix ??
           options.map((p) => p.prix).reduce((a, b) => a < b ? a : b);
-      return total + unitaire * item.quantite;
+      return total + unitaire * _facteurPrix(item.unite, item.quantite);
     }
 
     final article =
@@ -587,7 +606,7 @@ final totalListeProvider =
     if (article == null) return total;
     final indicatif = ref.watch(prixIndicatifProvider(article)).valueOrNull;
     if (indicatif == null) return total;
-    return total + indicatif.prix * item.quantite;
+    return total + indicatif.prix * _facteurPrix(item.unite, item.quantite);
   });
 });
 

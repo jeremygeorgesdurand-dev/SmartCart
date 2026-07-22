@@ -46,6 +46,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Ajout rapide depuis le "+" du widget : Activity native légère
+             au thème dialogue, ne charge jamais le moteur Flutter. -->
+        <activity
+            android:name=".QuickAddActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>

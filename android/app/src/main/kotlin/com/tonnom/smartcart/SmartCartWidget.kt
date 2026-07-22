@@ -11,6 +11,7 @@ import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONArray
+import org.json.JSONObject
 
 class SmartCartWidget : AppWidgetProvider() {
 
@@ -100,11 +101,15 @@ class SmartCartWidget : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             views.setOnClickPendingIntent(R.id.widget_header, piOpen)
 
-            // Tap + = ouvrir ajout
-            val iAdd = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                if (listeId != null) putExtra("open_liste_id", listeId)
-                putExtra("action", "add_article")
+            // Tap + = petite boîte de dialogue native pour ajouter un
+            // article directement, sans jamais ouvrir l'app (QuickAddActivity
+            // est une Activity au thème transparent/dialogue, pas le moteur
+            // Flutter : plus rapide et ça ne donne pas l'impression que
+            // l'app "s'ouvre").
+            val iAdd = Intent(context, QuickAddActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_NO_ANIMATION
+                putExtra("liste_id", listeId ?: "")
             }
             views.setOnClickPendingIntent(R.id.widget_btn_add,
                 PendingIntent.getActivity(context, 1, iAdd,
@@ -190,6 +195,54 @@ class SmartCartWidget : AppWidgetProvider() {
             } catch (e: Exception) {
                 Log.e(TAG, "JSON error: $e")
                 emptyList()
+            }
+        }
+
+        // Reconstruit entièrement le cache du widget (articles + compteurs)
+        // depuis la base SQLite pour une liste donnée, et redessine le
+        // widget. Appelé après un ajout d'article fait directement en base
+        // par QuickAddActivity (sans passer par l'app Flutter).
+        fun regenererCacheDepuisDB(context: Context, listeId: String) {
+            try {
+                val dbFile = context.getDatabasePath("smartcart.db")
+                if (!dbFile.exists()) return
+                val db = android.database.sqlite.SQLiteDatabase.openDatabase(
+                    dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
+                val cursor = db.rawQuery(
+                    "SELECT al.id, al.quantite, al.coche, a.nom " +
+                        "FROM articles_liste al JOIN articles a ON a.id = al.articleId " +
+                        "WHERE al.listeId = ?",
+                    arrayOf(listeId))
+
+                val arr = JSONArray()
+                var coches = 0
+                while (cursor.moveToNext()) {
+                    val coche = cursor.getInt(2) == 1
+                    arr.put(JSONObject().apply {
+                        put("id", cursor.getString(0))
+                        put("quantite", cursor.getInt(1))
+                        put("coche", coche)
+                        put("nom", cursor.getString(3))
+                    })
+                    if (coche) coches++
+                }
+                cursor.close()
+                db.close()
+
+                val prefs = context.getSharedPreferences(
+                    "FlutterSharedPreferences", Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putString("widget_articles_json", arr.toString())
+                    .putInt("widget_total", arr.length())
+                    .putInt("widget_coches", coches)
+                    .apply()
+
+                val manager = AppWidgetManager.getInstance(context)
+                val ids = manager.getAppWidgetIds(
+                    ComponentName(context, SmartCartWidget::class.java))
+                for (id in ids) updateWidget(context, manager, id)
+            } catch (e: Exception) {
+                Log.e(TAG, "regenererCacheDepuisDB error: $e")
             }
         }
     }

@@ -1238,7 +1238,7 @@ class _ArticleListeTile extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           PrixArticleBadge(article: article),
-          if (articleListe.quantite > 1) ...[
+          if (articleListe.quantite > 1 || articleListe.unite != null) ...[
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1247,7 +1247,9 @@ class _ArticleListeTile extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                '×${articleListe.quantite}',
+                articleListe.unite != null
+                    ? '×${articleListe.quantite} ${articleListe.unite}'
+                    : '×${articleListe.quantite}',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -1777,7 +1779,9 @@ class _ModeCoursesItem extends ConsumerWidget {
               const SizedBox(width: 8),
             ],
             Text(
-              '× ${articleListe.quantite}',
+              articleListe.unite != null
+                  ? '× ${articleListe.quantite} ${articleListe.unite}'
+                  : '× ${articleListe.quantite}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: coche
