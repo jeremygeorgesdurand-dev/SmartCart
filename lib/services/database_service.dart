@@ -29,7 +29,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -151,6 +151,22 @@ class DatabaseService {
               DELETE FROM articles_liste
               WHERE articleId NOT IN (SELECT id FROM articles)
             ''');
+          }
+        }
+        if (oldV < 10) {
+          // Purge unique des prix indicatifs mis en cache comme "non
+          // trouvés" : la recherche (OpenFoodFactsService/OpenPricesService)
+          // traitait jusqu'ici un simple timeout réseau transitoire EXACTEMENT
+          // comme "aucun prix", et ce faux négatif restait caché jusqu'à 3h
+          // (voir prixIndicatifProvider). Avec le nouveau réessai automatique
+          // sur timeout, ces anciennes entrées ne sont plus fiables : on les
+          // supprime pour que chaque article ait une nouvelle chance d'être
+          // retrouvé, sans attendre l'expiration naturelle du cache.
+          final tables = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name = 'prix_cache_web'");
+          if (tables.isNotEmpty) {
+            await db.execute('DELETE FROM prix_cache_web WHERE trouve = 0');
           }
         }
       },

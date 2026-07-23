@@ -113,11 +113,18 @@ class SmartCartWidget : AppWidgetProvider() {
             val serviceIntent = Intent(context, SmartCartWidgetService::class.java).apply {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
                 putExtra("liste_id", listeId ?: "")
-                // L'URI doit être unique par widget : RemoteViews met en cache
-                // la connexion au service par (widgetId, viewId, intent), un
-                // intent identique pour deux widgets différents partagerait
-                // sinon la même instance d'adaptateur.
-                data = android.net.Uri.parse("smartcart://widget/$widgetId")
+                // L'URI doit être unique par widget ET changer quand la
+                // liste choisie change : Android compare les intents via
+                // Intent.filterEquals (action/data/type/composant), qui
+                // IGNORE les extras. Avec une URI ne contenant que le
+                // widgetId, changer de liste dans Paramètres → Widget
+                // laissait le système réutiliser l'ancienne factory déjà
+                // connectée (avec l'ancien listeId figé dedans) au lieu
+                // d'en recréer une neuve — la liste défilante restait donc
+                // bloquée sur les articles de l'ancienne liste, alors que
+                // l'en-tête/compteur (basés sur les préférences, pas cette
+                // factory) se mettaient à jour correctement.
+                data = android.net.Uri.parse("smartcart://widget/$widgetId/${listeId ?: ""}")
             }
             views.setRemoteAdapter(R.id.widget_list, serviceIntent)
             views.setEmptyView(R.id.widget_list, R.id.widget_empty)

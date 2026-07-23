@@ -39,6 +39,8 @@ private class SmartCartRemoteViewsFactory(
             val quantite: Int,
             val unite: String?,
             val coche: Boolean,
+            val prix: Double?,
+            val prixIndicatif: Boolean,
         ) : Ligne()
     }
 
@@ -73,18 +75,31 @@ private class SmartCartRemoteViewsFactory(
                 val id: String, val nom: String, val quantite: Int,
                 val unite: String?, val coche: Boolean,
                 val rayonNom: String?, val rayonOrdre: Int,
+                val prix: Double?, val prixIndicatif: Boolean,
             )
 
+            // Prix confirmé (le moins cher tous magasins confondus, comme le
+            // fait PrixArticleBadge côté app quand la liste n'a pas de
+            // magasin précis) en priorité ; à défaut, le prix indicatif mis
+            // en cache par la recherche en ligne (Open Prices), lui aussi
+            // déjà en base localement — jamais d'appel réseau depuis le
+            // widget, seulement les données que l'app a déjà récupérées.
             val cursor = db.rawQuery(
                 "SELECT al.id, a.nom, al.quantite, al.unite, al.coche, " +
-                    "r.nom, r.ordre " +
+                    "r.nom, r.ordre, " +
+                    "(SELECT MIN(prix) FROM prix_articles WHERE articleId = a.id), " +
+                    "pcw.trouve, pcw.prix " +
                     "FROM articles_liste al " +
                     "JOIN articles a ON a.id = al.articleId " +
                     "LEFT JOIN rayons r ON r.id = a.rayonId " +
+                    "LEFT JOIN prix_cache_web pcw ON pcw.articleId = a.id " +
                     "WHERE al.listeId = ?",
                 arrayOf(listeId))
             val tout = mutableListOf<Art>()
             while (cursor.moveToNext()) {
+                val prixConfirme = if (cursor.isNull(7)) null else cursor.getDouble(7)
+                val cacheTrouve = !cursor.isNull(8) && cursor.getInt(8) == 1
+                val prixCache = if (cursor.isNull(9)) null else cursor.getDouble(9)
                 tout.add(Art(
                     id = cursor.getString(0),
                     nom = cursor.getString(1) ?: "?",
@@ -93,6 +108,8 @@ private class SmartCartRemoteViewsFactory(
                     coche = cursor.getInt(4) == 1,
                     rayonNom = cursor.getString(5),
                     rayonOrdre = if (cursor.isNull(6)) 99 else cursor.getInt(6),
+                    prix = prixConfirme ?: (if (cacheTrouve) prixCache else null),
+                    prixIndicatif = prixConfirme == null && cacheTrouve,
                 ))
             }
             cursor.close()
@@ -112,18 +129,18 @@ private class SmartCartRemoteViewsFactory(
                 for (cle in clesTriees) {
                     resultat.add(Ligne.Entete(cle))
                     for (a in groupes[cle]!!.sortedBy { it.nom.lowercase() }) {
-                        resultat.add(Ligne.Article(a.id, a.nom, a.quantite, a.unite, a.coche))
+                        resultat.add(Ligne.Article(a.id, a.nom, a.quantite, a.unite, a.coche, a.prix, a.prixIndicatif))
                     }
                 }
             } else {
                 for (a in nonCoches.sortedBy { it.nom.lowercase() }) {
-                    resultat.add(Ligne.Article(a.id, a.nom, a.quantite, a.unite, a.coche))
+                    resultat.add(Ligne.Article(a.id, a.nom, a.quantite, a.unite, a.coche, a.prix, a.prixIndicatif))
                 }
             }
             if (coches.isNotEmpty()) {
                 resultat.add(Ligne.Entete("✓ Déjà dans le panier"))
                 for (a in coches) {
-                    resultat.add(Ligne.Article(a.id, a.nom, a.quantite, a.unite, a.coche))
+                    resultat.add(Ligne.Article(a.id, a.nom, a.quantite, a.unite, a.coche, a.prix, a.prixIndicatif))
                 }
             }
             lignes = resultat
@@ -144,6 +161,11 @@ private class SmartCartRemoteViewsFactory(
                 setTextViewText(R.id.item_quantite,
                     if (ligne.unite != null) "×${ligne.quantite} ${ligne.unite}"
                     else if (ligne.quantite > 1) "×${ligne.quantite}" else "")
+                setTextViewText(R.id.item_prix,
+                    ligne.prix?.let {
+                        val texte = String.format(java.util.Locale.US, "%.2f €", it)
+                        if (ligne.prixIndicatif) "~$texte" else texte
+                    } ?: "")
                 if (ligne.coche) {
                     setInt(R.id.item_nom, "setPaintFlags",
                         android.graphics.Paint.STRIKE_THRU_TEXT_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG)

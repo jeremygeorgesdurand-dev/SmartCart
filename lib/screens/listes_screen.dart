@@ -323,13 +323,21 @@ class _ListeCard extends ConsumerWidget {
               Container(
                 width: 48,
                 height: 48,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: Color(liste.couleur).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  Icons.shopping_cart,
-                  color: Color(liste.couleur),
+                // Première lettre plutôt qu'un caddie générique identique
+                // pour toutes les listes : repérer une liste précise d'un
+                // coup d'œil quand on en a plusieurs devient plus facile.
+                child: Text(
+                  liste.nom.isNotEmpty ? liste.nom[0].toUpperCase() : '?',
+                  style: TextStyle(
+                    color: Color(liste.couleur),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -1402,6 +1410,7 @@ class _SelectionArticlesSheetState
                       }),
                       title: Text(a.nom),
                       subtitle: a.marque != null ? Text(a.marque!) : null,
+                      secondary: PrixArticleBadge(article: a),
                     );
                   },
                 );
@@ -1822,10 +1831,14 @@ class _ModeCoursesItem extends ConsumerWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (!coche) ...[
-              PrixArticleBadge(article: article),
-              const SizedBox(width: 8),
-            ],
+            // Toujours affiché, même coché : le masquer ne changeait rien au
+            // prix total (qui compte tous les articles, cochés ou non) mais
+            // faisait sauter toute la ligne vers la gauche à chaque coche,
+            // donnant l'impression trompeuse qu'un article venait d'être
+            // retiré. La ligne entière est déjà atténuée (AnimatedOpacity)
+            // une fois cochée, donc le prix suit naturellement le même effet.
+            PrixArticleBadge(article: article),
+            const SizedBox(width: 8),
             Text(
               articleListe.unite != null
                   ? '× ${articleListe.quantite} ${articleListe.unite}'

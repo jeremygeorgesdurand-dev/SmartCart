@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../widgets/article_tile.dart';
+import '../widgets/prix_article_badge.dart';
 import '../widgets/ajouter_article_dialog.dart' show AjouterArticleDialog, AjoutRapideDialog;
 import '../widgets/filtres_bar.dart';
 import '../widgets/vocal_button.dart';
@@ -252,6 +253,14 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                         child: DropdownButton<ListeCourses?>(
                           value: listeSelectionnee,
                           isDense: true,
+                          // Explicite plutôt que de compter sur la petite
+                          // flèche grise par défaut (facile à manquer) :
+                          // signale clairement qu'on peut dérouler un menu.
+                          // La liste déroulée défile déjà automatiquement
+                          // si elle dépasse la hauteur de l'écran (comportement
+                          // natif de DropdownButton, rien à faire de plus).
+                          icon: Icon(Icons.expand_more,
+                              color: Theme.of(context).colorScheme.primary),
                           hint: Text(
                             'Ajouter à une liste...',
                             style: TextStyle(
@@ -485,6 +494,10 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                     : null,
               )),
           subtitle: article.marque != null ? Text(article.marque!) : null,
+          // Prix visible directement dans la sélection : avant, il fallait
+          // ajouter l'article puis ouvrir la liste pour savoir combien il
+          // coûtait.
+          trailing: PrixArticleBadge(article: article),
           tileColor: selectionne
               ? Theme.of(context)
                   .colorScheme

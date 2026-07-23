@@ -32,8 +32,17 @@ class OpenPricesService {
       final uri = Uri.parse('$_baseUrl/prices'
           '?product_code=${Uri.encodeComponent(barcode)}'
           '&size=50');
-      final response =
-          await _client.get(uri).timeout(const Duration(seconds: 8));
+      // Un timeout/coupure réseau transitoire était traité comme "aucun
+      // prix", puis mis en cache comme tel pendant plusieurs heures (voir
+      // le commentaire équivalent dans OpenFoodFactsService) : un unique
+      // nouvel essai après une courte pause absorbe la plupart de ces ratés.
+      http.Response response;
+      try {
+        response = await _client.get(uri).timeout(const Duration(seconds: 8));
+      } catch (_) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        response = await _client.get(uri).timeout(const Duration(seconds: 8));
+      }
       if (response.statusCode != 200) return [];
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;

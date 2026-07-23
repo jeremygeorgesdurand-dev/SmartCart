@@ -32,6 +32,15 @@
         android:maxLines="1"
         android:ellipsize="end"/>
 
+    <!-- Prix (confirmé, ou indicatif si aucun prix saisi) -->
+    <TextView
+        android:id="@+id/item_prix"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:textSize="11sp"
+        android:textColor="#AAFFFFFF"/>
+
     <!-- Quantité -->
     <TextView
         android:id="@+id/item_quantite"

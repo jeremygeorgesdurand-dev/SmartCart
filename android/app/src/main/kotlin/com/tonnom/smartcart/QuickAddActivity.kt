@@ -148,13 +148,30 @@ class QuickAddActivity : Activity() {
                 })
             }
 
-            db.insert("articles_liste", null, ContentValues().apply {
-                put("id", "al_${System.currentTimeMillis()}")
-                put("listeId", listeId)
-                put("articleId", articleId)
-                put("quantite", 1)
-                put("coche", 0)
-            })
+            // Si cet article est déjà dans la liste, augmenter sa quantité
+            // plutôt que d'insérer une seconde ligne en double — ça
+            // arrivait à chaque fois qu'on retapait un nom déjà présent
+            // (suggestion choisie ou correspondance exacte trouvée ci-dessus).
+            val existant = db.rawQuery(
+                "SELECT id, quantite FROM articles_liste WHERE listeId = ? AND articleId = ? LIMIT 1",
+                arrayOf(listeId, articleId))
+            if (existant.moveToFirst()) {
+                val alId = existant.getString(0)
+                val quantiteActuelle = existant.getInt(1)
+                existant.close()
+                db.execSQL(
+                    "UPDATE articles_liste SET quantite = ? WHERE id = ?",
+                    arrayOf(quantiteActuelle + 1, alId))
+            } else {
+                existant.close()
+                db.insert("articles_liste", null, ContentValues().apply {
+                    put("id", "al_${System.currentTimeMillis()}")
+                    put("listeId", listeId)
+                    put("articleId", articleId)
+                    put("quantite", 1)
+                    put("coche", 0)
+                })
+            }
             db.close()
 
             SmartCartWidget.regenererCacheDepuisDB(this, listeId)

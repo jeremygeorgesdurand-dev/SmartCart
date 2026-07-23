@@ -3,6 +3,42 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 
+// Avertit avant de créer un doublon plutôt que de laisser le "Doublons"
+// détecter le problème après coup : si un article du même nom (insensible à
+// la casse/aux espaces) existe déjà, on demande confirmation. Retourne true
+// si la création doit continuer (aucun doublon, ou confirmé malgré tout).
+Future<bool> _confirmerSiDoublon(
+    BuildContext context, WidgetRef ref, String nom) async {
+  final nomNormalise = nom.trim().toLowerCase();
+  final existant = ref
+      .read(articlesNotifierProvider)
+      .valueOrNull
+      ?.where((a) => a.nom.trim().toLowerCase() == nomNormalise)
+      .firstOrNull;
+  if (existant == null) return true;
+
+  final continuer = await showDialog<bool>(
+    context: context,
+    builder: (dialogCtx) => AlertDialog(
+      title: const Text('Article déjà existant'),
+      content: Text(
+          '"${existant.nom}" est déjà dans le catalogue. Créer quand même '
+          'un doublon ?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogCtx, false),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogCtx, true),
+          child: const Text('Créer quand même'),
+        ),
+      ],
+    ),
+  );
+  return continuer ?? false;
+}
+
 class AjouterArticleDialog extends ConsumerStatefulWidget {
   final String? nomInitial;
   final Article? articleExistant;
@@ -90,8 +126,15 @@ class _AjouterArticleDialogState extends ConsumerState<AjouterArticleDialog> {
     });
   }
 
-  void _enregistrer() {
+  Future<void> _enregistrer() async {
     if (_nomCtrl.text.trim().isEmpty) return;
+    // Seulement à la création : modifier un article existant garde le même
+    // nom la plupart du temps, ça ne doit pas déclencher un avertissement.
+    if (widget.articleExistant == null) {
+      final continuer =
+          await _confirmerSiDoublon(context, ref, _nomCtrl.text);
+      if (!continuer || !mounted) return;
+    }
     final article = Article(
       id: widget.articleExistant?.id ??
           'article_${DateTime.now().millisecondsSinceEpoch}',
@@ -332,9 +375,11 @@ class _AjoutRapideDialogState extends ConsumerState<AjoutRapideDialog> {
     super.dispose();
   }
 
-  void _enregistrer() {
+  Future<void> _enregistrer() async {
     final nom = _ctrl.text.trim();
     if (nom.isEmpty) return;
+    final continuer = await _confirmerSiDoublon(context, ref, nom);
+    if (!continuer || !mounted) return;
     final article = Article(
       id: 'article_${DateTime.now().millisecondsSinceEpoch}',
       nom: nom,

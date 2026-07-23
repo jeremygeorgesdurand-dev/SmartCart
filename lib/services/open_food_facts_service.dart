@@ -7,6 +7,24 @@ class OpenFoodFactsService {
   static const _baseUrl = 'https://world.openfoodfacts.org';
   static const _uuid = Uuid();
 
+  // Un simple timeout/coupure réseau (fréquent en 4G/5G, connexion froide,
+  // bascule wifi↔mobile) était traité EXACTEMENT comme "aucun résultat" par
+  // le catch générique ci-dessous, puis cette absence de résultat était mise
+  // en cache par prixIndicatifProvider pendant plusieurs heures — d'où le
+  // symptôme observé : la recherche automatique dit "introuvable" une
+  // première fois, mais un nouvel essai immédiat (bouton "Chercher en
+  // ligne", qui ne passe pas par ce cache) trouve bien un résultat. Une
+  // seule tentative de plus, après une courte pause, absorbe la plupart de
+  // ces ratés transitoires sans faire attendre l'utilisateur trop longtemps.
+  Future<http.Response> _getAvecRetry(Uri uri) async {
+    try {
+      return await http.get(uri).timeout(const Duration(seconds: 8));
+    } catch (_) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      return await http.get(uri).timeout(const Duration(seconds: 8));
+    }
+  }
+
   /// Recherche d'articles par nom (en français)
   Future<List<Article>> searchByName(String query) async {
     try {
@@ -15,7 +33,7 @@ class OpenFoodFactsService {
         '?search_terms=${Uri.encodeComponent(query)}'
         '&search_simple=1&action=process&json=1&lc=fr&cc=fr&page_size=20',
       );
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      final response = await _getAvecRetry(uri);
       if (response.statusCode != 200) return [];
 
       final data = jsonDecode(response.body);
@@ -50,7 +68,7 @@ class OpenFoodFactsService {
   Future<Article?> searchByBarcode(String barcode) async {
     try {
       final uri = Uri.parse('$_baseUrl/api/v0/product/$barcode.json');
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      final response = await _getAvecRetry(uri);
       if (response.statusCode != 200) return null;
 
       final data = jsonDecode(response.body);
