@@ -295,6 +295,7 @@ class _ListeCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final articlesAsync = ref.watch(articlesListeProvider(liste.id));
+    final catalogue = ref.watch(articlesNotifierProvider).valueOrNull ?? [];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -362,8 +363,16 @@ class _ListeCard extends ConsumerWidget {
                       loading: () => const SizedBox.shrink(),
                       error: (err, stack) => const SizedBox.shrink(),
                       data: (items) {
-                        final total = items.length;
-                        final coches = items.where((a) => a.coche).length;
+                        // Exclut les lignes dont l'article n'existe plus au
+                        // catalogue (orphelines) : sans ce filtre, ce
+                        // compteur pouvait afficher un total supérieur au
+                        // nombre d'articles réellement visibles une fois la
+                        // liste ouverte, qui applique le même filtre.
+                        final visibles = items
+                            .where((a) => catalogue.any((c) => c.id == a.articleId))
+                            .toList();
+                        final total = visibles.length;
+                        final coches = visibles.where((a) => a.coche).length;
                         return Text(
                           total == 0
                               ? 'Liste vide'
@@ -1517,7 +1526,13 @@ class ModeCoursesScreen extends ConsumerWidget {
                   return (ra?.ordre ?? 99).compareTo(rb?.ordre ?? 99);
                 });
 
-              final total = items.length;
+              // Basé sur nonCoches+coches (déjà filtrés par la présence de
+              // l'article au catalogue), pas sur `items.length` brut : sinon
+              // une ligne orpheline (article supprimé du catalogue, jamais
+              // affichée) pouvait faire dire "1 restant" en même temps que
+              // la bannière "Courses terminées" (qui elle se base sur
+              // nonCoches, donc vide dans ce cas).
+              final total = nonCoches.length + coches.length;
               final nbCoches = coches.length;
               final progression = total == 0 ? 0.0 : nbCoches / total;
 

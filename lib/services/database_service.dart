@@ -29,7 +29,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -127,6 +127,31 @@ class DatabaseService {
               date TEXT NOT NULL
             )
           ''');
+        }
+        if (oldV < 9) {
+          // Nettoyage unique des lignes `articles_liste` orphelines : les
+          // clés étrangères ne sont pas appliquées par sqflite (pas de
+          // PRAGMA foreign_keys = ON), donc avant que deleteArticle() ne
+          // supprime en cascade (voir cette méthode plus bas), supprimer un
+          // article du catalogue laissait derrière lui des lignes
+          // `articles_liste` pointant vers un articleId inexistant. Ces
+          // lignes fantômes sont comptées dans le total d'une liste (simple
+          // requête SQL) mais invisibles partout où l'app doit d'abord
+          // retrouver l'article correspondant dans le catalogue pour
+          // l'afficher — d'où un décalage "1 article de plus que ce qui
+          // s'affiche" et un "1 restant" après avoir tout coché.
+          // Les deux tables existent dans toute base réelle depuis la v1,
+          // mais une base de test peut simuler un schéma minimal partiel :
+          // on vérifie leur présence avant de migrer, par prudence.
+          final tables = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('articles', 'articles_liste')");
+          if (tables.length == 2) {
+            await db.execute('''
+              DELETE FROM articles_liste
+              WHERE articleId NOT IN (SELECT id FROM articles)
+            ''');
+          }
         }
       },
     );

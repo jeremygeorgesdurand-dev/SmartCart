@@ -702,6 +702,15 @@ class RecettesNotifier extends AsyncNotifier<List<Recette>> {
     // chargé même si aucun autre écran ne l'a déjà déclenché avant.
     final catalogue = await ref.read(articlesNotifierProvider.future);
     final itemsExistants = await db.getArticlesListe(listeId);
+    // articleId déjà présents dans la liste, mis à jour de façon SYNCHRONE
+    // (avant tout await) dès qu'un ingrédient est retenu pour insertion : un
+    // snapshot figé de `itemsExistants` ne voit jamais les insertions faites
+    // par les AUTRES ingrédients de ce même Future.wait pendant qu'il tourne
+    // encore, donc une recette référençant deux fois un ingrédient déjà
+    // présent au catalogue (ex: "Sel" utilisé à deux endroits) faisait passer
+    // le test `dejaPresent` comme faux pour les deux, créant un doublon.
+    final articleIdsDansListe =
+        itemsExistants.map((it) => it.articleId).toSet();
 
     // Les articles créés à la volée pendant CE traitement (matché par nom,
     // insensible à la casse) : évite de créer un doublon quand la même
@@ -735,12 +744,14 @@ class RecettesNotifier extends AsyncNotifier<List<Recette>> {
             await ref.read(articlesNotifierProvider.notifier).ajouter(article);
           }
 
-          final dejaPresent =
-              itemsExistants.any((it) => it.articleId == article!.id);
-          if (dejaPresent) {
+          // Vérification ET réservation en un seul bloc synchrone (pas
+          // d'await entre les deux) : deux tâches concurrentes pour le même
+          // articleId ne peuvent pas passer toutes les deux ce test.
+          if (articleIdsDansListe.contains(article.id)) {
             reussis++;
             return;
           }
+          articleIdsDansListe.add(article.id);
 
           await ref.read(articlesListeProvider(listeId).notifier).ajouter(
                 ArticleListe(
