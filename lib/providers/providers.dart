@@ -496,6 +496,50 @@ class PrixArticlesNotifier extends AsyncNotifier<List<PrixArticle>> {
   }
 }
 
+// Article générique ("lait", "pain", "pâtes"...) ou repli quand le
+// code-barres précis n'a aucun prix connu : pas de produit unique à
+// interroger. Prendre le premier résultat de recherche au hasard donnerait
+// un prix pas du tout représentatif (une marque/format précis parmi des
+// dizaines). On interroge plusieurs produits correspondants et on fait la
+// moyenne de leur prix le moins cher, pour une estimation plus cohérente de
+// l'article le plus proche dans son ensemble.
+Future<PrixTrouve?> _prixIndicatifParNom(Ref ref, String nom) async {
+  final openPrices = ref.read(openPricesServiceProvider);
+  final suggestions = await ref.read(offServiceProvider).searchByName(nom);
+  // Un article générique ("beurre", "basilic"...) matche souvent des
+  // dizaines de produits sur Open Food Facts, mais Open Prices (base de
+  // prix communautaire, bien plus petite) n'a de données que pour une
+  // fraction d'entre eux. Se limiter aux 5 premiers résultats ratait
+  // fréquemment tout prix existant simplement parce qu'aucun des 5 premiers
+  // barcodes n'avait de prix renseigné. On élargit le nombre de candidats
+  // interrogés pour augmenter les chances d'en trouver au moins un, sans
+  // pour autant interroger les dizaines de résultats (coût réseau).
+  final barcodes = suggestions
+      .where((a) => a.barcode != null)
+      .map((a) => a.barcode!)
+      .toSet()
+      .take(15)
+      .toList();
+  if (barcodes.isEmpty) return null;
+
+  final resultatsParProduit =
+      await Future.wait(barcodes.map((b) => openPrices.chercherParBarcode(b)));
+  final prixParProduit = resultatsParProduit
+      .map((r) => r.firstOrNull)
+      .whereType<PrixTrouve>()
+      .toList();
+  if (prixParProduit.isEmpty) return null;
+
+  final moyenne = prixParProduit.fold<double>(0, (s, p) => s + p.prix) /
+      prixParProduit.length;
+  return PrixTrouve(
+    magasin: 'Moyenne (${prixParProduit.length} produits)',
+    prix: moyenne,
+    devise: prixParProduit.first.devise,
+    date: null,
+  );
+}
+
 // Prix indicatif automatique : récupéré en arrière-plan depuis Open Prices
 // (base communautaire Open Food Facts) pour un article qui n'a pas encore
 // de prix saisi par l'utilisateur. Purement informatif — jamais enregistré
@@ -535,50 +579,15 @@ final prixIndicatifProvider =
     // Code-barres connu : produit précis, on prend le prix le moins cher.
     final resultats = await openPrices.chercherParBarcode(article.barcode!);
     resultat = resultats.firstOrNull;
-  } else {
-    // Article générique ("lait", "pain", "pâtes"...) : pas de produit
-    // unique à interroger. Prendre le premier résultat de recherche au
-    // hasard donnerait un prix pas du tout représentatif (une marque/
-    // format précis parmi des dizaines). On interroge plusieurs produits
-    // correspondants et on fait la moyenne de leur prix le moins cher,
-    // pour une estimation plus cohérente du rayon dans son ensemble.
-    final suggestions =
-        await ref.read(offServiceProvider).searchByName(article.nom);
-    // Un article générique ("beurre", "basilic"...) matche souvent des
-    // dizaines de produits sur Open Food Facts, mais Open Prices (base de
-    // prix communautaire, bien plus petite) n'a de données que pour une
-    // fraction d'entre eux. Se limiter aux 5 premiers résultats ratait
-    // fréquemment tout prix existant simplement parce qu'aucun des 5
-    // premiers barcodes n'avait de prix renseigné. On élargit le nombre de
-    // candidats interrogés pour augmenter les chances d'en trouver au moins
-    // un, sans pour autant interroger les dizaines de résultats (coût réseau).
-    final barcodes = suggestions
-        .where((a) => a.barcode != null)
-        .map((a) => a.barcode!)
-        .toSet()
-        .take(15)
-        .toList();
-
-    if (barcodes.isNotEmpty) {
-      final resultatsParProduit = await Future.wait(
-          barcodes.map((b) => openPrices.chercherParBarcode(b)));
-      final prixParProduit = resultatsParProduit
-          .map((r) => r.firstOrNull)
-          .whereType<PrixTrouve>()
-          .toList();
-
-      if (prixParProduit.isNotEmpty) {
-        final moyenne = prixParProduit.fold<double>(0, (s, p) => s + p.prix) /
-            prixParProduit.length;
-        resultat = PrixTrouve(
-          magasin: 'Moyenne (${prixParProduit.length} produits)',
-          prix: moyenne,
-          devise: prixParProduit.first.devise,
-          date: null,
-        );
-      }
-    }
   }
+
+  // Pas de code-barres, OU code-barres connu mais aucun prix trouvé POUR CE
+  // PRODUIT PRÉCIS (Open Prices est une petite base communautaire, la
+  // plupart des codes-barres n'ont encore aucune donnée) : se rabattre sur
+  // le produit le plus proche par nom plutôt que d'abandonner et de laisser
+  // l'article sans aucun prix. C'est une estimation moins précise (moyenne
+  // sur plusieurs produits similaires), mais bien plus utile qu'un vide.
+  resultat ??= await _prixIndicatifParNom(ref, article.nom);
 
   await dbService.setPrixCacheWeb(
     article.id,
