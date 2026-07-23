@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -76,8 +78,10 @@ class ListesScreen extends ConsumerWidget {
             tooltip: 'Trier',
             onSelected: (v) => ref.read(_listeSortProvider.notifier).state = v,
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'date', child: Text('Par date (récent en premier)')),
-              PopupMenuItem(value: 'alpha', child: Text('Par ordre alphabétique')),
+              PopupMenuItem(
+                  value: 'date', child: Text('Par date (récent en premier)')),
+              PopupMenuItem(
+                  value: 'alpha', child: Text('Par ordre alphabétique')),
             ],
           ),
         ],
@@ -93,7 +97,10 @@ class ListesScreen extends ConsumerWidget {
                 children: [
                   Icon(Icons.shopping_cart_outlined,
                       size: 64,
-                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outline
+                          .withValues(alpha: 0.5)),
                   const SizedBox(height: 16),
                   Text('Aucune liste',
                       style: Theme.of(context).textTheme.titleMedium),
@@ -107,8 +114,8 @@ class ListesScreen extends ConsumerWidget {
           final sorted = [...listes];
           switch (sortMode) {
             case 'alpha':
-              sorted.sort((a, b) =>
-                  a.nom.toLowerCase().compareTo(b.nom.toLowerCase()));
+              sorted.sort(
+                  (a, b) => a.nom.toLowerCase().compareTo(b.nom.toLowerCase()));
             case 'date':
             default:
               sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -207,7 +214,13 @@ class ListesScreen extends ConsumerWidget {
 
   void _creerListe(BuildContext context, WidgetRef ref) {
     final ctrl = TextEditingController();
-    int couleurChoisie = couleursListe[0];
+    // Couleur de départ différente à chaque nouvelle liste (au lieu de
+    // toujours la première de la palette) : sans ça, toute liste créée sans
+    // toucher au sélecteur de couleur avait exactement la même teinte, et
+    // l'icône/pastille de chaque liste dans "Mes listes" se ressemblait
+    // toujours. L'utilisateur garde la main pour en choisir une autre.
+    final nbListes = ref.read(listesNotifierProvider).valueOrNull?.length ?? 0;
+    int couleurChoisie = couleursListe[nbListes % couleursListe.length];
     showDialog(
       context: context,
       builder: (_) => StatefulBuilder(
@@ -243,7 +256,8 @@ class ListesScreen extends ConsumerWidget {
                         shape: BoxShape.circle,
                         border: selectionnee
                             ? Border.all(
-                                color: Theme.of(dialogCtx).colorScheme.onSurface,
+                                color:
+                                    Theme.of(dialogCtx).colorScheme.onSurface,
                                 width: 2)
                             : null,
                       ),
@@ -281,8 +295,14 @@ class ListesScreen extends ConsumerWidget {
 
 // Palette de couleurs proposée à la création d'une liste.
 const couleursListe = [
-  0xFF1ABC9C, 0xFF1565C0, 0xFFE53935, 0xFFFF8F00,
-  0xFF8E24AA, 0xFF00838F, 0xFF546E7A, 0xFFD81B60,
+  0xFF1ABC9C,
+  0xFF1565C0,
+  0xFFE53935,
+  0xFFFF8F00,
+  0xFF8E24AA,
+  0xFF00838F,
+  0xFF546E7A,
+  0xFFD81B60,
 ];
 
 // ================================================================
@@ -299,161 +319,193 @@ class _ListeCard extends ConsumerWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.push(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (_, __, ___) => DetailListeScreen(liste: liste),
-            transitionsBuilder: (_, anim, __, child) => SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(1, 0),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-              child: child,
-            ),
-            transitionDuration: const Duration(milliseconds: 300),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Icône
-              Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Color(liste.couleur).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                // Première lettre plutôt qu'un caddie générique identique
-                // pour toutes les listes : repérer une liste précise d'un
-                // coup d'œil quand on en a plusieurs devient plus facile.
-                child: Text(
-                  liste.nom.isNotEmpty ? liste.nom[0].toUpperCase() : '?',
-                  style: TextStyle(
-                    color: Color(liste.couleur),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        children: [
+          // Barre de couleur en plus de la pastille : renforce le repère
+          // visuel entre listes d'un simple coup d'œil, même en défilant
+          // vite dans "Mes listes".
+          Container(width: 5, height: 72, color: Color(liste.couleur)),
+          Expanded(
+            child: InkWell(
+              onTap: () => Navigator.push(
+                context,
+                PageRouteBuilder(
+                  pageBuilder: (_, __, ___) => DetailListeScreen(liste: liste),
+                  transitionsBuilder: (_, anim, __, child) => SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(1, 0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                        parent: anim, curve: Curves.easeOutCubic)),
+                    child: child,
                   ),
+                  transitionDuration: const Duration(milliseconds: 300),
                 ),
               ),
-              const SizedBox(width: 16),
-
-              // Infos
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(liste.nom,
-                              style: Theme.of(context).textTheme.titleMedium,
-                              overflow: TextOverflow.ellipsis),
+                    // Icône
+                    Container(
+                      width: 48,
+                      height: 48,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Color(liste.couleur).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      // Première lettre plutôt qu'un caddie générique identique
+                      // pour toutes les listes : repérer une liste précise d'un
+                      // coup d'œil quand on en a plusieurs devient plus facile.
+                      child: Text(
+                        liste.nom.isNotEmpty ? liste.nom[0].toUpperCase() : '?',
+                        style: TextStyle(
+                          color: Color(liste.couleur),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
                         ),
-                        if (liste.partagee) ...[
-                          const SizedBox(width: 6),
-                          Icon(Icons.people,
-                              size: 16,
-                              color: Theme.of(context).colorScheme.primary),
-                        ],
-                      ],
+                      ),
                     ),
-                    if (liste.magasin != null) ...[
-                      const SizedBox(height: 2),
-                      Text(liste.magasin!,
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                    articlesAsync.when(
-                      loading: () => const SizedBox.shrink(),
-                      error: (err, stack) => const SizedBox.shrink(),
-                      data: (items) {
-                        // Exclut les lignes dont l'article n'existe plus au
-                        // catalogue (orphelines) : sans ce filtre, ce
-                        // compteur pouvait afficher un total supérieur au
-                        // nombre d'articles réellement visibles une fois la
-                        // liste ouverte, qui applique le même filtre.
-                        final visibles = items
-                            .where((a) => catalogue.any((c) => c.id == a.articleId))
-                            .toList();
-                        final total = visibles.length;
-                        final coches = visibles.where((a) => a.coche).length;
-                        return Text(
-                          total == 0
-                              ? 'Liste vide'
-                              : '$coches / $total articles cochés',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.outline,
+                    const SizedBox(width: 16),
+
+                    // Infos
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(liste.nom,
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                    overflow: TextOverflow.ellipsis),
                               ),
-                        );
-                      },
+                              if (liste.partagee) ...[
+                                const SizedBox(width: 6),
+                                Icon(Icons.people,
+                                    size: 16,
+                                    color:
+                                        Theme.of(context).colorScheme.primary),
+                              ],
+                            ],
+                          ),
+                          if (liste.magasin != null) ...[
+                            const SizedBox(height: 2),
+                            Text(liste.magasin!,
+                                style: Theme.of(context).textTheme.bodySmall),
+                          ],
+                          articlesAsync.when(
+                            loading: () => const SizedBox.shrink(),
+                            error: (err, stack) => const SizedBox.shrink(),
+                            data: (items) {
+                              // Exclut les lignes dont l'article n'existe plus au
+                              // catalogue (orphelines) : sans ce filtre, ce
+                              // compteur pouvait afficher un total supérieur au
+                              // nombre d'articles réellement visibles une fois la
+                              // liste ouverte, qui applique le même filtre.
+                              final visibles = items
+                                  .where((a) =>
+                                      catalogue.any((c) => c.id == a.articleId))
+                                  .toList();
+                              final total = visibles.length;
+                              final coches =
+                                  visibles.where((a) => a.coche).length;
+                              return Text(
+                                total == 0
+                                    ? 'Liste vide'
+                                    : '$coches / $total articles cochés',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color:
+                                          Theme.of(context).colorScheme.outline,
+                                    ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Total estimé (si des prix sont renseignés)
+                    Builder(builder: (context) {
+                      if (!ref.watch(afficherPrixProvider)) {
+                        return const SizedBox.shrink();
+                      }
+                      final total = ref.watch(totalListeProvider(liste.id));
+                      if (total <= 0) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Text(
+                          '${total.toStringAsFixed(2)} €',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                        ),
+                      );
+                    }),
+
+                    // Menu contextuel
+                    PopupMenuButton(
+                      onSelected: (action) => _onAction(context, ref, action),
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                            value: 'courses', child: Text('Mode courses')),
+                        const PopupMenuItem(
+                            value: 'partager', child: Text('Partager (texte)')),
+                        PopupMenuItem(
+                          value: 'collaborer',
+                          child: Text(liste.partagee
+                              ? 'Gérer la collaboration'
+                              : 'Rendre collaborative'),
+                        ),
+                        const PopupMenuItem(
+                            value: 'importer',
+                            child: Text('Importer une liste')),
+                        const PopupMenuItem(
+                            value: 'dupliquer', child: Text('Dupliquer')),
+                        const PopupMenuItem(
+                            value: 'renommer', child: Text('Renommer')),
+                        const PopupMenuItem(
+                          value: 'vider',
+                          child: Row(children: [
+                            Icon(Icons.remove_shopping_cart,
+                                size: 18, color: Color(0xFFFFC400)),
+                            SizedBox(width: 10),
+                            Text('Vider la liste',
+                                style: TextStyle(
+                                    color: Color(0xFFB38600),
+                                    fontWeight: FontWeight.bold)),
+                          ]),
+                        ),
+                        const PopupMenuItem(
+                          value: 'supprimer',
+                          child: Row(children: [
+                            Icon(Icons.delete_forever,
+                                size: 18, color: Colors.red),
+                            SizedBox(width: 10),
+                            Text('Supprimer',
+                                style: TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold)),
+                          ]),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-
-              // Total estimé (si des prix sont renseignés)
-              Builder(builder: (context) {
-                if (!ref.watch(afficherPrixProvider)) return const SizedBox.shrink();
-                final total = ref.watch(totalListeProvider(liste.id));
-                if (total <= 0) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: Text(
-                    '${total.toStringAsFixed(2)} €',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                  ),
-                );
-              }),
-
-              // Menu contextuel
-              PopupMenuButton(
-                onSelected: (action) => _onAction(context, ref, action),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'courses', child: Text('Mode courses')),
-                  const PopupMenuItem(value: 'partager', child: Text('Partager (texte)')),
-                  PopupMenuItem(
-                    value: 'collaborer',
-                    child: Text(liste.partagee
-                        ? 'Gérer la collaboration'
-                        : 'Rendre collaborative'),
-                  ),
-                  const PopupMenuItem(value: 'importer', child: Text('Importer une liste')),
-                  const PopupMenuItem(value: 'dupliquer', child: Text('Dupliquer')),
-                  const PopupMenuItem(value: 'renommer', child: Text('Renommer')),
-                  const PopupMenuItem(
-                    value: 'vider',
-                    child: Row(children: [
-                      Icon(Icons.remove_shopping_cart,
-                          size: 18, color: Color(0xFFFFC400)),
-                      SizedBox(width: 10),
-                      Text('Vider la liste',
-                          style: TextStyle(
-                              color: Color(0xFFB38600),
-                              fontWeight: FontWeight.bold)),
-                    ]),
-                  ),
-                  const PopupMenuItem(
-                    value: 'supprimer',
-                    child: Row(children: [
-                      Icon(Icons.delete_forever, size: 18, color: Colors.red),
-                      SizedBox(width: 10),
-                      Text('Supprimer',
-                          style: TextStyle(
-                              color: Colors.red, fontWeight: FontWeight.bold)),
-                    ]),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -511,8 +563,8 @@ class _ListeCard extends ConsumerWidget {
                           onPressed: () {
                             for (final item in items) {
                               ref
-                                  .read(articlesListeProvider(liste.id)
-                                      .notifier)
+                                  .read(
+                                      articlesListeProvider(liste.id).notifier)
                                   .ajouter(item);
                             }
                           },
@@ -607,8 +659,8 @@ class _ListeCard extends ConsumerWidget {
                                 .ajouter(liste);
                             for (final item in items) {
                               ref
-                                  .read(articlesListeProvider(liste.id)
-                                      .notifier)
+                                  .read(
+                                      articlesListeProvider(liste.id).notifier)
                                   .ajouter(item);
                             }
                           },
@@ -687,10 +739,11 @@ class _ListeCard extends ConsumerWidget {
                   ),
                   child: Text(
                     code,
-                    style: Theme.of(dialogCtx).textTheme.headlineSmall?.copyWith(
-                          letterSpacing: 4,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style:
+                        Theme.of(dialogCtx).textTheme.headlineSmall?.copyWith(
+                              letterSpacing: 4,
+                              fontWeight: FontWeight.bold,
+                            ),
                   ),
                 ),
               ),
@@ -782,8 +835,13 @@ class _ListeMembres extends ConsumerStatefulWidget {
 }
 
 class _ListeMembresState extends ConsumerState<_ListeMembres> {
-  List<({String uid, String? displayName, String? photoURL, bool estProprietaire})>?
-      _membres;
+  List<
+      ({
+        String uid,
+        String? displayName,
+        String? photoURL,
+        bool estProprietaire
+      })>? _membres;
 
   @override
   void initState() {
@@ -900,8 +958,11 @@ class DetailListeScreen extends ConsumerWidget {
                 ref.read(articleListeSortProvider.notifier).state = mode,
             itemBuilder: (_) => const [
               PopupMenuItem(value: SortMode.alphabetique, child: Text('A → Z')),
-              PopupMenuItem(value: SortMode.categorie, child: Text('Par catégorie maison')),
-              PopupMenuItem(value: SortMode.rayon, child: Text('Par rayon magasin')),
+              PopupMenuItem(
+                  value: SortMode.categorie,
+                  child: Text('Par catégorie maison')),
+              PopupMenuItem(
+                  value: SortMode.rayon, child: Text('Par rayon magasin')),
             ],
           ),
           IconButton(
@@ -931,7 +992,10 @@ class DetailListeScreen extends ConsumerWidget {
                 children: [
                   Icon(Icons.add_shopping_cart,
                       size: 64,
-                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outline
+                          .withValues(alpha: 0.5)),
                   const SizedBox(height: 16),
                   const Text('Liste vide'),
                   const SizedBox(height: 8),
@@ -952,21 +1016,28 @@ class DetailListeScreen extends ConsumerWidget {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => const SizedBox.shrink(),
                 data: (categories) => rayAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
                   error: (e, _) => const SizedBox.shrink(),
                   data: (rayons) {
                     // Enrichir les items
                     final itemsEnrichis = items
                         .map((item) {
-                          final article = catalogue.where((a) => a.id == item.articleId).firstOrNull;
-                          return article != null ? (item: item, article: article) : null;
+                          final article = catalogue
+                              .where((a) => a.id == item.articleId)
+                              .firstOrNull;
+                          return article != null
+                              ? (item: item, article: article)
+                              : null;
                         })
                         .whereType<({ArticleListe item, Article article})>()
                         .toList();
 
                     // Trier selon sortMode
                     if (sortMode == SortMode.alphabetique) {
-                      itemsEnrichis.sort((a, b) => a.article.nom.toLowerCase().compareTo(b.article.nom.toLowerCase()));
+                      itemsEnrichis.sort((a, b) => a.article.nom
+                          .toLowerCase()
+                          .compareTo(b.article.nom.toLowerCase()));
                       return ListView.builder(
                         padding: const EdgeInsets.only(bottom: 80),
                         itemCount: itemsEnrichis.length,
@@ -979,7 +1050,9 @@ class DetailListeScreen extends ConsumerWidget {
                     }
 
                     // Grouper par catégorie ou rayon
-                    final Map<String, List<({ArticleListe item, Article article})>> groupes = {};
+                    final Map<String,
+                            List<({ArticleListe item, Article article})>>
+                        groupes = {};
                     for (final e in itemsEnrichis) {
                       final cle = sortMode == SortMode.categorie
                           ? (e.article.categorieId ?? '__aucun__')
@@ -993,8 +1066,10 @@ class DetailListeScreen extends ConsumerWidget {
                         if (a == '__aucun__') return 1;
                         if (b == '__aucun__') return -1;
                         if (sortMode == SortMode.categorie) {
-                          final ca = categories.where((c) => c.id == a).firstOrNull;
-                          final cb = categories.where((c) => c.id == b).firstOrNull;
+                          final ca =
+                              categories.where((c) => c.id == a).firstOrNull;
+                          final cb =
+                              categories.where((c) => c.id == b).firstOrNull;
                           return (ca?.ordre ?? 99).compareTo(cb?.ordre ?? 99);
                         } else {
                           final ra = rayons.where((r) => r.id == a).firstOrNull;
@@ -1012,13 +1087,20 @@ class DetailListeScreen extends ConsumerWidget {
                         String label;
                         Color? couleur;
                         if (cle == '__aucun__') {
-                          label = sortMode == SortMode.categorie ? 'Sans categorie' : 'Sans rayon';
+                          label = sortMode == SortMode.categorie
+                              ? 'Sans categorie'
+                              : 'Sans rayon';
                         } else if (sortMode == SortMode.categorie) {
-                          final cat = categories.where((c) => c.id == cle).firstOrNull;
+                          final cat =
+                              categories.where((c) => c.id == cle).firstOrNull;
                           label = cat?.nom ?? cle;
                           couleur = cat != null ? Color(cat.couleur) : null;
                         } else {
-                          label = rayons.where((r) => r.id == cle).firstOrNull?.nom ?? cle;
+                          label = rayons
+                                  .where((r) => r.id == cle)
+                                  .firstOrNull
+                                  ?.nom ??
+                              cle;
                         }
 
                         return Column(
@@ -1030,39 +1112,54 @@ class DetailListeScreen extends ConsumerWidget {
                               child: Row(
                                 children: [
                                   if (couleur != null) ...[
-                                    CircleAvatar(backgroundColor: couleur, radius: 6),
+                                    CircleAvatar(
+                                        backgroundColor: couleur, radius: 6),
                                     const SizedBox(width: 8),
                                   ] else ...[
                                     Icon(
-                                      sortMode == SortMode.rayon ? Icons.store_outlined : Icons.category_outlined,
+                                      sortMode == SortMode.rayon
+                                          ? Icons.store_outlined
+                                          : Icons.category_outlined,
                                       size: 14,
-                                      color: Theme.of(context).colorScheme.primary,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
                                     ),
                                     const SizedBox(width: 6),
                                   ],
                                   Text(
                                     label,
-                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                      color: couleur ?? Theme.of(context).colorScheme.primary,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                          color: couleur ??
+                                              Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
                                     '${groupe.length} article${groupe.length > 1 ? 's' : ''}',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Theme.of(context).colorScheme.outline,
-                                    ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outline,
+                                        ),
                                   ),
                                 ],
                               ),
                             ),
                             const Divider(height: 1),
                             ...groupe.map((e) => _ArticleListeTile(
-                              articleListe: e.item,
-                              article: e.article,
-                              listeId: liste.id,
-                            )),
+                                  articleListe: e.item,
+                                  article: e.article,
+                                  listeId: liste.id,
+                                )),
                           ],
                         );
                       },
@@ -1109,7 +1206,8 @@ class DetailListeScreen extends ConsumerWidget {
     ouvrirVocal(context, listeId: liste.id);
   }
 
-  Future<void> _partagerDepuisDetail(BuildContext context, WidgetRef ref) async {
+  Future<void> _partagerDepuisDetail(
+      BuildContext context, WidgetRef ref) async {
     final items = await ref.read(dbServiceProvider).getArticlesListe(liste.id);
     final catalogue = await ref.read(articlesNotifierProvider.future);
     final rayons = await ref.read(rayonsNotifierProvider.future);
@@ -1161,8 +1259,11 @@ class _ArticleListeTile extends ConsumerWidget {
       builder: (sheetCtx) => Consumer(
         builder: (ctx, r, _) {
           // Re-lire l'articleListe à jour depuis le provider
-          final items = r.watch(articlesListeProvider(listeId)).valueOrNull ?? [];
-          final alActuel = items.where((i) => i.id == articleListe.id).firstOrNull ?? articleListe;
+          final items =
+              r.watch(articlesListeProvider(listeId)).valueOrNull ?? [];
+          final alActuel =
+              items.where((i) => i.id == articleListe.id).firstOrNull ??
+                  articleListe;
 
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -1172,7 +1273,8 @@ class _ArticleListeTile extends ConsumerWidget {
                 // Poignée
                 Center(
                   child: Container(
-                    width: 40, height: 4,
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
                       color: Theme.of(ctx).colorScheme.outline,
                       borderRadius: BorderRadius.circular(2),
@@ -1180,8 +1282,7 @@ class _ArticleListeTile extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(article.nom,
-                    style: Theme.of(ctx).textTheme.titleMedium),
+                Text(article.nom, style: Theme.of(ctx).textTheme.titleMedium),
                 if (article.marque != null)
                   Text(article.marque!,
                       style: Theme.of(ctx).textTheme.bodySmall),
@@ -1245,7 +1346,8 @@ class _ArticleListeTile extends ConsumerWidget {
                       style: TextStyle(color: Colors.red)),
                   onTap: () {
                     final alSupprime = alActuel;
-                    r.read(articlesListeProvider(listeId).notifier)
+                    r
+                        .read(articlesListeProvider(listeId).notifier)
                         .supprimer(alSupprime.id);
                     Navigator.pop(sheetCtx);
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -1347,8 +1449,8 @@ class _SelectionArticlesSheetState
     final query = _searchCtrl.text.toLowerCase();
 
     return Padding(
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1390,8 +1492,7 @@ class _SelectionArticlesSheetState
               data: (articles) {
                 final filtres = articles
                     .where((a) =>
-                        query.isEmpty ||
-                        a.nom.toLowerCase().contains(query))
+                        query.isEmpty || a.nom.toLowerCase().contains(query))
                     .toList();
                 return ListView.builder(
                   shrinkWrap: true,
@@ -1439,12 +1540,65 @@ class _SelectionArticlesSheetState
 // ================================================================
 // MODE COURSES — cochés descendent automatiquement en bas
 // ================================================================
-class ModeCoursesScreen extends ConsumerWidget {
+class ModeCoursesScreen extends ConsumerStatefulWidget {
   final ListeCourses liste;
   const ModeCoursesScreen({super.key, required this.liste});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ModeCoursesScreen> createState() => _ModeCoursesScreenState();
+}
+
+class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
+  // Un article qu'on vient de cocher reste affiché dans son rayon d'origine
+  // (juste barré/atténué) pendant ce court délai avant de glisser vers
+  // "Déjà dans le panier" — sans ça, il disparaissait INSTANTANÉMENT de sa
+  // place pour réapparaître tout en bas, donnant l'impression trompeuse
+  // qu'un article venait d'être retiré de la liste plutôt que simplement
+  // coché.
+  final Map<String, Timer> _delaisCoche = {};
+
+  @override
+  void dispose() {
+    for (final t in _delaisCoche.values) {
+      t.cancel();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final liste = widget.liste;
+
+    // Détecte les transitions non-coché → coché pour démarrer le délai
+    // d'affichage ; une transition coché → non-coché (ex: "Tout décocher")
+    // annule un délai en cours pour ne pas le laisser dans un état incohérent.
+    ref.listen<AsyncValue<List<ArticleListe>>>(
+      articlesListeProvider(liste.id),
+      (previous, next) {
+        final avant = previous?.valueOrNull;
+        final apres = next.valueOrNull;
+        if (apres == null) return;
+        for (final item in apres) {
+          final etaitCoche = avant == null
+              ? false
+              : (avant.where((i) => i.id == item.id).firstOrNull?.coche ??
+                  false);
+          if (item.coche && !etaitCoche && !_delaisCoche.containsKey(item.id)) {
+            setState(() {
+              _delaisCoche[item.id] = Timer(
+                const Duration(milliseconds: 900),
+                () {
+                  if (mounted) setState(() => _delaisCoche.remove(item.id));
+                },
+              );
+            });
+          } else if (!item.coche) {
+            _delaisCoche.remove(item.id)?.cancel();
+          }
+        }
+      },
+    );
+
     final articlesListeAsync = ref.watch(articlesListeProvider(liste.id));
     final catalogueAsync = ref.watch(articlesNotifierProvider);
     final rayonsAsync = ref.watch(rayonsNotifierProvider);
@@ -1482,7 +1636,8 @@ class ModeCoursesScreen extends ConsumerWidget {
           PopupMenuButton(
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'tout_cocher', child: Text('Tout cocher')),
-              PopupMenuItem(value: 'tout_decocher', child: Text('Tout décocher')),
+              PopupMenuItem(
+                  value: 'tout_decocher', child: Text('Tout décocher')),
             ],
             onSelected: (action) => ref
                 .read(articlesListeProvider(liste.id).notifier)
@@ -1508,7 +1663,11 @@ class ModeCoursesScreen extends ConsumerWidget {
                 final article =
                     catalogue.where((a) => a.id == item.articleId).firstOrNull;
                 if (article == null) continue;
-                if (item.coche) {
+                // Pendant le délai (voir _delaisCoche), un article tout
+                // juste coché reste groupé comme s'il ne l'était pas encore.
+                final coicheEffectif =
+                    item.coche && !_delaisCoche.containsKey(item.id);
+                if (coicheEffectif) {
                   coches.add((item, article));
                 } else {
                   nonCoches.add((item, article));
@@ -1568,9 +1727,11 @@ class ModeCoursesScreen extends ConsumerWidget {
                 final rayon = cle == '__sans_rayon__'
                     ? null
                     : rayons.where((r) => r.id == cle).firstOrNull;
-                final articlesRayon = parRayon[cle]!
-                    .where((e) => !e.$1.coche)
-                    .toList();
+                // parRayon vient déjà uniquement de nonCoches (qui inclut
+                // les articles tout juste cochés, encore en délai) : filtrer
+                // à nouveau sur `!coche` ici exclurait à tort ces derniers,
+                // dont le champ `coche` réel est déjà passé à true.
+                final articlesRayon = parRayon[cle]!.toList();
                 if (articlesRayon.isEmpty) continue;
 
                 widgets.add(_RayonHeader(
@@ -1675,7 +1836,8 @@ class _RayonHeader extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 8, height: 8,
+            width: 8,
+            height: 8,
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.primary,
               shape: BoxShape.circle,
@@ -1726,8 +1888,7 @@ class _SeparateurCoches extends StatelessWidget {
             child: Row(
               children: [
                 Icon(Icons.check_circle,
-                    size: 14,
-                    color: Theme.of(context).colorScheme.outline),
+                    size: 14, color: Theme.of(context).colorScheme.outline),
                 const SizedBox(width: 4),
                 Text(
                   'Déjà dans le panier',
@@ -1825,8 +1986,7 @@ class _ModeCoursesItem extends ConsumerWidget {
         subtitle: article.marque != null
             ? Text(article.marque!,
                 style: TextStyle(
-                    color: Theme.of(context).colorScheme.outline,
-                    fontSize: 12))
+                    color: Theme.of(context).colorScheme.outline, fontSize: 12))
             : null,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1845,9 +2005,7 @@ class _ModeCoursesItem extends ConsumerWidget {
                   : '× ${articleListe.quantite}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: coche
-                        ? Theme.of(context).colorScheme.outline
-                        : null,
+                    color: coche ? Theme.of(context).colorScheme.outline : null,
                   ),
             ),
           ],
@@ -1859,7 +2017,6 @@ class _ModeCoursesItem extends ConsumerWidget {
     );
   }
 }
-
 
 // ================================================================
 // BOTTOM SHEET DE PARTAGE
