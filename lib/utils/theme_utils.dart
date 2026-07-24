@@ -32,6 +32,20 @@ Color couleurSucces(BuildContext context) {
       .toColor();
 }
 
+// Garde la teinte choisie librement dans le sélecteur de couleur
+// personnalisée, mais impose une saturation/luminosité minimales : sans ça,
+// une couleur pâle (facile à tomber dessus par erreur sur une roue HSV, ex.
+// en tapant près du centre/du bord clair) donne un thème entier "délavé"
+// une fois passée dans ColorScheme.fromSeed, contrairement aux 16 couleurs
+// prédéfinies qui sont toutes volontairement saturées/foncées.
+Color couleurSeedUtilisable(Color c) {
+  final hsl = HSLColor.fromColor(c);
+  return hsl
+      .withSaturation(hsl.saturation.clamp(0.45, 1.0))
+      .withLightness(hsl.lightness.clamp(0.20, 0.45))
+      .toColor();
+}
+
 // Texte noir ou blanc selon le fond donné, pour garantir un texte lisible
 // sur une couleur choisie librement par l'utilisateur (personnalisation) —
 // un fond sombre (ex. thème "noir"/gris foncé) veut du texte blanc, un fond

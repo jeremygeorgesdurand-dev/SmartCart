@@ -6,8 +6,6 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.res.ColorStateList
-import android.os.Build
 import android.util.Log
 import android.widget.RemoteViews
 import org.json.JSONArray
@@ -62,19 +60,17 @@ class SmartCartWidget : AppWidgetProvider() {
             // Paramètres (reçue via MainActivity.updateCouleurTheme — voir
             // son commentaire : on ne peut pas relire "couleur_theme" ici,
             // shared_preferences_android 2.3+ n'écrit plus dans le fichier
-            // que ce code lit), via un tint qui préserve les coins arrondis
-            // du drawable au lieu de le remplacer par un rectangle plein.
-            // setColorStateList/setBackgroundTintList n'existe que depuis
-            // l'API 31 : sur des appareils plus anciens, le widget garde
-            // simplement sa couleur d'origine.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val seed = if (prefs.contains("widget_couleur_argb"))
-                    findInt(prefs, "widget_couleur_argb") else 0xFF1ABC9C.toInt()
-                val couleur = (seed and 0x00FFFFFF) or (0xE6 shl 24)
-                views.setColorStateList(
-                    R.id.widget_root, "setBackgroundTintList",
-                    ColorStateList.valueOf(couleur))
-            }
+            // que ce code lit). setColorFilter sur une ImageView dédiée
+            // (widget_bg, voir smartcart_widget_layout.xml) plutôt que
+            // setBackgroundTintList sur le layout racine : ce dernier
+            // n'existe comme API RemoteViews que depuis Android 12 (API 31)
+            // et ne faisait donc rien sur des appareils plus anciens,
+            // setColorFilter(int) sur ImageView marche lui sur toutes les
+            // versions tout en préservant les coins arrondis du drawable.
+            val seed = if (prefs.contains("widget_couleur_argb"))
+                findInt(prefs, "widget_couleur_argb") else 0xFF1ABC9C.toInt()
+            val couleur = (seed and 0x00FFFFFF) or (0xE6 shl 24)
+            views.setInt(R.id.widget_bg, "setColorFilter", couleur)
 
             val listeNom = findString(prefs, "widget_liste_nom")
             val listeId = findString(prefs, "widget_liste_id")

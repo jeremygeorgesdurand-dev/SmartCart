@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/widget_service.dart';
+import '../utils/theme_utils.dart';
 
 class ParametresScreen extends ConsumerWidget {
   const ParametresScreen({super.key});
@@ -211,12 +212,13 @@ class ParametresScreen extends ConsumerWidget {
     );
     if (confirmee == null) return;
 
-    final hex = confirmee.toARGB32().toRadixString(16).padLeft(8, '0');
+    final utilisable = couleurSeedUtilisable(confirmee);
+    final hex = utilisable.toARGB32().toRadixString(16).padLeft(8, '0');
     final id = 'custom:${hex.substring(2).toUpperCase()}';
     ref.read(couleurThemeProvider.notifier).state = id;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('couleur_theme', id);
-    WidgetService.mettreAJourCouleur(confirmee.toARGB32());
+    WidgetService.mettreAJourCouleur(utilisable.toARGB32());
     if (context.mounted) Navigator.pop(context);
   }
 

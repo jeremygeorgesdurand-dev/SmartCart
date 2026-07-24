@@ -123,8 +123,15 @@ class SmartCartApp extends ConsumerWidget {
     // mais on prend des surfaces neutres (calculées depuis un gris neutre)
     // pour que seuls les boutons/AppBar/accents portent la couleur, pas
     // l'ensemble de l'interface.
+    // Un gris VRAIMENT neutre (chroma quasi nulle), pas un bleu-gris/
+    // "blueGrey" : ce dernier gardait une légère teinte bleue perceptible
+    // sur les grandes surfaces (fond d'écran, cartes) en mode sombre,
+    // donnant l'impression que "le thème sombre est bleu" quelle que soit
+    // la couleur choisie, et écrasait la différence visuelle entre deux
+    // thèmes comme "brun" et "gris ardoise" (tous deux dominés par ce même
+    // bleu-gris de fond).
     final neutre = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF546E7A),
+      seedColor: const Color(0xFF808080),
       brightness: brightness,
     );
     final colorScheme = ColorScheme.fromSeed(
