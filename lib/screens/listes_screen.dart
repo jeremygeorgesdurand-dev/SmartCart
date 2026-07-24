@@ -10,6 +10,7 @@ import '../widgets/animated_list_item.dart';
 import '../widgets/import_liste_dialog.dart';
 import '../widgets/prix_article_badge.dart';
 import '../widgets/vocal_button.dart';
+import '../utils/erreur_utils.dart';
 import 'recherche_globale_screen.dart';
 import 'recettes_screen.dart';
 
@@ -18,10 +19,13 @@ final _listeSortProvider = StateProvider<String>((_) => 'date');
 
 // Message d'erreur affiché à l'utilisateur pour les actions qui échouent
 // réellement (réseau requis, pas de secours local) : rejoindre, partager,
-// quitter ou gérer une collaboration.
+// quitter ou gérer une collaboration. Traduit les erreurs Firebase/réseau
+// courantes en français clair au lieu d'afficher l'exception brute — voir
+// messageErreurLisible().
 void _afficherErreur(BuildContext context, Object e) {
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Une erreur est survenue : $e')),
+    SnackBar(
+        content: Text(messageErreurLisible(e, 'Une erreur est survenue'))),
   );
 }
 
@@ -39,6 +43,10 @@ class ListesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mes listes'),
+        // 2 icônes fréquentes + un repli, au lieu de 5 icônes à poids égal :
+        // "Rejoindre"/"Importer" sont des actions peu fréquentes pour la
+        // plupart des utilisateurs et diluaient la primauté du bouton "+"
+        // (seule vraie action principale de cet écran).
         actions: [
           // Recherche globale (catalogue + listes)
           IconButton(
@@ -58,30 +66,39 @@ class ListesScreen extends ConsumerWidget {
               MaterialPageRoute(builder: (_) => const RecettesScreen()),
             ),
           ),
-          // Rejoindre une liste collaborative via un code
-          IconButton(
-            icon: const Icon(Icons.group_add),
-            tooltip: 'Rejoindre une liste',
-            onPressed: () => _rejoindreListe(context, ref),
-          ),
-          // Importer une liste partagée (texte)
-          IconButton(
-            icon: const Icon(Icons.upload_file),
-            tooltip: 'Importer une liste',
-            onPressed: () => showDialog(
-              context: context,
-              builder: (_) => const ImportListeDialog(),
-            ),
-          ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.sort),
-            tooltip: 'Trier',
-            onSelected: (v) => ref.read(_listeSortProvider.notifier).state = v,
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                  value: 'date', child: Text('Par date (récent en premier)')),
-              PopupMenuItem(
-                  value: 'alpha', child: Text('Par ordre alphabétique')),
+            icon: const Icon(Icons.more_vert),
+            tooltip: 'Plus d\'options',
+            onSelected: (v) {
+              switch (v) {
+                case 'date':
+                case 'alpha':
+                  ref.read(_listeSortProvider.notifier).state = v;
+                case 'rejoindre':
+                  _rejoindreListe(context, ref);
+                case 'importer':
+                  showDialog(
+                    context: context,
+                    builder: (_) => const ImportListeDialog(),
+                  );
+              }
+            },
+            itemBuilder: (_) => [
+              CheckedPopupMenuItem(
+                value: 'date',
+                checked: sortMode == 'date',
+                child: const Text('Trier par date'),
+              ),
+              CheckedPopupMenuItem(
+                value: 'alpha',
+                checked: sortMode == 'alpha',
+                child: const Text('Trier par ordre alphabétique'),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                  value: 'rejoindre', child: Text('Rejoindre une liste')),
+              const PopupMenuItem(
+                  value: 'importer', child: Text('Importer une liste')),
             ],
           ),
         ],
@@ -171,7 +188,8 @@ class ListesScreen extends ConsumerWidget {
                     : 'Liste rejointe !';
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(message),
-              backgroundColor: resultat.ok ? Colors.green : null,
+              backgroundColor:
+                  resultat.ok ? Theme.of(context).colorScheme.primary : null,
             ));
           }
 
@@ -242,24 +260,41 @@ class ListesScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: couleursListe.map((c) {
+                spacing: 2,
+                runSpacing: 2,
+                children: couleursListe.asMap().entries.map((entry) {
+                  final c = entry.value;
                   final selectionnee = c == couleurChoisie;
-                  return GestureDetector(
-                    onTap: () => setState(() => couleurChoisie = c),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Color(c),
-                        shape: BoxShape.circle,
-                        border: selectionnee
-                            ? Border.all(
-                                color:
-                                    Theme.of(dialogCtx).colorScheme.onSurface,
-                                width: 2)
-                            : null,
+                  final nom = _nomsCouleursListe[entry.key];
+                  return Semantics(
+                    label: nom,
+                    selected: selectionnee,
+                    button: true,
+                    child: InkWell(
+                      onTap: () => setState(() => couleurChoisie = c),
+                      customBorder: const CircleBorder(),
+                      // Zone tactile portée à 48×48 (minimum Material) même
+                      // si la pastille visible reste à 32×32 — avant, seule
+                      // la pastille elle-même (32×32) était cliquable.
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        alignment: Alignment.center,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Color(c),
+                            shape: BoxShape.circle,
+                            border: selectionnee
+                                ? Border.all(
+                                    color: Theme.of(dialogCtx)
+                                        .colorScheme
+                                        .onSurface,
+                                    width: 2)
+                                : null,
+                          ),
+                        ),
                       ),
                     ),
                   );
@@ -303,6 +338,20 @@ const couleursListe = [
   0xFF00838F,
   0xFF546E7A,
   0xFFD81B60,
+];
+
+// Noms lisibles pour l'accessibilité (même ordre que couleursListe) : un
+// lecteur d'écran n'a sinon aucun moyen de savoir quelle couleur représente
+// chaque pastille.
+const _nomsCouleursListe = [
+  'Turquoise',
+  'Bleu',
+  'Rouge',
+  'Orange',
+  'Violet',
+  'Cyan',
+  'Bleu-gris',
+  'Rose',
 ];
 
 // ================================================================
@@ -453,52 +502,61 @@ class _ListeCard extends ConsumerWidget {
                       );
                     }),
 
-                    // Menu contextuel
-                    PopupMenuButton(
+                    // Menu contextuel — 6 entrées au lieu de 8 : "Partager
+                    // (texte)" et "Importer une liste" (toutes deux des
+                    // échanges de texte) sont fondues en une seule entrée,
+                    // et un séparateur isole les deux actions destructrices
+                    // du reste. "Collaboration" garde sa propre entrée : à la
+                    // différence du partage texte, c'est un mécanisme de
+                    // synchronisation en temps réel, pas juste un export —
+                    // le fondre dans "Partager" l'aurait rendu moins visible.
+                    PopupMenuButton<String>(
                       onSelected: (action) => _onAction(context, ref, action),
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(
-                            value: 'courses', child: Text('Mode courses')),
-                        const PopupMenuItem(
-                            value: 'partager', child: Text('Partager (texte)')),
-                        PopupMenuItem(
-                          value: 'collaborer',
-                          child: Text(liste.partagee
-                              ? 'Gérer la collaboration'
-                              : 'Rendre collaborative'),
-                        ),
-                        const PopupMenuItem(
-                            value: 'importer',
-                            child: Text('Importer une liste')),
-                        const PopupMenuItem(
-                            value: 'dupliquer', child: Text('Dupliquer')),
-                        const PopupMenuItem(
-                            value: 'renommer', child: Text('Renommer')),
-                        const PopupMenuItem(
-                          value: 'vider',
-                          child: Row(children: [
-                            Icon(Icons.remove_shopping_cart,
-                                size: 18, color: Color(0xFFFFC400)),
-                            SizedBox(width: 10),
-                            Text('Vider la liste',
-                                style: TextStyle(
-                                    color: Color(0xFFB38600),
-                                    fontWeight: FontWeight.bold)),
-                          ]),
-                        ),
-                        const PopupMenuItem(
-                          value: 'supprimer',
-                          child: Row(children: [
-                            Icon(Icons.delete_forever,
-                                size: 18, color: Colors.red),
-                            SizedBox(width: 10),
-                            Text('Supprimer',
-                                style: TextStyle(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.bold)),
-                          ]),
-                        ),
-                      ],
+                      itemBuilder: (menuCtx) {
+                        final erreur = Theme.of(menuCtx).colorScheme.error;
+                        return <PopupMenuEntry<String>>[
+                          const PopupMenuItem(
+                              value: 'courses', child: Text('Mode courses')),
+                          PopupMenuItem(
+                            value: 'collaborer',
+                            child: Text(liste.partagee
+                                ? 'Gérer la collaboration'
+                                : 'Rendre collaborative'),
+                          ),
+                          const PopupMenuItem(
+                              value: 'partager',
+                              child: Text('Partager / Importer')),
+                          const PopupMenuItem(
+                              value: 'dupliquer', child: Text('Dupliquer')),
+                          const PopupMenuItem(
+                              value: 'renommer', child: Text('Renommer')),
+                          const PopupMenuDivider(),
+                          PopupMenuItem(
+                            value: 'vider',
+                            child: Row(children: [
+                              Icon(Icons.remove_shopping_cart,
+                                  size: 18, color: erreur),
+                              const SizedBox(width: 10),
+                              Text('Vider la liste',
+                                  style: TextStyle(
+                                      color: erreur,
+                                      fontWeight: FontWeight.bold)),
+                            ]),
+                          ),
+                          PopupMenuItem(
+                            value: 'supprimer',
+                            child: Row(children: [
+                              Icon(Icons.delete_forever,
+                                  size: 18, color: erreur),
+                              const SizedBox(width: 10),
+                              Text('Supprimer',
+                                  style: TextStyle(
+                                      color: erreur,
+                                      fontWeight: FontWeight.bold)),
+                            ]),
+                          ),
+                        ];
+                      },
                     ),
                   ],
                 ),
@@ -518,14 +576,9 @@ class _ListeCard extends ConsumerWidget {
           MaterialPageRoute(builder: (_) => ModeCoursesScreen(liste: liste)),
         );
       case 'partager':
-        _partagerListe(context, ref);
+        _partagerOuImporter(context, ref);
       case 'collaborer':
         _gererCollaboration(context, ref);
-      case 'importer':
-        showDialog(
-          context: context,
-          builder: (_) => ImportListeDialog(listeId: liste.id),
-        );
       case 'vider':
         showDialog(
           context: context,
@@ -786,6 +839,46 @@ class _ListeCard extends ConsumerWidget {
             child: const Text('Fermer'),
           ),
         ],
+      ),
+    );
+  }
+
+  // "Partager (texte)" et "Importer une liste" sont désormais une seule
+  // entrée de menu ("Partager / Importer") : toutes deux manipulent du texte
+  // (export vs import), ce petit choix évite de leur donner chacune une
+  // ligne à part dans un menu déjà chargé.
+  void _partagerOuImporter(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.share),
+              title: const Text('Partager (texte)'),
+              subtitle: const Text('Copier ou envoyer la liste par SMS, WhatsApp…'),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                _partagerListe(context, ref);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.upload_file),
+              title: const Text('Importer une liste'),
+              subtitle: const Text('Coller une liste reçue en texte'),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                showDialog(
+                  context: context,
+                  builder: (_) => ImportListeDialog(listeId: liste.id),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -1341,9 +1434,11 @@ class _ArticleListeTile extends ConsumerWidget {
 
                 // Supprimer
                 ListTile(
-                  leading: const Icon(Icons.delete_outline, color: Colors.red),
-                  title: const Text('Retirer de la liste',
-                      style: TextStyle(color: Colors.red)),
+                  leading: Icon(Icons.delete_outline,
+                      color: Theme.of(ctx).colorScheme.error),
+                  title: Text('Retirer de la liste',
+                      style:
+                          TextStyle(color: Theme.of(ctx).colorScheme.error)),
                   onTap: () {
                     final alSupprime = alActuel;
                     r
@@ -1813,7 +1908,7 @@ class _BarreProgression extends StatelessWidget {
                   Theme.of(context).colorScheme.surfaceContainerHighest,
               valueColor: AlwaysStoppedAnimation<Color>(
                 progression >= 1.0
-                    ? Colors.green
+                    ? Theme.of(context).colorScheme.tertiary
                     : Theme.of(context).colorScheme.primary,
               ),
             ),
@@ -1912,22 +2007,27 @@ class _BanniereTermine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // "Terminé" utilise le rôle tertiary du thème (au lieu de Colors.green
+    // fixe) : il reste distinct du primary/teal de marque tout en suivant la
+    // couleur choisie par l'utilisateur (violet, noir…), contrairement à un
+    // vert figé qui ne changeait jamais.
+    final succes = Theme.of(context).colorScheme.tertiary;
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.1),
+        color: succes.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+        border: Border.all(color: succes.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
-          const Icon(Icons.celebration, color: Colors.green, size: 36),
+          Icon(Icons.celebration, color: succes, size: 36),
           const SizedBox(height: 8),
           Text(
             'Courses terminées !',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.green,
+                  color: succes,
                   fontWeight: FontWeight.bold,
                 ),
           ),
@@ -1936,7 +2036,7 @@ class _BanniereTermine extends StatelessWidget {
             onPressed: onDecocher,
             icon: const Icon(Icons.refresh, size: 16),
             label: const Text('Tout décocher'),
-            style: OutlinedButton.styleFrom(foregroundColor: Colors.green),
+            style: OutlinedButton.styleFrom(foregroundColor: succes),
           ),
         ],
       ),
@@ -1963,15 +2063,20 @@ class _ModeCoursesItem extends ConsumerWidget {
       opacity: coche ? 0.45 : 1.0,
       duration: const Duration(milliseconds: 300),
       child: ListTile(
-        leading: GestureDetector(
-          onTap: () => ref
-              .read(articlesListeProvider(listeId).notifier)
-              .cocher(articleListe, !coche),
-          child: AnimatedCheckIcon(
-            checked: coche,
-            color: coche
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.outline,
+        leading: Semantics(
+          label: coche ? 'Décocher ${article.nom}' : 'Cocher ${article.nom}',
+          toggled: coche,
+          button: true,
+          child: GestureDetector(
+            onTap: () => ref
+                .read(articlesListeProvider(listeId).notifier)
+                .cocher(articleListe, !coche),
+            child: AnimatedCheckIcon(
+              checked: coche,
+              color: coche
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.outline,
+            ),
           ),
         ),
         title: Text(
@@ -2123,9 +2228,9 @@ class _PartageSheetState extends ConsumerState<_PartageSheet> {
                     if (context.mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Liste copiée dans le presse-papier'),
-                          backgroundColor: Colors.green,
+                        SnackBar(
+                          content: const Text('Liste copiée dans le presse-papier'),
+                          backgroundColor: Theme.of(context).colorScheme.primary,
                         ),
                       );
                     }

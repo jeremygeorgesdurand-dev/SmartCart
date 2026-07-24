@@ -1,24 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
-
-// Message lisible à partir d'une erreur réseau/Firebase, plutôt que
-// d'afficher tel quel un `Exception: ...` technique à l'utilisateur.
-String _messageErreur(Object e, String contexte) {
-  if (e is SocketException ||
-      (e is FirebaseException &&
-          (e.code == 'unavailable' || e.code == 'network-request-failed'))) {
-    return 'Pas de connexion internet. Réessaie plus tard.';
-  }
-  if (e is FirebaseException) {
-    return '$contexte : ${e.message ?? e.code}';
-  }
-  return '$contexte : $e';
-}
+import '../utils/erreur_utils.dart';
 
 class CompteScreen extends ConsumerStatefulWidget {
   const CompteScreen({super.key});
@@ -71,7 +57,7 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       if (!mounted) return;
       setState(() {
         _syncing = false;
-        _message = _messageErreur(e, 'Erreur de connexion');
+        _message = messageErreurLisible(e, 'Erreur de connexion');
         _messageOk = false;
       });
     }
@@ -104,7 +90,7 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       setState(() { _syncing = false; _message = 'Synchronisation réussie !'; _messageOk = true; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _syncing = false; _message = _messageErreur(e, 'Erreur sync'); _messageOk = false; });
+      setState(() { _syncing = false; _message = messageErreurLisible(e, 'Erreur sync'); _messageOk = false; });
     }
   }
 
@@ -120,7 +106,7 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       setState(() { _syncing = false; _message = 'Données restaurées depuis le cloud !'; _messageOk = true; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _syncing = false; _message = _messageErreur(e, 'Erreur restauration'); _messageOk = false; });
+      setState(() { _syncing = false; _message = messageErreurLisible(e, 'Erreur restauration'); _messageOk = false; });
     }
   }
 
@@ -159,7 +145,7 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       setState(() { _syncing = false; _message = 'Compte supprimé'; _messageOk = true; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _syncing = false; _message = _messageErreur(e, 'Erreur suppression'); _messageOk = false; });
+      setState(() { _syncing = false; _message = messageErreurLisible(e, 'Erreur suppression'); _messageOk = false; });
     }
   }
 

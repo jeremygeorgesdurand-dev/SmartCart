@@ -124,7 +124,14 @@ void main() {
       );
       await _laisserRetomber(tester);
 
-      await tester.tap(find.byTooltip('Rejoindre une liste'));
+      // "Rejoindre une liste" est repliée sous le menu "Plus d'options"
+      // (icône more_vert) plutôt qu'un bouton dédié dans l'AppBar : la
+      // route du PopupMenuButton a sa propre animation d'ouverture, un
+      // pumpAndSettle est nécessaire avant de taper sur son contenu.
+      await tester.tap(find.byTooltip('Plus d\'options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rejoindre une liste'));
+      await tester.pumpAndSettle();
       await _laisserRetomber(tester);
 
       await tester.enterText(find.byType(TextField), code);
@@ -156,7 +163,14 @@ void main() {
       );
       await _laisserRetomber(tester);
 
-      await tester.tap(find.byTooltip('Rejoindre une liste'));
+      // "Rejoindre une liste" est repliée sous le menu "Plus d'options"
+      // (icône more_vert) plutôt qu'un bouton dédié dans l'AppBar : la
+      // route du PopupMenuButton a sa propre animation d'ouverture, un
+      // pumpAndSettle est nécessaire avant de taper sur son contenu.
+      await tester.tap(find.byTooltip('Plus d\'options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rejoindre une liste'));
+      await tester.pumpAndSettle();
       await _laisserRetomber(tester);
 
       await tester.enterText(find.byType(TextField), 'ZZZZZZ');
