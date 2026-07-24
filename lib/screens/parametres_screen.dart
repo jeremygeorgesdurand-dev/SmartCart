@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../services/widget_service.dart';
 
 class ParametresScreen extends ConsumerWidget {
   const ParametresScreen({super.key});
@@ -118,6 +119,7 @@ class ParametresScreen extends ConsumerWidget {
                   ref.read(couleurThemeProvider.notifier).state = id;
                   final prefs = await SharedPreferences.getInstance();
                   await prefs.setString('couleur_theme', id);
+                  WidgetService.mettreAJourCouleur(couleur.toARGB32());
                   if (context.mounted) Navigator.pop(context);
                 },
                 child: Column(

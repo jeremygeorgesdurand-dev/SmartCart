@@ -38,6 +38,20 @@ class MainActivity : FlutterActivity() {
                         refreshAllWidgets()
                         result.success(null)
                     }
+                    // Reçoit la couleur de thème choisie dans Paramètres (voir
+                    // le commentaire de mettreAJourCouleur côté Dart pour la
+                    // raison : shared_preferences_android passe par Jetpack
+                    // DataStore depuis la 2.3+, invisible depuis ici).
+                    "updateCouleurTheme" -> {
+                        val args = call.arguments as? Map<*, *>
+                        val couleur = (args?.get("couleur") as? Int)
+                        if (couleur != null) {
+                            val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+                            prefs.edit().putInt("widget_couleur_argb", couleur).apply()
+                        }
+                        refreshAllWidgets()
+                        result.success(null)
+                    }
                     "clearWidget" -> {
                         val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
                         val editor = prefs.edit()

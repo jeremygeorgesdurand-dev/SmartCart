@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'providers/providers.dart';
+import 'services/widget_service.dart';
 import 'widgets/background_logo.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -55,6 +56,13 @@ void main() async {
   final themeMode = _themeModeDepuisPrefs(prefs.getString('theme_mode'));
   final onboardingVu = prefs.getBool('onboarding_vu') ?? false;
   final tailleTexte = prefs.getDouble('taille_texte') ?? 1.0;
+
+  // Resynchronise le widget d'écran d'accueil avec la couleur actuelle à
+  // chaque démarrage (pas seulement au moment où l'utilisateur la change
+  // dans Paramètres) : couvre le cas d'un widget ajouté après coup ou
+  // réinstallé, qui sinon resterait sur sa couleur par défaut tant que
+  // l'utilisateur ne rouvre pas Paramètres.
+  WidgetService.mettreAJourCouleur(_couleurSeed(couleurTheme).toARGB32());
 
   runApp(ProviderScope(
     overrides: [
@@ -235,26 +243,27 @@ class SmartCartApp extends ConsumerWidget {
     );
   }
 
-  Color _couleurSeed(String nom) {
-    switch (nom) {
-      case 'vert': return const Color(0xFF1ABC9C);
-      case 'vert_fonce': return const Color(0xFF2E7D32);
-      case 'teal': return const Color(0xFF00695C);
-      case 'olive': return const Color(0xFF827717);
-      case 'bleu': return const Color(0xFF1565C0);
-      case 'bleu_clair': return const Color(0xFF0288D1);
-      case 'indigo': return const Color(0xFF283593);
-      case 'cyan': return const Color(0xFF00838F);
-      case 'orange': return const Color(0xFFE65100);
-      case 'ambre': return const Color(0xFFFF6F00);
-      case 'rouge': return const Color(0xFFC62828);
-      case 'rose': return const Color(0xFFAD1457);
-      case 'violet': return const Color(0xFF6A1B9A);
-      case 'brun': return const Color(0xFF4E342E);
-      case 'gris': return const Color(0xFF455A64);
-      case 'noir': return const Color(0xFF212121);
-      default: return const Color(0xFF1ABC9C);
-    }
+}
+
+Color _couleurSeed(String nom) {
+  switch (nom) {
+    case 'vert': return const Color(0xFF1ABC9C);
+    case 'vert_fonce': return const Color(0xFF2E7D32);
+    case 'teal': return const Color(0xFF00695C);
+    case 'olive': return const Color(0xFF827717);
+    case 'bleu': return const Color(0xFF1565C0);
+    case 'bleu_clair': return const Color(0xFF0288D1);
+    case 'indigo': return const Color(0xFF283593);
+    case 'cyan': return const Color(0xFF00838F);
+    case 'orange': return const Color(0xFFE65100);
+    case 'ambre': return const Color(0xFFFF6F00);
+    case 'rouge': return const Color(0xFFC62828);
+    case 'rose': return const Color(0xFFAD1457);
+    case 'violet': return const Color(0xFF6A1B9A);
+    case 'brun': return const Color(0xFF4E342E);
+    case 'gris': return const Color(0xFF455A64);
+    case 'noir': return const Color(0xFF212121);
+    default: return const Color(0xFF1ABC9C);
   }
 }
 

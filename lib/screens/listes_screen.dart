@@ -1944,7 +1944,7 @@ class _BarreProgression extends StatelessWidget {
                   Theme.of(context).colorScheme.surfaceContainerHighest,
               valueColor: AlwaysStoppedAnimation<Color>(
                 progression >= 1.0
-                    ? Theme.of(context).colorScheme.tertiary
+                    ? couleurSucces(context)
                     : Theme.of(context).colorScheme.primary,
               ),
             ),
@@ -2043,11 +2043,11 @@ class _BanniereTermine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // "Terminé" utilise le rôle tertiary du thème (au lieu de Colors.green
-    // fixe) : il reste distinct du primary/teal de marque tout en suivant la
-    // couleur choisie par l'utilisateur (violet, noir…), contrairement à un
-    // vert figé qui ne changeait jamais.
-    final succes = Theme.of(context).colorScheme.tertiary;
+    // Vert fixe plutôt que le rôle tertiary du thème : tertiary tourne la
+    // teinte choisie par l'utilisateur (~120°), ce qui donnait un rouge pour
+    // un thème "brun" ou un bleu pour "gris ardoise" — un indicateur de
+    // succès ne doit pas changer de sens selon le thème (voir theme_utils).
+    final succes = couleurSucces(context);
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),

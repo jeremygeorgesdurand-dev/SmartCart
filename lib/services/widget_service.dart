@@ -49,6 +49,25 @@ class WidgetService {
     }
   }
 
+  // La couleur de thème (comme le reste des préférences côté Flutter) doit
+  // être transmise en argument plutôt qu'écrite via SharedPreferences.
+  // getInstance() : depuis shared_preferences_android 2.3+, le plugin
+  // stocke via Jetpack DataStore, donc le widget natif (qui lit encore le
+  // fichier SharedPreferences classique) ne verrait jamais les changements
+  // ultérieurs — seulement une éventuelle valeur figée au moment de la
+  // migration. Sans cet appel explicite, changer de couleur dans
+  // Paramètres n'avait donc aucun effet sur le widget après le tout premier
+  // affichage.
+  static Future<void> mettreAJourCouleur(int couleurArgb) async {
+    try {
+      await _channel.invokeMethod('updateCouleurTheme', {
+        'couleur': couleurArgb,
+      });
+    } catch (e) {
+      // Widget non installé, silencieux
+    }
+  }
+
   /// Appelé depuis MainActivity quand l'app est lancée via widget
   static void ecouterIntents(
       void Function(String action, String listeId, String articleListeId)
