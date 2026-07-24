@@ -6,6 +6,10 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.util.Log
 import android.widget.RemoteViews
 import org.json.JSONArray
@@ -50,27 +54,42 @@ class SmartCartWidget : AppWidgetProvider() {
             }
         }
 
+        // Dessine directement un bitmap arrondi de la couleur voulue plutôt
+        // que de compter sur setColorFilter/setBackgroundTintList via
+        // RemoteViews : ces deux méthodes dépendent de signatures précises
+        // (setBackgroundTintList n'existe comme API RemoteViews que depuis
+        // Android 12, et le setColorFilter(int) à un seul argument n'existe
+        // pas sur ImageView, seul setColorFilter(int, PorterDuff.Mode)
+        // existe) — aucune des deux ne s'appliquait donc réellement, quelle
+        // que soit la version d'Android. Un Bitmap dessiné ici, dans notre
+        // propre process, ne dépend d'aucune de ces API et marche à coup
+        // sûr sur toutes les versions.
+        private fun bitmapFondArrondi(couleur: Int): Bitmap {
+            val largeur = 480
+            val hauteur = 240
+            val rayon = 56f
+            val bmp = Bitmap.createBitmap(largeur, hauteur, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bmp)
+            val peinture = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = couleur }
+            canvas.drawRoundRect(
+                RectF(0f, 0f, largeur.toFloat(), hauteur.toFloat()), rayon, rayon, peinture)
+            return bmp
+        }
+
         fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int) {
             val prefs = context.getSharedPreferences(
                 "FlutterSharedPreferences", Context.MODE_PRIVATE)
             val views = RemoteViews(context.packageName, R.layout.smartcart_widget_layout)
 
-            // Teinte le fond (déjà à 90% d'opacité dans le drawable
-            // widget_background) avec la couleur de thème choisie dans
-            // Paramètres (reçue via MainActivity.updateCouleurTheme — voir
-            // son commentaire : on ne peut pas relire "couleur_theme" ici,
+            // Fond teinté avec la couleur de thème choisie dans Paramètres
+            // (reçue via MainActivity.updateCouleurTheme — voir son
+            // commentaire : on ne peut pas relire "couleur_theme" ici,
             // shared_preferences_android 2.3+ n'écrit plus dans le fichier
-            // que ce code lit). setColorFilter sur une ImageView dédiée
-            // (widget_bg, voir smartcart_widget_layout.xml) plutôt que
-            // setBackgroundTintList sur le layout racine : ce dernier
-            // n'existe comme API RemoteViews que depuis Android 12 (API 31)
-            // et ne faisait donc rien sur des appareils plus anciens,
-            // setColorFilter(int) sur ImageView marche lui sur toutes les
-            // versions tout en préservant les coins arrondis du drawable.
+            // que ce code lit), à 90% d'opacité comme l'ancien drawable fixe.
             val seed = if (prefs.contains("widget_couleur_argb"))
                 findInt(prefs, "widget_couleur_argb") else 0xFF1ABC9C.toInt()
             val couleur = (seed and 0x00FFFFFF) or (0xE6 shl 24)
-            views.setInt(R.id.widget_bg, "setColorFilter", couleur)
+            views.setImageViewBitmap(R.id.widget_bg, bitmapFondArrondi(couleur))
 
             val listeNom = findString(prefs, "widget_liste_nom")
             val listeId = findString(prefs, "widget_liste_id")

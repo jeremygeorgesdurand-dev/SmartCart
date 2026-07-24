@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'providers/providers.dart';
 import 'services/widget_service.dart';
+import 'utils/theme_utils.dart';
 import 'widgets/background_logo.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -134,7 +135,7 @@ class SmartCartApp extends ConsumerWidget {
       seedColor: const Color(0xFF808080),
       brightness: brightness,
     );
-    final colorScheme = ColorScheme.fromSeed(
+    var colorScheme = ColorScheme.fromSeed(
       seedColor: seedColor,
       brightness: brightness,
     ).copyWith(
@@ -151,6 +152,26 @@ class SmartCartApp extends ConsumerWidget {
       outline: neutre.outline,
       outlineVariant: neutre.outlineVariant,
     );
+
+    // Pour une couleur quasi neutre (chroma très faible, ex. "noir" ou
+    // "gris ardoise") l'algorithme HCT de Material — qui a besoin d'une
+    // teinte pour construire toute la palette — en invente une, et celle-ci
+    // penche systématiquement vers le bleu quand la couleur de départ n'a
+    // presque pas de teinte propre. Résultat : primary/AppBar/boutons
+    // ressortent bleutés même pour un thème "noir" ou "gris". On calcule
+    // donc primary directement à partir du gris/noir choisi (sans passer
+    // par cette extraction de teinte) dans ce cas précis.
+    final hslSeed = HSLColor.fromColor(seedColor);
+    if (hslSeed.saturation < 0.08) {
+      final primary = hslSeed.withSaturation(0.0).withLightness(isDark ? 0.78 : 0.30).toColor();
+      final primaryContainer = hslSeed.withSaturation(0.0).withLightness(isDark ? 0.30 : 0.85).toColor();
+      colorScheme = colorScheme.copyWith(
+        primary: primary,
+        onPrimary: texteContrastant(primary),
+        primaryContainer: primaryContainer,
+        onPrimaryContainer: texteContrastant(primaryContainer),
+      );
+    }
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
