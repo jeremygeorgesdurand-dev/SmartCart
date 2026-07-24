@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../services/version_info.dart';
 import '../widgets/background_logo.dart';
 import 'compte_screen.dart';
@@ -14,7 +15,16 @@ import '../services/widget_service.dart';
 class ParametresScreen extends ConsumerWidget {
   const ParametresScreen({super.key});
 
+  // "custom:RRGGBB" = couleur choisie librement via le sélecteur
+  // "Personnalisée…", pas une des 16 couleurs prédéfinies ci-dessous.
+  Color? _couleurPersonnalisee(String c) {
+    if (!c.startsWith('custom:')) return null;
+    final hex = int.tryParse(c.substring('custom:'.length), radix: 16);
+    return hex == null ? null : Color(0xFF000000 | hex);
+  }
+
   String _nomTheme(String c) {
+    if (_couleurPersonnalisee(c) != null) return 'Personnalisée';
     const noms = {
       'vert': 'Vert', 'vert_fonce': 'Vert foncé', 'teal': 'Teal', 'olive': 'Olive',
       'bleu': 'Bleu', 'bleu_clair': 'Bleu ciel', 'indigo': 'Indigo', 'cyan': 'Cyan',
@@ -25,6 +35,8 @@ class ParametresScreen extends ConsumerWidget {
   }
 
   Color _couleurTheme(String c) {
+    final personnalisee = _couleurPersonnalisee(c);
+    if (personnalisee != null) return personnalisee;
     const couleurs = {
       'vert': Color(0xFF1ABC9C), 'vert_fonce': Color(0xFF2E7D32),
       'teal': Color(0xFF00695C), 'olive': Color(0xFF827717),
@@ -111,7 +123,7 @@ class ParametresScreen extends ConsumerWidget {
           child: Wrap(
             spacing: 12,
             runSpacing: 12,
-            children: themes.map((t) {
+            children: themes.map<Widget>((t) {
               final (id, nom, couleur) = t;
               final selected = actuel == id;
               return GestureDetector(
@@ -151,7 +163,12 @@ class ParametresScreen extends ConsumerWidget {
                   ],
                 ),
               );
-            }).toList(),
+            }).toList()
+              ..add(_SwatchPersonnalisee(
+                actuel: actuel,
+                couleurActuelle: _couleurPersonnalisee(actuel),
+                onTap: () => _choisirCouleurPersonnalisee(context, ref),
+              )),
           ),
         ),
         actions: [
@@ -162,6 +179,45 @@ class ParametresScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _choisirCouleurPersonnalisee(
+      BuildContext context, WidgetRef ref) async {
+    Color choisie = _couleurTheme(ref.read(couleurThemeProvider));
+    final confirmee = await showDialog<Color>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Couleur personnalisée'),
+        content: SingleChildScrollView(
+          child: ColorPicker(
+            pickerColor: choisie,
+            onColorChanged: (c) => choisie = c,
+            enableAlpha: false,
+            pickerAreaHeightPercent: 0.7,
+            labelTypes: const [ColorLabelType.hex],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, choisie),
+            child: const Text('Valider'),
+          ),
+        ],
+      ),
+    );
+    if (confirmee == null) return;
+
+    final hex = confirmee.toARGB32().toRadixString(16).padLeft(8, '0');
+    final id = 'custom:${hex.substring(2).toUpperCase()}';
+    ref.read(couleurThemeProvider.notifier).state = id;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('couleur_theme', id);
+    WidgetService.mettreAJourCouleur(confirmee.toARGB32());
+    if (context.mounted) Navigator.pop(context);
   }
 
   @override
@@ -291,6 +347,62 @@ class _Section extends StatelessWidget {
         ),
         child,
       ],
+    );
+  }
+}
+
+// Swatch "Personnalisée…" dans le sélecteur de thème : ouvre un vrai
+// sélecteur de couleur (roue HSV + hex) au lieu de se limiter aux 16
+// couleurs prédéfinies.
+class _SwatchPersonnalisee extends StatelessWidget {
+  final String actuel;
+  final Color? couleurActuelle;
+  final VoidCallback onTap;
+  const _SwatchPersonnalisee({
+    required this.actuel,
+    required this.couleurActuelle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = couleurActuelle != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 52, height: 52,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: couleurActuelle,
+              gradient: selected
+                  ? null
+                  : const SweepGradient(colors: [
+                      Color(0xFFE53935), Color(0xFFFDD835), Color(0xFF43A047),
+                      Color(0xFF1E88E5), Color(0xFF8E24AA), Color(0xFFE53935),
+                    ]),
+              border: selected
+                  ? Border.all(
+                      color: Theme.of(context).colorScheme.onSurface, width: 3)
+                  : null,
+              boxShadow: selected
+                  ? [BoxShadow(
+                      color: couleurActuelle!.withValues(alpha: 0.5),
+                      blurRadius: 8, spreadRadius: 2)]
+                  : null,
+            ),
+            child: Icon(
+              selected ? Icons.check : Icons.colorize,
+              color: Colors.white,
+              size: selected ? 24 : 20,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text('Perso.', style: TextStyle(fontSize: 11)),
+        ],
+      ),
     );
   }
 }

@@ -601,7 +601,8 @@ class _ListeCard extends ConsumerWidget {
               FilledButton(
                 style: FilledButton.styleFrom(
                     backgroundColor: couleurAvertissement(context),
-                    foregroundColor: Colors.black87),
+                    foregroundColor:
+                        texteContrastant(couleurAvertissement(context))),
                 onPressed: () async {
                   final items = await ref
                       .read(dbServiceProvider)
@@ -700,7 +701,7 @@ class _ListeCard extends ConsumerWidget {
               FilledButton(
                 style: FilledButton.styleFrom(
                     backgroundColor: couleurDanger(context),
-                    foregroundColor: Colors.white),
+                    foregroundColor: texteContrastant(couleurDanger(context))),
                 onPressed: () async {
                   // Les articles_liste sont supprimés en cascade (ON DELETE
                   // CASCADE) avec la liste : on les capture avant pour

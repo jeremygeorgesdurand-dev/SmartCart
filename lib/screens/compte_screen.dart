@@ -130,7 +130,7 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
           FilledButton(
             style: FilledButton.styleFrom(
                 backgroundColor: couleurDanger(dialogCtx),
-                foregroundColor: Colors.white),
+                foregroundColor: texteContrastant(couleurDanger(dialogCtx))),
             onPressed: () => Navigator.pop(dialogCtx, true),
             child: const Text('Supprimer définitivement'),
           ),

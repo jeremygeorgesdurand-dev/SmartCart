@@ -17,12 +17,26 @@ Color couleurAvertissement(BuildContext context) =>
         ? const Color(0xFFFFCA28)
         : const Color(0xFFF9A825);
 
-// Vert fixe pour les indicateurs de succès ("liste terminée"). colorScheme
-// .tertiary tourne la teinte du thème choisi (~120° sur la roue Material) :
-// pour un thème "brun" ça donne un rouge/orange, pour "gris ardoise" un
-// bleu — un indicateur de succès ne doit jamais changer de sens selon le
-// thème.
-Color couleurSucces(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF66BB6A)
-        : const Color(0xFF2E7D32);
+// Indicateur de succès ("liste terminée") : une version plus saturée/foncée
+// du primary du thème, PAS colorScheme.tertiary. tertiary tourne la teinte
+// choisie d'environ 120° sur la roue Material (un thème "brun" donnait un
+// indicateur rouge/orange, "gris ardoise" un bleu) — alors que primary
+// conserve toujours la teinte exacte choisie par l'utilisateur. On accentue
+// juste un peu la saturation/luminosité pour que "terminé" reste visible-
+// ment distinct de l'état "en cours" (qui utilise le primary tel quel).
+Color couleurSucces(BuildContext context) {
+  final hsl = HSLColor.fromColor(Theme.of(context).colorScheme.primary);
+  return hsl
+      .withSaturation((hsl.saturation + 0.2).clamp(0.0, 1.0))
+      .withLightness((hsl.lightness - 0.10).clamp(0.0, 1.0))
+      .toColor();
+}
+
+// Texte noir ou blanc selon le fond donné, pour garantir un texte lisible
+// sur une couleur choisie librement par l'utilisateur (personnalisation) —
+// un fond sombre (ex. thème "noir"/gris foncé) veut du texte blanc, un fond
+// clair veut du texte sombre, et ça ne peut pas être deviné à l'avance.
+Color texteContrastant(Color fond) =>
+    ThemeData.estimateBrightnessForColor(fond) == Brightness.dark
+        ? Colors.white
+        : Colors.black87;

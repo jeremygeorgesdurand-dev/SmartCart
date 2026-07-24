@@ -245,7 +245,18 @@ class SmartCartApp extends ConsumerWidget {
 
 }
 
+// Couleur choisie librement par l'utilisateur (sélecteur "Personnalisée…"
+// dans Paramètres), stockée sous la forme "custom:RRGGBB" plutôt que
+// d'ajouter une clé de préférence séparée à synchroniser partout.
+Color? _couleurPersonnalisee(String nom) {
+  if (!nom.startsWith('custom:')) return null;
+  final hex = int.tryParse(nom.substring('custom:'.length), radix: 16);
+  return hex == null ? null : Color(0xFF000000 | hex);
+}
+
 Color _couleurSeed(String nom) {
+  final personnalisee = _couleurPersonnalisee(nom);
+  if (personnalisee != null) return personnalisee;
   switch (nom) {
     case 'vert': return const Color(0xFF1ABC9C);
     case 'vert_fonce': return const Color(0xFF2E7D32);
