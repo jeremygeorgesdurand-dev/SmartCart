@@ -11,6 +11,8 @@ import '../widgets/vocal_button.dart';
 import '../widgets/animated_list_item.dart';
 import 'scanner_screen.dart';
 import '../widgets/import_liste_dialog.dart' show ImportListeDialog, ExportDialog;
+import '../utils/erreur_utils.dart';
+import '../utils/theme_utils.dart';
 import 'doublons_screen.dart';
 
 class CatalogueScreen extends ConsumerStatefulWidget {
@@ -75,7 +77,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
               ? 'Articles déjà présents dans la liste'
               : '$nbAjoutes article(s) ajouté(s) à "${liste.nom}"',
         ),
-        backgroundColor: nbAjoutes > 0 ? Colors.green : null,
+        backgroundColor: nbAjoutes > 0 ? couleurSucces(context) : null,
       ));
     }
   }
@@ -94,10 +96,15 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
+                style: TextStyle(
+                    color: Theme.of(context).appBarTheme.foregroundColor ??
+                        Theme.of(context).colorScheme.onPrimary),
+                decoration: InputDecoration(
                   hintText: 'Rechercher...',
-                  hintStyle: TextStyle(color: Colors.white70),
+                  hintStyle: TextStyle(
+                      color: (Theme.of(context).appBarTheme.foregroundColor ??
+                              Theme.of(context).colorScheme.onPrimary)
+                          .withValues(alpha: 0.7)),
                   border: InputBorder.none,
                   filled: false,
                 ),
@@ -202,15 +209,18 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                     const Text('Détecter les doublons'),
                     if (ref.watch(doublonsProvider).isNotEmpty) ...[
                       const SizedBox(width: 8),
-                      CircleAvatar(
-                        radius: 9,
-                        backgroundColor: Colors.orange,
-                        child: Text(
-                          '${ref.watch(doublonsProvider).length}',
-                          style: const TextStyle(
-                              fontSize: 10, color: Colors.white),
-                        ),
-                      ),
+                      Builder(builder: (context) {
+                        final fond = couleurAvertissement(context);
+                        return CircleAvatar(
+                          radius: 9,
+                          backgroundColor: fond,
+                          child: Text(
+                            '${ref.watch(doublonsProvider).length}',
+                            style: TextStyle(
+                                fontSize: 10, color: texteContrastant(fond)),
+                          ),
+                        );
+                      }),
                     ],
                   ])),
             ],
@@ -356,7 +366,8 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
             child: articlesAsync.when(
               loading: () =>
                   const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Erreur : $e')),
+              error: (e, _) =>
+                  Center(child: Text(messageErreurLisible(e, 'Erreur'))),
               data: (articles) {
                 if (articles.isEmpty) {
                   return Center(

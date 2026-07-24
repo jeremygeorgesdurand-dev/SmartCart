@@ -6,6 +6,8 @@ import '../providers/providers.dart';
 import '../providers/suggestions_provider.dart';
 import '../services/stats_service.dart';
 import '../services/suggestions_service.dart';
+import '../utils/erreur_utils.dart';
+import '../utils/theme_utils.dart';
 
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});
@@ -37,7 +39,7 @@ class StatsScreen extends ConsumerWidget {
             children: [
               const Icon(Icons.error_outline, size: 48),
               const SizedBox(height: 12),
-              Text('Erreur : $e'),
+              Text(messageErreurLisible(e, 'Erreur')),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => ref.invalidate(statsProvider),
@@ -59,7 +61,7 @@ class StatsScreen extends ConsumerWidget {
                   titre: 'À racheter bientôt',
                   icone: Icons.autorenew,
                   badge: '${suggestionsAsync.value!.length}',
-                  badgeColor: Colors.deepOrange,
+                  badgeColor: couleurAvertissement(context),
                 ),
                 const SizedBox(height: 8),
                 _CarteSuggestions(suggestions: suggestionsAsync.value!),
@@ -134,7 +136,7 @@ class StatsScreen extends ConsumerWidget {
                   titre: 'Jamais ajoutés à une liste',
                   icone: Icons.inventory_2_outlined,
                   badge: '${stats.articlesSansListe.length}',
-                  badgeColor: Colors.orange,
+                  badgeColor: couleurAvertissement(context),
                 ),
                 const SizedBox(height: 8),
                 _CarteArticlesInutilises(articles: stats.articlesSansListe),
@@ -223,19 +225,19 @@ class _CardsVueEnsemble extends StatelessWidget {
           icone: Icons.shopping_cart,
           valeur: '${stats.totalListes}',
           label: 'Listes\nactives',
-          color: Colors.green,
+          color: couleurSucces(context),
         ),
         _MiniCard(
           icone: Icons.calendar_today,
           valeur: '${stats.articlesAchetesCeMois}',
           label: 'Articles\nce mois',
-          color: Colors.orange,
+          color: Theme.of(context).colorScheme.primary,
         ),
         _MiniCard(
           icone: Icons.archive_outlined,
           valeur: '${stats.totalListesArchivees}',
           label: 'Listes\narchivées',
-          color: Colors.blueGrey,
+          color: Theme.of(context).colorScheme.outline,
         ),
       ],
     );
@@ -377,9 +379,9 @@ class _CarteActivite extends StatelessWidget {
   Widget build(BuildContext context) {
     final taux = stats.tauxCompletionMoyen;
     final color = taux >= 80
-        ? Colors.green
+        ? couleurSucces(context)
         : taux >= 50
-            ? Colors.orange
+            ? couleurAvertissement(context)
             : Theme.of(context).colorScheme.primary;
 
     return Card(
@@ -718,7 +720,7 @@ class _CarteSuggestions extends ConsumerWidget {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('"${article.nom}" ajouté à "${cible.nom}"'),
-        backgroundColor: Colors.green,
+        backgroundColor: couleurSucces(context),
       ));
     }
   }

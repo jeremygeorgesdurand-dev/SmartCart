@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
 import '../services/widget_service.dart';
+import '../utils/theme_utils.dart';
 
 class WidgetConfigScreen extends ConsumerStatefulWidget {
   const WidgetConfigScreen({super.key});
@@ -54,7 +55,7 @@ class _WidgetConfigScreenState extends ConsumerState<WidgetConfigScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('"$listeNom" configurée pour le widget'),
-        backgroundColor: Colors.green,
+        backgroundColor: couleurSucces(context),
       ));
     }
   }

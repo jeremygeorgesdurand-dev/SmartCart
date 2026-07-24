@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/vocal_service.dart';
+import '../utils/erreur_utils.dart';
+import '../utils/theme_utils.dart';
 
 // ================================================================
 // ÉCRAN RECETTES — liste, création, et génération de liste de courses
@@ -18,7 +20,8 @@ class RecettesScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Recettes')),
       body: recettesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erreur : $e')),
+        error: (e, _) =>
+            Center(child: Text(messageErreurLisible(e, 'Erreur'))),
         data: (recettes) {
           if (recettes.isEmpty) {
             return Center(
@@ -173,7 +176,9 @@ class _BoutonGenererListeState extends ConsumerState<_BoutonGenererListe> {
                   if (context.mounted) {
                     setState(() => generation = false);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Une erreur est survenue : $e')),
+                      SnackBar(
+                          content: Text(
+                              messageErreurLisible(e, 'Une erreur est survenue'))),
                     );
                   }
                   return;
@@ -186,16 +191,19 @@ class _BoutonGenererListeState extends ConsumerState<_BoutonGenererListe> {
                     content: Text(incomplet
                         ? 'Liste "${recette.nom}" créée, mais seulement $reussis/$total ingrédient(s) ajoutés — vérifie la liste'
                         : 'Liste "${recette.nom}" créée avec $total ingrédient(s)'),
-                    backgroundColor: incomplet ? Colors.orange : Colors.green,
+                    backgroundColor: incomplet
+                        ? couleurAvertissement(context)
+                        : couleurSucces(context),
                   ));
                 }
               },
         icon: generation
-            ? const SizedBox(
+            ? SizedBox(
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
+                    strokeWidth: 2,
+                    color: Theme.of(context).colorScheme.onPrimary))
             : const Icon(Icons.shopping_cart_outlined),
         label: Text(generation
             ? 'Génération en cours…'
@@ -345,7 +353,7 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(
           '"${recette.nom}" importée — vérifie les quantités avant d\'enregistrer'),
-      backgroundColor: Colors.green,
+      backgroundColor: couleurSucces(context),
     ));
   }
 

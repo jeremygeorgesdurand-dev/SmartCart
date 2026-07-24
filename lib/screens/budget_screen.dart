@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../utils/erreur_utils.dart';
+import '../utils/theme_utils.dart';
 import 'historique_prix_screen.dart';
 
 // ================================================================
@@ -19,7 +21,8 @@ class BudgetScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Budget courses')),
       body: articlesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erreur : $e')),
+        error: (e, _) =>
+            Center(child: Text(messageErreurLisible(e, 'Erreur'))),
         data: (articles) {
           if (articles.isEmpty) {
             return Center(
@@ -173,7 +176,7 @@ class _ArticlePrixTile extends ConsumerWidget {
                   : Icons.storefront_outlined,
               size: 18,
               color: p == moinsCher && tries.length > 1
-                  ? Colors.amber[700]
+                  ? couleurAvertissement(context)
                   : null,
             ),
             title: Text(p.magasin.isEmpty ? 'Prix générique' : p.magasin),
@@ -346,6 +349,8 @@ class _ArticlePrixTile extends ConsumerWidget {
         actions: [
           if (!estNouveau)
             TextButton(
+              style: TextButton.styleFrom(
+                  foregroundColor: couleurDanger(context)),
               onPressed: () {
                 ref
                     .read(prixArticlesNotifierProvider.notifier)

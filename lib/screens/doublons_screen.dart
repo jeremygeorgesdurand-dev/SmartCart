@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../utils/theme_utils.dart';
 
 // Signale les articles du catalogue qui semblent être des doublons (même
 // nom, ou noms très proches) pour que l'utilisateur puisse nettoyer
@@ -65,7 +66,7 @@ class _GroupeCard extends ConsumerWidget {
                 title: Text(a.nom),
                 subtitle: a.marque != null ? Text(a.marque!) : null,
                 trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  icon: Icon(Icons.delete_outline, color: couleurDanger(context)),
                   tooltip: 'Supprimer cet article du catalogue',
                   onPressed: () => _confirmerSuppression(context, ref, a),
                 ),
@@ -88,7 +89,9 @@ class _GroupeCard extends ConsumerWidget {
               onPressed: () => Navigator.pop(context),
               child: const Text('Annuler')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+                backgroundColor: couleurDanger(context),
+                foregroundColor: texteContrastant(couleurDanger(context))),
             onPressed: () {
               ref.read(articlesNotifierProvider.notifier).supprimer(a.id);
               Navigator.pop(context);

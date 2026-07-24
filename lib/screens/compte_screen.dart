@@ -159,7 +159,8 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       appBar: AppBar(title: const Text('Compte & Sauvegarde')),
       body: authAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erreur : $e')),
+        error: (e, _) =>
+            Center(child: Text(messageErreurLisible(e, 'Erreur'))),
         data: (user) => ListView(
           padding: const EdgeInsets.all(20),
           children: [
@@ -231,11 +232,15 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: (_messageOk ? Colors.green : Colors.red)
+                  color: (_messageOk
+                          ? couleurSucces(context)
+                          : couleurDanger(context))
                       .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: (_messageOk ? Colors.green : Colors.red)
+                    color: (_messageOk
+                            ? couleurSucces(context)
+                            : couleurDanger(context))
                         .withValues(alpha: 0.3),
                   ),
                 ),
@@ -243,7 +248,9 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
                   children: [
                     Icon(
                       _messageOk ? Icons.check_circle : Icons.error,
-                      color: _messageOk ? Colors.green : Colors.red,
+                      color: _messageOk
+                          ? couleurSucces(context)
+                          : couleurDanger(context),
                       size: 18,
                     ),
                     const SizedBox(width: 8),
@@ -383,7 +390,8 @@ class _IndicateurSynchroState extends State<_IndicateurSynchro> {
 
   @override
   Widget build(BuildContext context) {
-    final couleur = _synchronise ? Colors.green : Colors.orange;
+    final couleur =
+        _synchronise ? couleurSucces(context) : couleurAvertissement(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(

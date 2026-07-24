@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../widgets/ajouter_article_dialog.dart';
+import '../utils/theme_utils.dart';
 
 class ScannerScreen extends ConsumerStatefulWidget {
   const ScannerScreen({super.key});
@@ -161,7 +162,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           Navigator.pop(context); // scanner
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('${article.nom} ajouté au catalogue'),
-            backgroundColor: Colors.green,
+            backgroundColor: couleurSucces(context),
           ));
         },
       ),
@@ -317,11 +318,11 @@ class _ArticleTrouveDialog extends ConsumerWidget {
         ?.where((c) => c.id == article.categorieId).firstOrNull;
 
     return AlertDialog(
-      title: const Row(
+      title: Row(
         children: [
-          Icon(Icons.check_circle, color: Colors.green),
-          SizedBox(width: 8),
-          Text('Produit trouvé !'),
+          Icon(Icons.check_circle, color: couleurSucces(context)),
+          const SizedBox(width: 8),
+          const Text('Produit trouvé !'),
         ],
       ),
       content: Column(
