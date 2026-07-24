@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
 import '../utils/erreur_utils.dart';
+import '../utils/theme_utils.dart';
 
 class CompteScreen extends ConsumerStatefulWidget {
   const CompteScreen({super.key});
@@ -128,7 +129,8 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(dialogCtx).colorScheme.error),
+                backgroundColor: couleurDanger(dialogCtx),
+                foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(dialogCtx, true),
             child: const Text('Supprimer définitivement'),
           ),
@@ -295,17 +297,16 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
               // Déconnexion
               TextButton.icon(
                 onPressed: _deconnecter,
-                icon: const Icon(Icons.logout, color: Colors.red),
-                label: const Text('Se déconnecter',
-                    style: TextStyle(color: Colors.red)),
+                icon: Icon(Icons.logout, color: couleurDanger(context)),
+                label: Text('Se déconnecter',
+                    style: TextStyle(color: couleurDanger(context))),
               ),
               TextButton.icon(
                 onPressed: _syncing ? null : _supprimerCompte,
                 icon: Icon(Icons.delete_forever,
-                    color: Theme.of(context).colorScheme.error),
+                    color: couleurDanger(context)),
                 label: Text('Supprimer mon compte',
-                    style:
-                        TextStyle(color: Theme.of(context).colorScheme.error)),
+                    style: TextStyle(color: couleurDanger(context))),
               ),
             ],
 

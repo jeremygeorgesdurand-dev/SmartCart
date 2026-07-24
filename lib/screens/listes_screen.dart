@@ -11,6 +11,7 @@ import '../widgets/import_liste_dialog.dart';
 import '../widgets/prix_article_badge.dart';
 import '../widgets/vocal_button.dart';
 import '../utils/erreur_utils.dart';
+import '../utils/theme_utils.dart';
 import 'recherche_globale_screen.dart';
 import 'recettes_screen.dart';
 
@@ -23,9 +24,15 @@ final _listeSortProvider = StateProvider<String>((_) => 'date');
 // courantes en français clair au lieu d'afficher l'exception brute — voir
 // messageErreurLisible().
 void _afficherErreur(BuildContext context, Object e) {
+  final scheme = Theme.of(context).colorScheme;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-        content: Text(messageErreurLisible(e, 'Une erreur est survenue'))),
+      backgroundColor: scheme.errorContainer,
+      content: Text(
+        messageErreurLisible(e, 'Une erreur est survenue'),
+        style: TextStyle(color: scheme.onErrorContainer),
+      ),
+    ),
   );
 }
 
@@ -513,7 +520,8 @@ class _ListeCard extends ConsumerWidget {
                     PopupMenuButton<String>(
                       onSelected: (action) => _onAction(context, ref, action),
                       itemBuilder: (menuCtx) {
-                        final erreur = Theme.of(menuCtx).colorScheme.error;
+                        final danger = couleurDanger(menuCtx);
+                        final avertissement = couleurAvertissement(menuCtx);
                         return <PopupMenuEntry<String>>[
                           const PopupMenuItem(
                               value: 'courses', child: Text('Mode courses')),
@@ -535,11 +543,11 @@ class _ListeCard extends ConsumerWidget {
                             value: 'vider',
                             child: Row(children: [
                               Icon(Icons.remove_shopping_cart,
-                                  size: 18, color: erreur),
+                                  size: 18, color: avertissement),
                               const SizedBox(width: 10),
                               Text('Vider la liste',
                                   style: TextStyle(
-                                      color: erreur,
+                                      color: avertissement,
                                       fontWeight: FontWeight.bold)),
                             ]),
                           ),
@@ -547,11 +555,11 @@ class _ListeCard extends ConsumerWidget {
                             value: 'supprimer',
                             child: Row(children: [
                               Icon(Icons.delete_forever,
-                                  size: 18, color: erreur),
+                                  size: 18, color: danger),
                               const SizedBox(width: 10),
                               Text('Supprimer',
                                   style: TextStyle(
-                                      color: erreur,
+                                      color: danger,
                                       fontWeight: FontWeight.bold)),
                             ]),
                           ),
@@ -592,7 +600,8 @@ class _ListeCard extends ConsumerWidget {
               ),
               FilledButton(
                 style: FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error),
+                    backgroundColor: couleurAvertissement(context),
+                    foregroundColor: Colors.black87),
                 onPressed: () async {
                   final items = await ref
                       .read(dbServiceProvider)
@@ -690,7 +699,8 @@ class _ListeCard extends ConsumerWidget {
                   child: const Text('Annuler')),
               FilledButton(
                 style: FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error),
+                    backgroundColor: couleurDanger(context),
+                    foregroundColor: Colors.white),
                 onPressed: () async {
                   // Les articles_liste sont supprimés en cascade (ON DELETE
                   // CASCADE) avec la liste : on les capture avant pour
@@ -771,6 +781,7 @@ class _ListeCard extends ConsumerWidget {
   }
 
   void _afficherCode(BuildContext context, WidgetRef ref, String code) {
+    final jeSuisProprietaire = ValueNotifier<bool>(false);
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -803,7 +814,10 @@ class _ListeCard extends ConsumerWidget {
               const SizedBox(height: 20),
               Text('Membres', style: Theme.of(dialogCtx).textTheme.titleSmall),
               const SizedBox(height: 4),
-              _ListeMembres(listeId: liste.id),
+              _ListeMembres(
+                listeId: liste.id,
+                onProprietaire: (v) => jeSuisProprietaire.value = v,
+              ),
             ],
           ),
         ),
@@ -819,20 +833,32 @@ class _ListeCard extends ConsumerWidget {
             },
             child: const Text('Copier'),
           ),
-          TextButton(
-            style: TextButton.styleFrom(
-                foregroundColor: Theme.of(dialogCtx).colorScheme.error),
-            onPressed: () async {
-              Navigator.pop(dialogCtx);
-              try {
-                await ref
-                    .read(listesNotifierProvider.notifier)
-                    .quitterPartage(liste);
-              } catch (e) {
-                if (context.mounted) _afficherErreur(context, e);
-              }
-            },
-            child: const Text('Quitter la collaboration'),
+          ValueListenableBuilder<bool>(
+            valueListenable: jeSuisProprietaire,
+            builder: (_, estProprietaire, __) => estProprietaire
+                ? TextButton(
+                    onPressed: null,
+                    child: Text(
+                      'Vous êtes propriétaire',
+                      style: TextStyle(
+                          color: Theme.of(dialogCtx).colorScheme.outline),
+                    ),
+                  )
+                : TextButton(
+                    style: TextButton.styleFrom(
+                        foregroundColor: couleurDanger(dialogCtx)),
+                    onPressed: () async {
+                      Navigator.pop(dialogCtx);
+                      try {
+                        await ref
+                            .read(listesNotifierProvider.notifier)
+                            .quitterPartage(liste);
+                      } catch (e) {
+                        if (context.mounted) _afficherErreur(context, e);
+                      }
+                    },
+                    child: const Text('Quitter la collaboration'),
+                  ),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogCtx),
@@ -921,7 +947,13 @@ class _ListeCard extends ConsumerWidget {
 // ================================================================
 class _ListeMembres extends ConsumerStatefulWidget {
   final String listeId;
-  const _ListeMembres({required this.listeId});
+  // Notifie le parent (dialogue "Liste collaborative") si l'utilisateur
+  // courant est propriétaire, pour lui masquer le bouton "Quitter la
+  // collaboration" : le propriétaire ne peut pas quitter sa propre liste
+  // (protégé aussi côté règles Firestore), donc ce bouton échouait toujours
+  // avec une erreur de permission pour lui.
+  final ValueChanged<bool>? onProprietaire;
+  const _ListeMembres({required this.listeId, this.onProprietaire});
 
   @override
   ConsumerState<_ListeMembres> createState() => _ListeMembresState();
@@ -947,6 +979,11 @@ class _ListeMembresState extends ConsumerState<_ListeMembres> {
       final membres =
           await ref.read(syncServiceProvider).getMembresListe(widget.listeId);
       if (mounted) setState(() => _membres = membres);
+      final monUid = ref.read(authServiceProvider).currentUser?.uid;
+      final jeSuisProprietaire =
+          membres.where((m) => m.uid == monUid).firstOrNull?.estProprietaire ??
+              false;
+      widget.onProprietaire?.call(jeSuisProprietaire);
     } catch (e) {
       if (mounted) _afficherErreur(context, e);
     }
@@ -1435,10 +1472,9 @@ class _ArticleListeTile extends ConsumerWidget {
                 // Supprimer
                 ListTile(
                   leading: Icon(Icons.delete_outline,
-                      color: Theme.of(ctx).colorScheme.error),
+                      color: couleurDanger(ctx)),
                   title: Text('Retirer de la liste',
-                      style:
-                          TextStyle(color: Theme.of(ctx).colorScheme.error)),
+                      style: TextStyle(color: couleurDanger(ctx))),
                   onTap: () {
                     final alSupprime = alActuel;
                     r

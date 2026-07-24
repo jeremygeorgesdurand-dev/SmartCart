@@ -6,6 +6,8 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.os.Build
 import android.util.Log
 import android.widget.RemoteViews
 import org.json.JSONArray
@@ -50,10 +52,49 @@ class SmartCartWidget : AppWidgetProvider() {
             }
         }
 
+        // Reprend exactement la palette de _couleurSeed() côté Dart
+        // (lib/main.dart) : le widget doit se teinter comme le reste de
+        // l'app quand l'utilisateur change la couleur de thème dans
+        // Paramètres, plutôt que de garder pour toujours le teal d'origine.
+        private fun couleurSeed(nom: String?): Int = when (nom) {
+            "vert" -> 0xFF1ABC9C.toInt()
+            "vert_fonce" -> 0xFF2E7D32.toInt()
+            "teal" -> 0xFF00695C.toInt()
+            "olive" -> 0xFF827717.toInt()
+            "bleu" -> 0xFF1565C0.toInt()
+            "bleu_clair" -> 0xFF0288D1.toInt()
+            "indigo" -> 0xFF283593.toInt()
+            "cyan" -> 0xFF00838F.toInt()
+            "orange" -> 0xFFE65100.toInt()
+            "ambre" -> 0xFFFF6F00.toInt()
+            "rouge" -> 0xFFC62828.toInt()
+            "rose" -> 0xFFAD1457.toInt()
+            "violet" -> 0xFF6A1B9A.toInt()
+            "brun" -> 0xFF4E342E.toInt()
+            "gris" -> 0xFF455A64.toInt()
+            "noir" -> 0xFF212121.toInt()
+            else -> 0xFF1ABC9C.toInt()
+        }
+
         fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int) {
             val prefs = context.getSharedPreferences(
                 "FlutterSharedPreferences", Context.MODE_PRIVATE)
             val views = RemoteViews(context.packageName, R.layout.smartcart_widget_layout)
+
+            // Teinte le fond (déjà à 90% d'opacité dans le drawable
+            // widget_background) avec la couleur de thème choisie dans
+            // Paramètres, via un tint qui préserve les coins arrondis du
+            // drawable au lieu de le remplacer par un rectangle plein.
+            // setColorStateList/setBackgroundTintList n'existe que depuis
+            // l'API 31 : sur des appareils plus anciens, le widget garde
+            // simplement sa couleur d'origine.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val couleur = (couleurSeed(findString(prefs, "couleur_theme")) and 0x00FFFFFF) or
+                    (0xE6 shl 24)
+                views.setColorStateList(
+                    R.id.widget_root, "setBackgroundTintList",
+                    ColorStateList.valueOf(couleur))
+            }
 
             val listeNom = findString(prefs, "widget_liste_nom")
             val listeId = findString(prefs, "widget_liste_id")

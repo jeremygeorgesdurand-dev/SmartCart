@@ -106,16 +106,44 @@ class SmartCartApp extends ConsumerWidget {
   ThemeData _buildTheme(Brightness brightness, String couleurNom) {
     final isDark = brightness == Brightness.dark;
     final seedColor = _couleurSeed(couleurNom);
+    // Les tons "surface" générés par ColorScheme.fromSeed reprennent la
+    // teinte de la couleur choisie (c'est le fonctionnement normal de
+    // Material 3) : pour un rouge ou un orange, très saturés, ça donne un
+    // fond d'écran, de cartes et de boîtes de dialogue visiblement teinté,
+    // perçu comme "un filtre sur l'écran". On garde donc les rôles d'accent
+    // (primary/secondary/tertiary/error) calculés depuis la couleur choisie,
+    // mais on prend des surfaces neutres (calculées depuis un gris neutre)
+    // pour que seuls les boutons/AppBar/accents portent la couleur, pas
+    // l'ensemble de l'interface.
+    final neutre = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF546E7A),
+      brightness: brightness,
+    );
     final colorScheme = ColorScheme.fromSeed(
       seedColor: seedColor,
       brightness: brightness,
+    ).copyWith(
+      surface: neutre.surface,
+      surfaceDim: neutre.surfaceDim,
+      surfaceBright: neutre.surfaceBright,
+      surfaceContainerLowest: neutre.surfaceContainerLowest,
+      surfaceContainerLow: neutre.surfaceContainerLow,
+      surfaceContainer: neutre.surfaceContainer,
+      surfaceContainerHigh: neutre.surfaceContainerHigh,
+      surfaceContainerHighest: neutre.surfaceContainerHighest,
+      onSurface: neutre.onSurface,
+      onSurfaceVariant: neutre.onSurfaceVariant,
+      outline: neutre.outline,
+      outlineVariant: neutre.outlineVariant,
     );
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
+      scaffoldBackgroundColor: colorScheme.surface,
       appBarTheme: AppBarTheme(
-        centerTitle: true,
+        centerTitle: false,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         backgroundColor: isDark ? colorScheme.surface : colorScheme.primary,
         foregroundColor: isDark ? colorScheme.onSurface : colorScheme.onPrimary,
         systemOverlayStyle: const SystemUiOverlayStyle(
@@ -131,10 +159,15 @@ class SmartCartApp extends ConsumerWidget {
       ),
       cardTheme: CardThemeData(
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(color: colorScheme.outlineVariant, width: 1),
         ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        surfaceTintColor: Colors.transparent,
+        color: colorScheme.surfaceContainer,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -161,9 +194,11 @@ class SmartCartApp extends ConsumerWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       dialogTheme: DialogThemeData(
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
