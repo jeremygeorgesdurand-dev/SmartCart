@@ -67,7 +67,7 @@ class SmartCartWidget : AppWidgetProvider() {
         private fun bitmapFondArrondi(couleur: Int): Bitmap {
             val largeur = 480
             val hauteur = 240
-            val rayon = 56f
+            val rayon = 16f
             val bmp = Bitmap.createBitmap(largeur, hauteur, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
             val peinture = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = couleur }

@@ -153,25 +153,39 @@ class SmartCartApp extends ConsumerWidget {
       outlineVariant: neutre.outlineVariant,
     );
 
-    // Pour une couleur quasi neutre (chroma très faible, ex. "noir" ou
-    // "gris ardoise") l'algorithme HCT de Material — qui a besoin d'une
-    // teinte pour construire toute la palette — en invente une, et celle-ci
-    // penche systématiquement vers le bleu quand la couleur de départ n'a
-    // presque pas de teinte propre. Résultat : primary/AppBar/boutons
-    // ressortent bleutés même pour un thème "noir" ou "gris". On calcule
-    // donc primary directement à partir du gris/noir choisi (sans passer
-    // par cette extraction de teinte) dans ce cas précis.
+    // primary est calculé directement depuis la couleur choisie plutôt que
+    // laissé à l'algorithme HCT de Material, pour deux raisons :
+    // 1) pour une couleur quasi neutre (chroma très faible, ex. "noir"),
+    //    HCT doit malgré tout inventer une teinte pour construire toute la
+    //    palette, et penche systématiquement vers le bleu quand la couleur
+    //    de départ n'a presque pas de teinte propre — "noir" ressortait
+    //    bleuté sur les boutons/AppBar.
+    // 2) en thème sombre, Material 3 éclaircit délibérément primary (ton
+    //    ~80, pensé comme du TEXTE lisible sur fond sombre) : pour un
+    //    bouton, ça donne une couleur pâle/"délavée" plutôt qu'un bouton
+    //    fait pour être vu, avec le texte blanc qu'on attendrait dessus.
+    // On garde donc toujours la même teinte/saturation que la couleur
+    // choisie et on ne fait varier que la luminosité, légèrement plus
+    // claire en mode sombre pour rester lisible sur un fond sombre, mais
+    // jamais au point de devenir pâle.
     final hslSeed = HSLColor.fromColor(seedColor);
-    if (hslSeed.saturation < 0.08) {
-      final primary = hslSeed.withSaturation(0.0).withLightness(isDark ? 0.78 : 0.30).toColor();
-      final primaryContainer = hslSeed.withSaturation(0.0).withLightness(isDark ? 0.30 : 0.85).toColor();
-      colorScheme = colorScheme.copyWith(
-        primary: primary,
-        onPrimary: texteContrastant(primary),
-        primaryContainer: primaryContainer,
-        onPrimaryContainer: texteContrastant(primaryContainer),
-      );
-    }
+    final saturationUtilisable = hslSeed.saturation < 0.08
+        ? 0.0
+        : hslSeed.saturation.clamp(0.45, 1.0);
+    final primary = hslSeed
+        .withSaturation(saturationUtilisable)
+        .withLightness(isDark ? 0.55 : 0.32)
+        .toColor();
+    final primaryContainer = hslSeed
+        .withSaturation(saturationUtilisable)
+        .withLightness(isDark ? 0.28 : 0.85)
+        .toColor();
+    colorScheme = colorScheme.copyWith(
+      primary: primary,
+      onPrimary: texteContrastant(primary),
+      primaryContainer: primaryContainer,
+      onPrimaryContainer: texteContrastant(primaryContainer),
+    );
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
@@ -300,7 +314,7 @@ Color _couleurSeed(String nom) {
     case 'rose': return const Color(0xFFAD1457);
     case 'violet': return const Color(0xFF6A1B9A);
     case 'brun': return const Color(0xFF4E342E);
-    case 'gris': return const Color(0xFF455A64);
+    case 'gris': return const Color(0xFF616161);
     case 'noir': return const Color(0xFF212121);
     default: return const Color(0xFF1ABC9C);
   }

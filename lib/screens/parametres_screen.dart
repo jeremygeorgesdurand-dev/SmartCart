@@ -46,7 +46,7 @@ class ParametresScreen extends ConsumerWidget {
       'orange': Color(0xFFE65100), 'ambre': Color(0xFFFF6F00),
       'rouge': Color(0xFFC62828), 'rose': Color(0xFFAD1457),
       'violet': Color(0xFF6A1B9A), 'brun': Color(0xFF4E342E),
-      'gris': Color(0xFF455A64), 'noir': Color(0xFF212121),
+      'gris': Color(0xFF616161), 'noir': Color(0xFF212121),
     };
     return couleurs[c] ?? const Color(0xFF1ABC9C);
   }
@@ -109,7 +109,7 @@ class ParametresScreen extends ConsumerWidget {
       ('rose', 'Rose', const Color(0xFFAD1457)),
       ('violet', 'Violet', const Color(0xFF6A1B9A)),
       ('brun', 'Brun', const Color(0xFF4E342E)),
-      ('gris', 'Gris ardoise', const Color(0xFF455A64)),
+      ('gris', 'Gris ardoise', const Color(0xFF616161)),
       ('noir', 'Sombre', const Color(0xFF212121)),
     ];
 
