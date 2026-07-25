@@ -475,6 +475,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
       return AnimatedListItem(
         index: index,
         child: ListTile(
+          selected: selectionne,
           onTap: () {
             final current =
                 Set<String>.from(ref.read(articlesSelectionnesProvider));

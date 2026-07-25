@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/widget_service.dart';
+import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 
 class ParametresScreen extends ConsumerWidget {
@@ -127,7 +128,11 @@ class ParametresScreen extends ConsumerWidget {
             children: themes.map<Widget>((t) {
               final (id, nom, couleur) = t;
               final selected = actuel == id;
-              return GestureDetector(
+              return Semantics(
+                label: nom,
+                selected: selected,
+                button: true,
+                child: GestureDetector(
                 onTap: () async {
                   ref.read(couleurThemeProvider.notifier).state = id;
                   final prefs = await SharedPreferences.getInstance();
@@ -162,6 +167,7 @@ class ParametresScreen extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(nom, style: const TextStyle(fontSize: 11)),
                   ],
+                ),
                 ),
               );
             }).toList()
@@ -369,7 +375,11 @@ class _SwatchPersonnalisee extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = couleurActuelle != null;
-    return GestureDetector(
+    return Semantics(
+      label: 'Couleur personnalisée',
+      selected: selected,
+      button: true,
+      child: GestureDetector(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -405,6 +415,7 @@ class _SwatchPersonnalisee extends StatelessWidget {
           const Text('Perso.', style: TextStyle(fontSize: 11)),
         ],
       ),
+      ),
     );
   }
 }
@@ -427,7 +438,7 @@ class _CategoriesManager extends ConsumerWidget {
 
     return catAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Erreur : $e')),
+      error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
       data: (cats) => Column(
         children: [
           ReorderableListView.builder(
@@ -523,19 +534,31 @@ class _CategoriesManager extends ConsumerWidget {
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
-                children: _couleurs.map((c) {
+                children: _couleurs.asMap().entries.map((entry) {
+                  final c = entry.value;
                   final selected = selectedColor == c.toARGB32();
-                  return GestureDetector(
-                    onTap: () => setState(() => selectedColor = c.toARGB32()),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: c,
-                        shape: BoxShape.circle,
-                        border: selected
-                            ? Border.all(color: Colors.black, width: 2.5)
-                            : null,
+                  return Semantics(
+                    label: 'Couleur ${entry.key + 1}',
+                    selected: selected,
+                    button: true,
+                    child: InkWell(
+                      onTap: () => setState(() => selectedColor = c.toARGB32()),
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: c,
+                            shape: BoxShape.circle,
+                            border: selected
+                                ? Border.all(color: Colors.black, width: 2.5)
+                                : null,
+                          ),
+                        ),
                       ),
                     ),
                   );
@@ -586,7 +609,7 @@ class _RayonsManager extends ConsumerWidget {
 
     return rayAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Erreur : $e')),
+      error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
       data: (rayons) => Column(
         children: [
           ReorderableListView.builder(
@@ -706,15 +729,27 @@ class _RayonsManager extends ConsumerWidget {
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
-                children: _couleursRayon.map((c) {
+                children: _couleursRayon.asMap().entries.map((entry) {
+                  final c = entry.value;
                   final selected = selectedColor == c.toARGB32();
-                  return GestureDetector(
-                    onTap: () => setState(() => selectedColor = c.toARGB32()),
-                    child: Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(
-                        color: c, shape: BoxShape.circle,
-                        border: selected ? Border.all(color: Colors.black, width: 2.5) : null,
+                  return Semantics(
+                    label: 'Couleur ${entry.key + 1}',
+                    selected: selected,
+                    button: true,
+                    child: InkWell(
+                      onTap: () => setState(() => selectedColor = c.toARGB32()),
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        child: Container(
+                          width: 32, height: 32,
+                          decoration: BoxDecoration(
+                            color: c, shape: BoxShape.circle,
+                            border: selected ? Border.all(color: Colors.black, width: 2.5) : null,
+                          ),
+                        ),
                       ),
                     ),
                   );

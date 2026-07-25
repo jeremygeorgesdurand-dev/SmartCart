@@ -397,6 +397,7 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
               const Text('Portions : '),
               IconButton(
                 icon: const Icon(Icons.remove_circle_outline),
+                tooltip: 'Diminuer les portions',
                 onPressed: _portions > 1
                     ? () => setState(() => _portions--)
                     : null,
@@ -404,6 +405,7 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
               Text('$_portions', style: Theme.of(context).textTheme.titleMedium),
               IconButton(
                 icon: const Icon(Icons.add_circle_outline),
+                tooltip: 'Augmenter les portions',
                 onPressed: () => setState(() => _portions++),
               ),
             ],
@@ -445,6 +447,7 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, size: 18),
+                  tooltip: 'Supprimer cet ingrédient',
                   onPressed: _lignes.length > 1
                       ? () => setState(() => _lignes.removeAt(i))
                       : null,

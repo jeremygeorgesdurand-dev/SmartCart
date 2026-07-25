@@ -248,8 +248,17 @@ class _VocalSheetState extends ConsumerState<VocalSheet>
     final color = isEcoute
         ? Colors.red
         : Theme.of(context).colorScheme.primary;
+    final label = switch (_etat) {
+      _Etat.demarrage => 'Microphone, initialisation',
+      _Etat.ecoute => 'Microphone, écoute en cours',
+      _Etat.rienReconnu => 'Microphone, rien entendu, appuyez pour réessayer',
+      _Etat.erreur => 'Microphone, erreur, appuyez pour réessayer',
+    };
 
-    return AnimatedBuilder(
+    return Semantics(
+      label: label,
+      button: true,
+      child: AnimatedBuilder(
       animation: _pulseAnim,
       builder: (_, child) => Transform.scale(
         scale: isEcoute ? _pulseAnim.value : 1.0,
@@ -275,6 +284,7 @@ class _VocalSheetState extends ConsumerState<VocalSheet>
             color: Colors.white, size: 36,
           ),
         ),
+      ),
       ),
     );
   }

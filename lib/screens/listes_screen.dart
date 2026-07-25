@@ -112,7 +112,7 @@ class ListesScreen extends ConsumerWidget {
       ),
       body: listesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erreur : $e')),
+        error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
         data: (listes) {
           if (listes.isEmpty) {
             return Center(
@@ -1085,6 +1085,7 @@ class DetailListeScreen extends ConsumerWidget {
         actions: [
           PopupMenuButton<SortMode>(
             icon: const Icon(Icons.sort),
+            tooltip: 'Trier',
             onSelected: (mode) =>
                 ref.read(articleListeSortProvider.notifier).state = mode,
             itemBuilder: (_) => const [
@@ -1114,7 +1115,7 @@ class DetailListeScreen extends ConsumerWidget {
       ),
       body: articlesListeAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erreur : $e')),
+        error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
         data: (items) {
           if (items.isEmpty) {
             return Center(
@@ -1138,7 +1139,7 @@ class DetailListeScreen extends ConsumerWidget {
 
           return articlesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('Erreur : $e')),
+            error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
             data: (catalogue) {
               final catAsync = ref.watch(categoriesNotifierProvider);
               final rayAsync = ref.watch(rayonsNotifierProvider);
@@ -1506,7 +1507,10 @@ class _ArticleListeTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ListTile(
+    return Semantics(
+      toggled: articleListe.coche,
+      label: articleListe.coche ? '${article.nom}, coché' : article.nom,
+      child: ListTile(
       // Pas de leading (rond supprimé)
       title: Text(
         article.nom,
@@ -1548,6 +1552,7 @@ class _ArticleListeTile extends ConsumerWidget {
           .read(articlesListeProvider(listeId).notifier)
           .cocher(articleListe, !articleListe.coche),
       onLongPress: () => _afficherOptions(context, ref),
+      ),
     );
   }
 }
@@ -1620,7 +1625,7 @@ class _SelectionArticlesSheetState
           Flexible(
             child: articlesAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Erreur : $e')),
+              error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
               data: (articles) {
                 final filtres = articles
                     .where((a) =>
@@ -1779,13 +1784,13 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
       ),
       body: articlesListeAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erreur : $e')),
+        error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
         data: (items) => catalogueAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Erreur : $e')),
+          error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
           data: (catalogue) => rayonsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('Erreur : $e')),
+            error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
             data: (rayons) {
               // Séparer cochés / non cochés
               final nonCoches = <(ArticleListe, Article)>[];

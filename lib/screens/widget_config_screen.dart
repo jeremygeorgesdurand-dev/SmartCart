@@ -160,6 +160,7 @@ class _WidgetConfigScreenState extends ConsumerState<WidgetConfigScreen> {
                   final isSelected = _listeWidgetId == liste.id;
                   return Card(
                     child: ListTile(
+                      selected: isSelected,
                       leading: CircleAvatar(
                         backgroundColor: isSelected
                             ? Theme.of(context).colorScheme.primary
@@ -167,7 +168,7 @@ class _WidgetConfigScreenState extends ConsumerState<WidgetConfigScreen> {
                         child: Icon(
                           Icons.shopping_cart,
                           color: isSelected
-                              ? Colors.white
+                              ? Theme.of(context).colorScheme.onPrimary
                               : Theme.of(context).colorScheme.primary,
                           size: 20,
                         ),

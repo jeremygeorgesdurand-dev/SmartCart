@@ -85,14 +85,49 @@ class _RechercheGlobaleScreenState
         ],
       ),
       body: q.isEmpty
-          ? const Center(
+          ? Center(
               child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text('Cherche un article ou une liste'),
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.search,
+                        size: 56,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outline
+                            .withValues(alpha: 0.5)),
+                    const SizedBox(height: 16),
+                    const Text('Cherche un article ou une liste'),
+                  ],
+                ),
               ),
             )
           : aucunResultat
-              ? const Center(child: Text('Aucun résultat'))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.search_off,
+                            size: 56,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .outline
+                                .withValues(alpha: 0.5)),
+                        const SizedBox(height: 16),
+                        Text('Aucun résultat',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Essaie un autre mot-clé',
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [

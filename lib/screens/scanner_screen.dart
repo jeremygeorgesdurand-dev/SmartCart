@@ -181,10 +181,16 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.flashlight_on),
-            tooltip: 'Activer/désactiver le flash',
-            onPressed: () => _controller.toggleTorch(),
+          ValueListenableBuilder(
+            valueListenable: _controller,
+            builder: (context, state, child) {
+              final actif = state.torchState == TorchState.on;
+              return IconButton(
+                icon: Icon(actif ? Icons.flashlight_on : Icons.flashlight_off),
+                tooltip: actif ? 'Désactiver le flash' : 'Activer le flash',
+                onPressed: () => _controller.toggleTorch(),
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.flip_camera_ios),

@@ -170,14 +170,17 @@ class _ArticlePrixTile extends ConsumerWidget {
         for (final p in tries)
           ListTile(
             dense: true,
-            leading: Icon(
-              p == moinsCher && tries.length > 1
-                  ? Icons.star
-                  : Icons.storefront_outlined,
-              size: 18,
-              color: p == moinsCher && tries.length > 1
-                  ? couleurAvertissement(context)
-                  : null,
+            leading: Semantics(
+              label: p == moinsCher && tries.length > 1 ? 'Moins cher' : null,
+              child: Icon(
+                p == moinsCher && tries.length > 1
+                    ? Icons.star
+                    : Icons.storefront_outlined,
+                size: 18,
+                color: p == moinsCher && tries.length > 1
+                    ? couleurAvertissement(context)
+                    : null,
+              ),
             ),
             title: Text(p.magasin.isEmpty ? 'Prix générique' : p.magasin),
             trailing: TextButton(

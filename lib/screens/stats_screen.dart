@@ -465,15 +465,18 @@ class _CarteTopArticles extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                SizedBox(
-                  width: 28,
-                  child: rangIcon != null
-                      ? Icon(rangIcon, color: rangColor, size: 18)
-                      : Text('${i + 1}',
-                          style: TextStyle(
-                              color: rangColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13)),
+                Semantics(
+                  label: 'Rang ${i + 1}',
+                  child: SizedBox(
+                    width: 28,
+                    child: rangIcon != null
+                        ? Icon(rangIcon, color: rangColor, size: 18)
+                        : Text('${i + 1}',
+                            style: TextStyle(
+                                color: rangColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13)),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
