@@ -172,9 +172,15 @@ class SmartCartApp extends ConsumerWidget {
     final saturationUtilisable = hslSeed.saturation < 0.08
         ? 0.0
         : hslSeed.saturation.clamp(0.45, 1.0);
+    // La luminosité cible part de celle du SEED lui-même (clampée à une
+    // plage utilisable), pas d'une valeur fixe pour tous les thèmes :
+    // sinon "noir" (très sombre à l'origine) ressortait comme un gris
+    // moyen au lieu de rester quasi noir, alors qu'un rouge/vert vif
+    // gardait sa luminosité d'origine sans problème.
+    final lightnessClaire = hslSeed.lightness.clamp(0.14, 0.40);
     final primary = hslSeed
         .withSaturation(saturationUtilisable)
-        .withLightness(isDark ? 0.55 : 0.32)
+        .withLightness(isDark ? (lightnessClaire + 0.18).clamp(0.14, 0.60) : lightnessClaire)
         .toColor();
     final primaryContainer = hslSeed
         .withSaturation(saturationUtilisable)

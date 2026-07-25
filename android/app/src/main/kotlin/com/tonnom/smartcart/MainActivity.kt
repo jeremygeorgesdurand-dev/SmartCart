@@ -44,7 +44,16 @@ class MainActivity : FlutterActivity() {
                     // DataStore depuis la 2.3+, invisible depuis ici).
                     "updateCouleurTheme" -> {
                         val args = call.arguments as? Map<*, *>
-                        val couleur = (args?.get("couleur") as? Int)
+                        // Un ARGB opaque (alpha 0xFF) est TOUJOURS un grand
+                        // nombre positif côté Dart (les int Dart sont 64
+                        // bits, pas de retour en négatif comme en Kotlin) —
+                        // ça dépasse systématiquement Int32.MAX, donc le
+                        // codec de channel l'encode en Long, jamais en Int.
+                        // "as? Int" échouait donc silencieusement à CHAQUE
+                        // appel, couleur restait toujours null, et la
+                        // préférence n'était en fait jamais écrite : le
+                        // widget gardait pour toujours sa couleur par défaut.
+                        val couleur = (args?.get("couleur") as? Number)?.toInt()
                         if (couleur != null) {
                             val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
                             prefs.edit().putInt("widget_couleur_argb", couleur).apply()
