@@ -13,6 +13,7 @@ import '../providers/providers.dart';
 import '../services/widget_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
+import '../widgets/animated_list_item.dart';
 
 class ParametresScreen extends ConsumerWidget {
   const ParametresScreen({super.key});
@@ -132,7 +133,7 @@ class ParametresScreen extends ConsumerWidget {
                 label: nom,
                 selected: selected,
                 button: true,
-                child: GestureDetector(
+                child: BouncingButton(
                 onTap: () async {
                   ref.read(couleurThemeProvider.notifier).state = id;
                   final prefs = await SharedPreferences.getInstance();
@@ -379,7 +380,7 @@ class _SwatchPersonnalisee extends StatelessWidget {
       label: 'Couleur personnalisée',
       selected: selected,
       button: true,
-      child: GestureDetector(
+      child: BouncingButton(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,

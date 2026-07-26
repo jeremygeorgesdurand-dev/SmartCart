@@ -1512,14 +1512,15 @@ class _ArticleListeTile extends ConsumerWidget {
       label: articleListe.coche ? '${article.nom}, coché' : article.nom,
       child: ListTile(
       // Pas de leading (rond supprimé)
-      title: Text(
-        article.nom,
+      title: AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 200),
         style: articleListe.coche
             ? TextStyle(
                 decoration: TextDecoration.lineThrough,
                 color: Theme.of(context).colorScheme.outline,
               )
             : const TextStyle(fontWeight: FontWeight.w500),
+        child: Text(article.nom),
       ),
       subtitle: article.marque != null ? Text(article.marque!) : null,
       trailing: Row(

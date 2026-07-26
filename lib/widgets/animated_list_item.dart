@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/theme_utils.dart';
 
 /// Anime l'apparition d'un item dans une liste (fade + slide depuis le bas)
 class AnimatedListItem extends StatefulWidget {
@@ -192,41 +193,46 @@ class DismissibleCard extends StatelessWidget {
     return Dismissible(
       key: Key(id),
       direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: Colors.red,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.delete_outline, color: Colors.white, size: 28),
-            SizedBox(height: 4),
-            Text('Supprimer',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ),
+      background: Builder(builder: (context) {
+        final danger = couleurDanger(context);
+        return Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 20),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: danger,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.delete_outline, color: texteContrastant(danger), size: 28),
+              const SizedBox(height: 4),
+              Text('Supprimer',
+                  style: TextStyle(
+                      color: texteContrastant(danger),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold)),
+            ],
+          ),
+        );
+      }),
       confirmDismiss: (_) async {
         return await showDialog<bool>(
               context: context,
-              builder: (_) => AlertDialog(
+              builder: (dialogCtx) => AlertDialog(
                 title: const Text('Confirmer ?'),
                 content: Text('$confirmLabel définitivement ?'),
                 actions: [
                   TextButton(
-                      onPressed: () => Navigator.pop(context, false),
+                      onPressed: () => Navigator.pop(dialogCtx, false),
                       child: const Text('Annuler')),
                   FilledButton(
                     style: FilledButton.styleFrom(
-                        backgroundColor: Colors.red),
-                    onPressed: () => Navigator.pop(context, true),
+                        backgroundColor: couleurDanger(dialogCtx),
+                        foregroundColor:
+                            texteContrastant(couleurDanger(dialogCtx))),
+                    onPressed: () => Navigator.pop(dialogCtx, true),
                     child: const Text('Supprimer'),
                   ),
                 ],
