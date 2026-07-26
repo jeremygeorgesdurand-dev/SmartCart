@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
 import '../services/widget_service.dart';
+import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 
 class WidgetConfigScreen extends ConsumerStatefulWidget {
@@ -150,10 +151,14 @@ class _WidgetConfigScreenState extends ConsumerState<WidgetConfigScreen> {
           // Liste des listes
           listesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('Erreur: $e'),
+            error: (e, _) => Text(messageErreurLisible(e, 'Erreur')),
             data: (listes) {
               if (listes.isEmpty) {
-                return const Text('Aucune liste disponible');
+                return Text('Aucune liste disponible',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: Theme.of(context).colorScheme.outline));
               }
               return Column(
                 children: listes.map((liste) {

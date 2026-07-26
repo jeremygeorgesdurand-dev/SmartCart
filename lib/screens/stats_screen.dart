@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -27,6 +28,7 @@ class StatsScreen extends ConsumerWidget {
             onPressed: () {
               ref.invalidate(statsProvider);
               ref.invalidate(suggestionsProvider);
+              ref.invalidate(_toutesLesListesProvider);
             },
           ),
         ],
@@ -51,6 +53,7 @@ class StatsScreen extends ConsumerWidget {
         data: (stats) => RefreshIndicator(
           onRefresh: () => ref.refresh(statsProvider.future).then((_) {
             ref.invalidate(suggestionsProvider);
+            ref.invalidate(_toutesLesListesProvider);
           }),
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -78,6 +81,8 @@ class StatsScreen extends ConsumerWidget {
               const _TitreSection(titre: 'Budget', icone: Icons.euro),
               const SizedBox(height: 8),
               const _CarteBudget(),
+              const SizedBox(height: 12),
+              const _CarteEvolutionBudget(),
               const SizedBox(height: 20),
 
               // ── Activité courses ─────────────────────────
@@ -362,6 +367,126 @@ class _CarteBudget extends ConsumerWidget {
                           color: Theme.of(context).colorScheme.outline,
                         )),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Les listes archivées ne sont pas incluses dans listesNotifierProvider
+// (utilisé pour l'affichage courant) : l'historique de dépenses a besoin
+// de son propre chargement incluant tout l'historique.
+final _toutesLesListesProvider = FutureProvider<List<ListeCourses>>(
+    (ref) => ref.read(dbServiceProvider).getListes(inclureArchivees: true));
+
+const _moisAbreges = [
+  'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
+  'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',
+];
+
+// ── Carte évolution du budget mensuel ────────────────────────────
+// Regroupe les listes (actives + archivées) par mois de création et
+// additionne leur total estimé : la meilleure approximation disponible
+// d'un historique de dépenses, faute d'une date de fin de course dédiée.
+class _CarteEvolutionBudget extends ConsumerWidget {
+  const _CarteEvolutionBudget();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final listes = ref.watch(_toutesLesListesProvider).valueOrNull ?? [];
+    if (listes.isEmpty) return const SizedBox.shrink();
+
+    final maintenant = DateTime.now();
+    final mois = List.generate(
+        6, (i) => DateTime(maintenant.year, maintenant.month - (5 - i)));
+
+    final totaux = <double>[];
+    for (final m in mois) {
+      final finMois = DateTime(m.year, m.month + 1);
+      final listesDuMois = listes.where(
+          (l) => !l.createdAt.isBefore(m) && l.createdAt.isBefore(finMois));
+      totaux.add(listesDuMois.fold<double>(
+          0, (s, l) => s + ref.watch(totalListeProvider(l.id))));
+    }
+
+    if (totaux.every((t) => t == 0)) return const SizedBox.shrink();
+
+    final couleurs = Theme.of(context).colorScheme;
+    final couleurAxes = couleurs.onSurfaceVariant;
+    final maxY = totaux.reduce((a, b) => a > b ? a : b) * 1.2;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Dépenses par mois',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text('Estimation basée sur la date de création des listes',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: couleurs.outline)),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 180,
+              child: BarChart(
+                BarChartData(
+                  maxY: maxY <= 0 ? 1 : maxY,
+                  alignment: BarChartAlignment.spaceAround,
+                  titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(),
+                    rightTitles: const AxisTitles(),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 44,
+                        getTitlesWidget: (value, meta) => Text(
+                            '${value.toStringAsFixed(0)} €',
+                            style: TextStyle(fontSize: 10, color: couleurAxes)),
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 24,
+                        getTitlesWidget: (value, meta) {
+                          final i = value.round();
+                          if (i < 0 || i >= mois.length) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(_moisAbreges[mois[i].month - 1],
+                                style: TextStyle(fontSize: 10, color: couleurAxes)),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  gridData: FlGridData(
+                    drawVerticalLine: false,
+                    getDrawingHorizontalLine: (_) =>
+                        FlLine(color: couleurs.outlineVariant, strokeWidth: 1),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  barGroups: [
+                    for (var i = 0; i < totaux.length; i++)
+                      BarChartGroupData(x: i, barRods: [
+                        BarChartRodData(
+                          toY: totaux[i],
+                          color: i == totaux.length - 1
+                              ? couleurs.primary
+                              : couleurs.primary.withValues(alpha: 0.45),
+                          width: 22,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ]),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

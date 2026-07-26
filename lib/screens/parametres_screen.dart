@@ -1182,7 +1182,7 @@ class _SectionCompte extends ConsumerWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             trailing: user != null
-                ? const Icon(Icons.cloud_done, color: Colors.green)
+                ? Icon(Icons.cloud_done, color: couleurSucces(context))
                 : const Icon(Icons.chevron_right),
             onTap: () => Navigator.push(
               context,

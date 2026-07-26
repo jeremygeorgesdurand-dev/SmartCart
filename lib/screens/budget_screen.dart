@@ -26,8 +26,22 @@ class BudgetScreen extends ConsumerWidget {
         data: (articles) {
           if (articles.isEmpty) {
             return Center(
-              child: Text('Aucun article dans le catalogue',
-                  style: Theme.of(context).textTheme.bodyMedium),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.euro_outlined,
+                      size: 64,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outline
+                          .withValues(alpha: 0.5)),
+                  const SizedBox(height: 16),
+                  Text('Aucun article dans le catalogue',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  const Text('Ajoute des articles pour suivre leur prix'),
+                ],
+              ),
             );
           }
 

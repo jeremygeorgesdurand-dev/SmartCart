@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/vocal_service.dart';
+import '../utils/theme_utils.dart';
 
 // ================================================================
 // POINT D'ENTRÉE : ouvrir le sheet vocal depuis n'importe où
@@ -181,7 +182,7 @@ class _VocalSheetState extends ConsumerState<VocalSheet>
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: Colors.green,
+      backgroundColor: couleurSucces(context),
       duration: const Duration(seconds: 2),
     ));
   }
@@ -246,7 +247,7 @@ class _VocalSheetState extends ConsumerState<VocalSheet>
   Widget _buildMicro(BuildContext context) {
     final isEcoute = _etat == _Etat.ecoute;
     final color = isEcoute
-        ? Colors.red
+        ? couleurDanger(context)
         : Theme.of(context).colorScheme.primary;
     final label = switch (_etat) {
       _Etat.demarrage => 'Microphone, initialisation',
