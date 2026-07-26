@@ -43,26 +43,33 @@ class BudgetScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             children: [
-              Text('Estimation par liste',
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
               listesAsync.when(
                 loading: () => const SizedBox.shrink(),
                 error: (_, __) => const SizedBox.shrink(),
                 data: (listes) {
                   final actives = listes.where((l) => !l.archivee).toList();
                   if (actives.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text('Aucune liste active',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.outline)),
-                    );
+                    return Text('Aucune liste active',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.outline));
                   }
+                  // Le total apparaît maintenant AVANT le détail par liste :
+                  // c'est le chiffre que l'utilisateur vient chercher en
+                  // premier sur cet écran, pas un résultat à déduire en
+                  // additionnant les cartes une par une plus bas.
+                  final totalGlobal = actives.fold<double>(
+                      0, (sum, l) => sum + ref.watch(totalListeProvider(l.id)));
                   return Column(
-                    children: actives
-                        .map((liste) => _ListeTotalTile(liste: liste))
-                        .toList(),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _ResumeBudgetCard(
+                          total: totalGlobal, nbListes: actives.length),
+                      const SizedBox(height: 20),
+                      Text('Par liste',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      ...actives.map((liste) => _ListeTotalTile(liste: liste)),
+                    ],
                   );
                 },
               ),
@@ -86,6 +93,48 @@ class BudgetScreen extends ConsumerWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+// Le chiffre qu'on vient chercher en premier sur cet écran : le total
+// toutes listes actives confondues, mis en avant avant le détail
+// liste par liste (qui reste plus bas pour qui veut le détail).
+class _ResumeBudgetCard extends StatelessWidget {
+  final double total;
+  final int nbListes;
+  const _ResumeBudgetCard({required this.total, required this.nbListes});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            nbListes > 1
+                ? 'Total sur $nbListes listes actives'
+                : 'Total de la liste active',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: scheme.onPrimaryContainer.withValues(alpha: 0.8)),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${total.toStringAsFixed(2)} €',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: scheme.onPrimaryContainer,
+                ),
+          ),
+        ],
       ),
     );
   }

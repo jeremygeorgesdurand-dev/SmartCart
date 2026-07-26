@@ -53,7 +53,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text=""
-            android:textSize="11sp"
+            android:textSize="12sp"
             android:textColor="#CCFFFFFF"
             android:layout_marginEnd="10dp"/>
 
@@ -115,8 +115,8 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:text="Configurez dans\nParamètres → Widget"
-            android:textSize="11sp"
-            android:textColor="#AAFFFFFF"
+            android:textSize="13sp"
+            android:textColor="#CCFFFFFF"
             android:gravity="center"/>
 
     </FrameLayout>

@@ -15,9 +15,9 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:text="Rayon"
-        android:textSize="11sp"
+        android:textSize="12sp"
         android:textStyle="bold"
-        android:textColor="#AAFFFFFF"
+        android:textColor="#CCFFFFFF"
         android:maxLines="1"
         android:ellipsize="end"/>
 
