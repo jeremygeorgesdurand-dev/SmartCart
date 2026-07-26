@@ -1724,7 +1724,7 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
           if (item.coche && !etaitCoche && !_delaisCoche.containsKey(item.id)) {
             setState(() {
               _delaisCoche[item.id] = Timer(
-                const Duration(milliseconds: 900),
+                const Duration(milliseconds: 400),
                 () {
                   if (mounted) setState(() => _delaisCoche.remove(item.id));
                 },
