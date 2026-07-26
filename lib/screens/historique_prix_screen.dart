@@ -77,12 +77,26 @@ class _HistoriquePrixScreenState extends ConsumerState<HistoriquePrixScreen> {
     ];
 
     final series = parMagasin.entries.toList();
+    // Le texte des axes du graphique n'hérite pas de la couleur du thème par
+    // défaut (fl_chart applique son propre style) : sans couleur explicite,
+    // les axes devenaient quasiment invisibles en thème sombre.
+    final couleurAxes = couleurs.onSurfaceVariant;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 24, 16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text('Évolution du prix',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            '${historique.length} relevés depuis le '
+            '${debut.day}/${debut.month}/${debut.year}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: couleurs.outline),
+          ),
+          const SizedBox(height: 16),
           Wrap(
             spacing: 12,
             runSpacing: 8,
@@ -99,7 +113,10 @@ class _HistoriquePrixScreenState extends ConsumerState<HistoriquePrixScreen> {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: LineChart(
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 20, 20, 8),
+                child: LineChart(
               LineChartData(
                 titlesData: FlTitlesData(
                   topTitles: const AxisTitles(),
@@ -110,7 +127,7 @@ class _HistoriquePrixScreenState extends ConsumerState<HistoriquePrixScreen> {
                       reservedSize: 44,
                       getTitlesWidget: (value, meta) =>
                           Text('${value.toStringAsFixed(2)} €',
-                              style: const TextStyle(fontSize: 10)),
+                              style: TextStyle(fontSize: 10, color: couleurAxes)),
                     ),
                   ),
                   bottomTitles: AxisTitles(
@@ -123,14 +140,18 @@ class _HistoriquePrixScreenState extends ConsumerState<HistoriquePrixScreen> {
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
                             '${date.day}/${date.month}',
-                            style: const TextStyle(fontSize: 10),
+                            style: TextStyle(fontSize: 10, color: couleurAxes),
                           ),
                         );
                       },
                     ),
                   ),
                 ),
-                gridData: const FlGridData(drawVerticalLine: false),
+                gridData: FlGridData(
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (_) =>
+                      FlLine(color: couleurs.outlineVariant, strokeWidth: 1),
+                ),
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
                   for (var i = 0; i < series.length; i++)
@@ -145,6 +166,8 @@ class _HistoriquePrixScreenState extends ConsumerState<HistoriquePrixScreen> {
                       dotData: const FlDotData(show: true),
                     ),
                 ],
+              ),
+                ),
               ),
             ),
           ),
