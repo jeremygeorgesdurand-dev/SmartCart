@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../providers/off_details_provider.dart';
+import '../utils/theme_utils.dart';
 import 'ajouter_article_dialog.dart';
 import 'prix_article_badge.dart';
 
@@ -20,40 +21,45 @@ class ArticleTile extends ConsumerWidget {
     return Dismissible(
       key: Key('article_${article.id}'),
       direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.red,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.delete_outline, color: Colors.white, size: 24),
-            SizedBox(height: 2),
-            Text('Supprimer',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ),
+      background: Builder(builder: (context) {
+        final danger = couleurDanger(context);
+        return Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 20),
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: danger,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.delete_outline, color: texteContrastant(danger), size: 24),
+              const SizedBox(height: 2),
+              Text('Supprimer',
+                  style: TextStyle(
+                      color: texteContrastant(danger),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold)),
+            ],
+          ),
+        );
+      }),
       confirmDismiss: (_) async => await showDialog<bool>(
             context: context,
-            builder: (_) => AlertDialog(
+            builder: (dialogCtx) => AlertDialog(
               title: const Text('Supprimer ?'),
               content: Text('Supprimer "${article.nom}" du catalogue ?'),
               actions: [
                 TextButton(
-                    onPressed: () => Navigator.pop(context, false),
+                    onPressed: () => Navigator.pop(dialogCtx, false),
                     child: const Text('Annuler')),
                 FilledButton(
-                  style:
-                      FilledButton.styleFrom(backgroundColor: Colors.red),
-                  onPressed: () => Navigator.pop(context, true),
+                  style: FilledButton.styleFrom(
+                      backgroundColor: couleurDanger(dialogCtx),
+                      foregroundColor:
+                          texteContrastant(couleurDanger(dialogCtx))),
+                  onPressed: () => Navigator.pop(dialogCtx, true),
                   child: const Text('Supprimer'),
                 ),
               ],

@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/export_service.dart';
 import '../services/liste_partage_service.dart';
+import '../utils/theme_utils.dart';
 
 class ImportListeDialog extends ConsumerStatefulWidget {
   final String? listeId;
@@ -172,7 +173,7 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
             : '"${_apercu!.nomListe}" créée avec ${_apercu!.articles.length} article(s)'
                 '${nbImportes > 0 ? " ($nbImportes nouveaux)" : ""}',
       ),
-      backgroundColor: Colors.green,
+      backgroundColor: couleurSucces(context),
     ));
   }
 
@@ -235,8 +236,9 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
                     Text('${_apercu!.articles.length} article(s) détecté(s)'),
                     if (_apercu!.articles.any(
                         (a) => a.categorieNom.isNotEmpty || a.rayonNom.isNotEmpty))
-                      const Text('✓ Catégories incluses',
-                          style: TextStyle(color: Colors.green, fontSize: 12)),
+                      Text('✓ Catégories incluses',
+                          style: TextStyle(
+                              color: couleurSucces(context), fontSize: 12)),
                   ],
                 ),
               ),
