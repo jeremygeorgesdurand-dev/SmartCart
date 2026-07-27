@@ -643,9 +643,8 @@ double _facteurPrix(String? unite, int quantite) {
 // jamais renseignés à la main, plutôt que de les ignorer purement et
 // simplement. Si la liste a un magasin renseigné et qu'un prix existe pour
 // ce magasin, on l'utilise ; sinon on prend le prix confirmé le moins cher.
-final totalListeProvider =
-    Provider.family<double, String>((ref, listeId) {
-  final items = ref.watch(articlesListeProvider(listeId)).valueOrNull ?? [];
+double _totalPourArticles(
+    Ref ref, String listeId, List<ArticleListe> items) {
   final prix = ref.watch(prixArticlesNotifierProvider).valueOrNull ?? [];
   final listes = ref.watch(listesNotifierProvider).valueOrNull ?? [];
   final articles = ref.watch(articlesNotifierProvider).valueOrNull ?? [];
@@ -674,6 +673,21 @@ final totalListeProvider =
     if (indicatif == null) return total;
     return total + indicatif.prix * _facteurPrix(item.unite, item.quantite);
   });
+}
+
+final totalListeProvider =
+    Provider.family<double, String>((ref, listeId) {
+  final items = ref.watch(articlesListeProvider(listeId)).valueOrNull ?? [];
+  return _totalPourArticles(ref, listeId, items);
+});
+
+// Comme totalListeProvider, mais uniquement sur les articles déjà cochés :
+// utilisé par le récapitulatif de fin de courses, où seuls les articles
+// réellement mis dans le panier doivent compter dans la dépense.
+final totalListeCochesProvider =
+    Provider.family<double, String>((ref, listeId) {
+  final items = ref.watch(articlesListeProvider(listeId)).valueOrNull ?? [];
+  return _totalPourArticles(ref, listeId, items.where((i) => i.coche).toList());
 });
 
 // ─── OPEN FOOD FACTS ─────────────────────────────────────────────

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
@@ -204,8 +206,25 @@ class ListesScreen extends ConsumerWidget {
             title: const Text('Rejoindre une liste'),
             content: TextField(
               controller: ctrl,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Code à 6 caractères…',
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.qr_code_scanner),
+                  tooltip: 'Scanner un QR code',
+                  onPressed: enCours
+                      ? null
+                      : () async {
+                          final scanne = await Navigator.push<String>(
+                            dialogCtx,
+                            MaterialPageRoute(
+                                builder: (_) => const _ScannerCodeQrScreen()),
+                          );
+                          if (scanne != null) {
+                            ctrl.text = scanne;
+                            await rejoindre();
+                          }
+                        },
+                ),
               ),
               autofocus: true,
               textCapitalization: TextCapitalization.characters,
@@ -330,6 +349,64 @@ class ListesScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ================================================================
+// SCANNER QR — lit le code d'une liste collaborative affiché en QR
+// sur un autre téléphone, sans avoir à le retaper à la main.
+// ================================================================
+class _ScannerCodeQrScreen extends StatefulWidget {
+  const _ScannerCodeQrScreen();
+
+  @override
+  State<_ScannerCodeQrScreen> createState() => _ScannerCodeQrScreenState();
+}
+
+class _ScannerCodeQrScreenState extends State<_ScannerCodeQrScreen> {
+  final MobileScannerController _controller = MobileScannerController();
+  bool _detecte = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_detecte) return;
+    final valeur = capture.barcodes.firstOrNull?.rawValue;
+    if (valeur == null || valeur.isEmpty) return;
+    _detecte = true;
+    HapticFeedback.mediumImpact();
+    Navigator.pop(context, valeur.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Scanner un QR code'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: Stack(
+        children: [
+          MobileScanner(controller: _controller, onDetect: _onDetect),
+          Center(
+            child: Container(
+              width: 220, height: 220,
+              decoration: BoxDecoration(
+                border: Border.all(
+                    color: Theme.of(context).colorScheme.primary, width: 3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -794,6 +871,22 @@ class _ListeCard extends ConsumerWidget {
             children: [
               const Text('Partagez ce code pour inviter quelqu\'un :'),
               const SizedBox(height: 16),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: QrImageView(
+                    data: code,
+                    version: QrVersions.auto,
+                    size: 160,
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               Center(
                 child: Container(
                   padding:
@@ -1721,12 +1814,81 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
   // coché.
   final Map<String, Timer> _delaisCoche = {};
 
+  // Évite de rouvrir automatiquement le récapitulatif à chaque frame une
+  // fois que tout est coché (ref.listen se redéclenche sur chaque nouvelle
+  // valeur, pas uniquement à la transition) — un seul affichage auto par
+  // passage à 100%, l'utilisateur peut toujours rouvrir via le bouton.
+  bool _recapAutoAffiche = false;
+
   @override
   void dispose() {
     for (final t in _delaisCoche.values) {
       t.cancel();
     }
     super.dispose();
+  }
+
+  void _afficherRecap(ListeCourses liste) {
+    final items = ref.read(articlesListeProvider(liste.id)).valueOrNull ?? [];
+    final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
+    final coches = items.where((i) => i.coche).toList();
+    final nonTrouves = items
+        .where((i) => !i.coche)
+        .map((i) => catalogue.where((a) => a.id == i.articleId).firstOrNull?.nom)
+        .whereType<String>()
+        .toList();
+    final afficherPrix = ref.read(afficherPrixProvider);
+    final total = afficherPrix ? ref.read(totalListeCochesProvider(liste.id)) : 0.0;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        icon: Icon(Icons.celebration, color: couleurSucces(dialogCtx)),
+        title: const Text('Récapitulatif des courses'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${coches.length}/${items.length} articles achetés',
+                style: Theme.of(dialogCtx).textTheme.bodyMedium),
+            if (afficherPrix) ...[
+              const SizedBox(height: 8),
+              Text('≈ ${total.toStringAsFixed(2)} € dépensés',
+                  style: Theme.of(dialogCtx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(dialogCtx).colorScheme.primary,
+                      )),
+            ],
+            if (nonTrouves.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text('Non trouvés (${nonTrouves.length}) :',
+                  style: Theme.of(dialogCtx).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text(nonTrouves.join(', '),
+                  style: Theme.of(dialogCtx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(dialogCtx).colorScheme.outline)),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Fermer'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              await ref
+                  .read(listesNotifierProvider.notifier)
+                  .modifier(liste.copyWith(archivee: true));
+              if (mounted) Navigator.pop(context);
+            },
+            child: const Text('Archiver cette liste'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1760,6 +1922,18 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
             _delaisCoche.remove(item.id)?.cancel();
           }
         }
+
+        final toutCocheAvant = avant != null &&
+            avant.isNotEmpty &&
+            avant.every((i) => i.coche);
+        final toutCocheApres = apres.isNotEmpty && apres.every((i) => i.coche);
+        if (toutCocheApres && !toutCocheAvant && !_recapAutoAffiche) {
+          _recapAutoAffiche = true;
+          WidgetsBinding.instance
+              .addPostFrameCallback((_) => _afficherRecap(liste));
+        } else if (!toutCocheApres) {
+          _recapAutoAffiche = false;
+        }
       },
     );
 
@@ -1790,6 +1964,15 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
             : null,
         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
         actions: [
+          // Bouton toujours disponible, pas seulement quand tout est coché :
+          // certains articles ne sont parfois pas trouvés en magasin, donc
+          // la liste n'atteint jamais 100% alors que les courses sont bel
+          // et bien terminées.
+          IconButton(
+            icon: const Icon(Icons.flag_outlined),
+            tooltip: 'Terminer les courses',
+            onPressed: () => _afficherRecap(liste),
+          ),
           IconButton(
             icon: const Icon(Icons.remove_done),
             tooltip: 'Tout décocher',
