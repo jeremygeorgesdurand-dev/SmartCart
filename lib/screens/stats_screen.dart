@@ -9,6 +9,7 @@ import '../services/stats_service.dart';
 import '../services/suggestions_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
+import 'listes_screen.dart';
 
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});
@@ -773,24 +774,77 @@ class _CarteSuggestions extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       child: Column(
-        children: suggestions.map((s) {
-          return ListTile(
-            leading: Icon(Icons.shopping_cart_checkout,
-                color: Theme.of(context).colorScheme.primary),
-            title: Text(s.article.nom),
-            subtitle: Text(
-              'En retard de ${s.joursRetard} jour${s.joursRetard > 1 ? 's' : ''}'
-              ' · habituellement tous les ${s.intervalleMoyenJours.round()} jours',
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'D\'après tes habitudes d\'achat',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _creerListeSuggeree(context, ref),
+                  icon: const Icon(Icons.playlist_add, size: 18),
+                  label: const Text('Créer une liste'),
+                ),
+              ],
             ),
-            trailing: IconButton(
-              icon: const Icon(Icons.add_circle_outline),
-              tooltip: 'Ajouter à une liste',
-              onPressed: () => _ajouterSuggestion(context, ref, s.article),
+          ),
+          for (final s in suggestions)
+            ListTile(
+              leading: Icon(Icons.shopping_cart_checkout,
+                  color: Theme.of(context).colorScheme.primary),
+              title: Text(s.article.nom),
+              subtitle: Text(
+                'En retard de ${s.joursRetard} jour${s.joursRetard > 1 ? 's' : ''}'
+                ' · habituellement tous les ${s.intervalleMoyenJours.round()} jours',
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.add_circle_outline),
+                tooltip: 'Ajouter à une liste',
+                onPressed: () => _ajouterSuggestion(context, ref, s.article),
+              ),
             ),
-          );
-        }).toList(),
+        ],
       ),
     );
+  }
+
+  // Crée d'un coup une nouvelle liste avec tous les articles suggérés,
+  // plutôt que de les ajouter un par un à une liste existante : le geste
+  // que l'utilisateur veut faire quand il retrouve toutes ses habitudes
+  // rassemblées ici, pas une liste vide qu'il faudrait remplir manuellement.
+  Future<void> _creerListeSuggeree(BuildContext context, WidgetRef ref) async {
+    final maintenant = DateTime.now();
+    final nom = 'Courses habituelles du ${maintenant.day}/${maintenant.month}';
+    final liste = ListeCourses(id: 'liste_${const Uuid().v4()}', nom: nom);
+    await ref.read(listesNotifierProvider.notifier).ajouter(liste);
+
+    for (final s in suggestions) {
+      await ref.read(articlesListeProvider(liste.id).notifier).ajouter(
+            ArticleListe(
+              id: 'al_${const Uuid().v4()}',
+              listeId: liste.id,
+              articleId: s.article.id,
+            ),
+          );
+    }
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Liste "$nom" créée avec ${suggestions.length} article'
+          '${suggestions.length > 1 ? "s" : ""}'),
+      backgroundColor: couleurSucces(context),
+      action: SnackBarAction(
+        label: 'Voir',
+        onPressed: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => DetailListeScreen(liste: liste))),
+      ),
+    ));
   }
 
   Future<void> _ajouterSuggestion(

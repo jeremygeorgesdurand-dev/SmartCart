@@ -439,6 +439,24 @@ class ArticlesListeNotifier
     ref.invalidateSelf();
   }
 
+  // unite == null retire l'unité (retour à un simple compte d'unités).
+  // copyWith ne convient pas ici : son `unite ?? this.unite` empêcherait de
+  // jamais remettre l'unité à null une fois posée.
+  Future<void> modifierUnite(ArticleListe al, String? unite) async {
+    final updated = ArticleListe(
+      id: al.id,
+      listeId: al.listeId,
+      articleId: al.articleId,
+      quantite: al.quantite,
+      unite: unite,
+      note: al.note,
+      coche: al.coche,
+    );
+    await ref.read(dbServiceProvider).updateArticleListe(updated);
+    await _syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(updated));
+    ref.invalidateSelf();
+  }
+
   Future<void> supprimer(String id) async {
     final items =
         await ref.read(dbServiceProvider).getArticlesListe(arg);

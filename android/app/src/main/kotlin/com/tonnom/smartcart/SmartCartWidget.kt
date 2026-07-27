@@ -11,6 +11,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.Log
+import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONArray
 import org.json.JSONObject
@@ -104,6 +105,20 @@ class SmartCartWidget : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_compteur,
                 if (listeNom != null) "$cochesCount/$total" else "")
             views.setProgressBar(R.id.widget_progress, 100, progression, false)
+
+            // Adapte le contenu à la taille réelle choisie par l'utilisateur
+            // sur son écran d'accueil (le widget est redimensionnable —
+            // resizeMode="horizontal|vertical" — mais un layout à base de
+            // match_parent/weight seul ne suffit pas : sur un format très bas
+            // ou très étroit, la barre de progression ou le bouton de tri
+            // prennent une place disproportionnée, voire se chevauchent).
+            val options = manager.getAppWidgetOptions(widgetId)
+            val minWidth = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0
+            val minHeight = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0) ?: 0
+            val compact = minHeight in 1 until 110
+            val etroit = minWidth in 1 until 150
+            if (compact) views.setViewVisibility(R.id.widget_progress, View.GONE)
+            if (etroit) views.setViewVisibility(R.id.widget_btn_tri, View.GONE)
 
             // Tap header = ouvrir la liste dans l'app
             val iOpen = Intent(context, MainActivity::class.java).apply {
@@ -241,6 +256,16 @@ class SmartCartWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         Log.d(TAG, "onUpdate ${ids.size} widgets")
         for (id in ids) updateWidget(context, manager, id)
+    }
+
+    // Appelé par le système quand l'utilisateur redimensionne le widget sur
+    // son écran d'accueil : on redessine pour appliquer le mode compact/étroit
+    // (voir updateWidget) à la nouvelle taille.
+    override fun onAppWidgetOptionsChanged(
+        context: Context, manager: AppWidgetManager, appWidgetId: Int,
+        newOptions: android.os.Bundle) {
+        super.onAppWidgetOptionsChanged(context, manager, appWidgetId, newOptions)
+        updateWidget(context, manager, appWidgetId)
     }
 
     override fun onReceive(context: Context, intent: Intent) {

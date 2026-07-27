@@ -1461,6 +1461,32 @@ class _ArticleListeTile extends ConsumerWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+
+                // Unité — kg/g/L/mL, ou aucune (simple compte d'unités)
+                Row(
+                  children: [
+                    Text('Unité :',
+                        style: Theme.of(ctx).textTheme.bodyMedium),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final u in const [null, 'kg', 'g', 'L', 'mL'])
+                            ChoiceChip(
+                              label: Text(u ?? 'Aucune'),
+                              selected: alActuel.unite == u,
+                              onSelected: (_) => r
+                                  .read(articlesListeProvider(listeId).notifier)
+                                  .modifierUnite(alActuel, u),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
                 const Divider(),
 
                 // Fermer
