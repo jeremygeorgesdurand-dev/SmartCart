@@ -64,6 +64,18 @@ class Article {
         imageUrl: map['imageUrl'],
         createdAt: DateTime.parse(map['createdAt']),
       );
+
+  // Égalité par id : le catalogue est ré-instancié à chaque lecture de la
+  // base (nouveaux objets Article à chaque fois). Sans ceci, un provider
+  // family keyé par Article (ex: prixIndicatifProvider) traite chaque
+  // nouvelle instance comme une clé différente et relance inutilement sa
+  // requête réseau au moindre rebuild, au lieu de réutiliser le résultat
+  // déjà en cache pour le même article.
+  @override
+  bool operator ==(Object other) => other is Article && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 // ============================================================

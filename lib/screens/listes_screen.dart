@@ -90,6 +90,12 @@ class ListesScreen extends ConsumerWidget {
                     context: context,
                     builder: (_) => const ImportListeDialog(),
                   );
+                case 'archivees':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const ListesArchiveesScreen()),
+                  );
               }
             },
             itemBuilder: (_) => [
@@ -108,6 +114,12 @@ class ListesScreen extends ConsumerWidget {
                   value: 'rejoindre', child: Text('Rejoindre une liste')),
               const PopupMenuItem(
                   value: 'importer', child: Text('Importer une liste')),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'archivees',
+                child: Text('Listes archivées'
+                    '${(listesAsync.valueOrNull ?? []).where((l) => l.archivee).isNotEmpty ? ' (${(listesAsync.valueOrNull ?? []).where((l) => l.archivee).length})' : ''}'),
+              ),
             ],
           ),
         ],
@@ -116,7 +128,12 @@ class ListesScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
         data: (listes) {
-          if (listes.isEmpty) {
+          // Une liste archivée (courses terminées) sort de "Mes listes" pour
+          // ne pas s'accumuler ici indéfiniment ; elle reste consultable via
+          // "Listes archivées" dans le menu, et continue de compter dans
+          // l'historique des Statistiques.
+          final actives = listes.where((l) => !l.archivee).toList();
+          if (actives.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -137,7 +154,7 @@ class ListesScreen extends ConsumerWidget {
             );
           }
           // Appliquer le tri
-          final sorted = [...listes];
+          final sorted = [...actives];
           switch (sortMode) {
             case 'alpha':
               sorted.sort(
@@ -350,6 +367,70 @@ class ListesScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ================================================================
+// LISTES ARCHIVÉES — courses terminées, sorties de "Mes listes" mais
+// toujours consultables et désarchivables depuis ici.
+// ================================================================
+class ListesArchiveesScreen extends ConsumerWidget {
+  const ListesArchiveesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final listesAsync = ref.watch(listesNotifierProvider);
+    final archivees =
+        (listesAsync.valueOrNull ?? []).where((l) => l.archivee).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Listes archivées')),
+      body: archivees.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.inventory_2_outlined,
+                      size: 64,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outline
+                          .withValues(alpha: 0.5)),
+                  const SizedBox(height: 16),
+                  const Text('Aucune liste archivée'),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: archivees.length,
+              itemBuilder: (_, i) {
+                final liste = archivees[i];
+                return Card(
+                  child: ListTile(
+                    leading: CircleAvatar(
+                        backgroundColor: Color(liste.couleur)),
+                    title: Text(liste.nom),
+                    subtitle: Text(
+                        '${liste.createdAt.day}/${liste.createdAt.month}/${liste.createdAt.year}'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.unarchive_outlined),
+                      tooltip: 'Désarchiver',
+                      onPressed: () => ref
+                          .read(listesNotifierProvider.notifier)
+                          .modifier(liste.copyWith(archivee: false)),
+                    ),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => DetailListeScreen(liste: liste)),
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
@@ -1806,30 +1887,28 @@ class ModeCoursesScreen extends ConsumerStatefulWidget {
 }
 
 class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
-  // Un article qu'on vient de cocher reste affiché dans son rayon d'origine
-  // (juste barré/atténué) pendant ce court délai avant de glisser vers
-  // "Déjà dans le panier" — sans ça, il disparaissait INSTANTANÉMENT de sa
-  // place pour réapparaître tout en bas, donnant l'impression trompeuse
-  // qu'un article venait d'être retiré de la liste plutôt que simplement
-  // coché.
-  final Map<String, Timer> _delaisCoche = {};
-
   // Évite de rouvrir automatiquement le récapitulatif à chaque frame une
   // fois que tout est coché (ref.listen se redéclenche sur chaque nouvelle
   // valeur, pas uniquement à la transition) — un seul affichage auto par
   // passage à 100%, l'utilisateur peut toujours rouvrir via le bouton.
   bool _recapAutoAffiche = false;
 
-  @override
-  void dispose() {
-    for (final t in _delaisCoche.values) {
-      t.cancel();
-    }
-    super.dispose();
+  // Ne compte que les lignes dont l'article existe encore au catalogue :
+  // une liste collaborative synchronisée peut garder une ligne pointant
+  // vers un article supprimé ailleurs (voir database_service.deleteArticle,
+  // dont le nettoyage en cascade ne s'applique qu'en local). Ignorer ces
+  // lignes fantômes est nécessaire pour que "tout est coché" redevienne
+  // vrai et que le compte affiché corresponde à ce qui est réellement à
+  // l'écran (sinon "20/21" alors que les 20 articles visibles sont cochés).
+  List<ArticleListe> _itemsValides(List<ArticleListe> items) {
+    final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
+    final idsValides = catalogue.map((a) => a.id).toSet();
+    return items.where((i) => idsValides.contains(i.articleId)).toList();
   }
 
   void _afficherRecap(ListeCourses liste) {
-    final items = ref.read(articlesListeProvider(liste.id)).valueOrNull ?? [];
+    final items = _itemsValides(
+        ref.read(articlesListeProvider(liste.id)).valueOrNull ?? []);
     final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
     final coches = items.where((i) => i.coche).toList();
     final nonTrouves = items
@@ -1840,53 +1919,17 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
     final afficherPrix = ref.read(afficherPrixProvider);
     final total = afficherPrix ? ref.read(totalListeCochesProvider(liste.id)) : 0.0;
 
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        icon: Icon(Icons.celebration, color: couleurSucces(dialogCtx)),
-        title: const Text('Récapitulatif des courses'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${coches.length}/${items.length} articles achetés',
-                style: Theme.of(dialogCtx).textTheme.bodyMedium),
-            if (afficherPrix) ...[
-              const SizedBox(height: 8),
-              Text('≈ ${total.toStringAsFixed(2)} € dépensés',
-                  style: Theme.of(dialogCtx).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(dialogCtx).colorScheme.primary,
-                      )),
-            ],
-            if (nonTrouves.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text('Non trouvés (${nonTrouves.length}) :',
-                  style: Theme.of(dialogCtx).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              Text(nonTrouves.join(', '),
-                  style: Theme.of(dialogCtx).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(dialogCtx).colorScheme.outline)),
-            ],
-          ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RecapCoursesScreen(
+          liste: liste,
+          nbAchetes: coches.length,
+          totalArticles: items.length,
+          afficherPrix: afficherPrix,
+          total: total,
+          nonTrouves: nonTrouves,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Fermer'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(dialogCtx);
-              await ref
-                  .read(listesNotifierProvider.notifier)
-                  .modifier(liste.copyWith(archivee: true));
-              if (mounted) Navigator.pop(context);
-            },
-            child: const Text('Archiver cette liste'),
-          ),
-        ],
       ),
     );
   }
@@ -1895,33 +1938,18 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
   Widget build(BuildContext context) {
     final liste = widget.liste;
 
-    // Détecte les transitions non-coché → coché pour démarrer le délai
-    // d'affichage ; une transition coché → non-coché (ex: "Tout décocher")
-    // annule un délai en cours pour ne pas le laisser dans un état incohérent.
+    // Détecte le passage à "tout coché" pour proposer automatiquement le
+    // récapitulatif — sur les seules lignes dont l'article existe encore
+    // (voir _itemsValides : une ligne fantôme ne doit jamais empêcher ce
+    // passage à 100%).
     ref.listen<AsyncValue<List<ArticleListe>>>(
       articlesListeProvider(liste.id),
       (previous, next) {
-        final avant = previous?.valueOrNull;
-        final apres = next.valueOrNull;
-        if (apres == null) return;
-        for (final item in apres) {
-          final etaitCoche = avant == null
-              ? false
-              : (avant.where((i) => i.id == item.id).firstOrNull?.coche ??
-                  false);
-          if (item.coche && !etaitCoche && !_delaisCoche.containsKey(item.id)) {
-            setState(() {
-              _delaisCoche[item.id] = Timer(
-                const Duration(milliseconds: 400),
-                () {
-                  if (mounted) setState(() => _delaisCoche.remove(item.id));
-                },
-              );
-            });
-          } else if (!item.coche) {
-            _delaisCoche.remove(item.id)?.cancel();
-          }
-        }
+        final avant =
+            previous?.valueOrNull != null ? _itemsValides(previous!.valueOrNull!) : null;
+        final apresBrut = next.valueOrNull;
+        if (apresBrut == null) return;
+        final apres = _itemsValides(apresBrut);
 
         final toutCocheAvant = avant != null &&
             avant.isNotEmpty &&
@@ -1941,8 +1969,12 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
     final catalogueAsync = ref.watch(articlesNotifierProvider);
     final rayonsAsync = ref.watch(rayonsNotifierProvider);
 
+    // Total des articles déjà cochés (pas de la liste entière) : en Mode
+    // Courses, ce chiffre représente ce qui est déjà dans le panier et
+    // grandit naturellement à chaque article coché — un total de la liste
+    // entière resterait inutilement figé jusqu'à la fin des courses.
     final total = ref.watch(afficherPrixProvider)
-        ? ref.watch(totalListeProvider(liste.id))
+        ? ref.watch(totalListeCochesProvider(liste.id))
         : 0.0;
 
     return Scaffold(
@@ -1954,7 +1986,7 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Text(
-                    '≈ ${total.toStringAsFixed(2)} €',
+                    '≈ ${total.toStringAsFixed(2)} € dans le panier',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -2010,11 +2042,7 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
                 final article =
                     catalogue.where((a) => a.id == item.articleId).firstOrNull;
                 if (article == null) continue;
-                // Pendant le délai (voir _delaisCoche), un article tout
-                // juste coché reste groupé comme s'il ne l'était pas encore.
-                final coicheEffectif =
-                    item.coche && !_delaisCoche.containsKey(item.id);
-                if (coicheEffectif) {
+                if (item.coche) {
                   coches.add((item, article));
                 } else {
                   nonCoches.add((item, article));
@@ -2291,6 +2319,130 @@ class _BanniereTermine extends StatelessWidget {
             style: OutlinedButton.styleFrom(foregroundColor: succes),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ================================================================
+// RÉCAPITULATIF DE FIN DE COURSES — page à part entière (pas une
+// simple boîte de dialogue) : donne le temps de voir ce qui a été
+// acheté avant de revenir à l'accueil.
+// ================================================================
+class RecapCoursesScreen extends ConsumerWidget {
+  final ListeCourses liste;
+  final int nbAchetes;
+  final int totalArticles;
+  final bool afficherPrix;
+  final double total;
+  final List<String> nonTrouves;
+
+  const RecapCoursesScreen({
+    super.key,
+    required this.liste,
+    required this.nbAchetes,
+    required this.totalArticles,
+    required this.afficherPrix,
+    required this.total,
+    required this.nonTrouves,
+  });
+
+  void _retourAccueil(BuildContext context) {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _archiverEtFermer(BuildContext context, WidgetRef ref) async {
+    await ref
+        .read(listesNotifierProvider.notifier)
+        .modifier(liste.copyWith(archivee: true));
+    if (context.mounted) _retourAccueil(context);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final succes = couleurSucces(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Récapitulatif'),
+        automaticallyImplyLeading: false,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 16),
+              Icon(Icons.celebration, color: succes, size: 56),
+              const SizedBox(height: 16),
+              Text(liste.nom,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 24),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Text('$nbAchetes/$totalArticles articles achetés',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      if (afficherPrix) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          '${total.toStringAsFixed(2)} €',
+                          style:
+                              Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                        ),
+                        Text('dépensés',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.outline)),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              if (nonTrouves.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Non trouvés (${nonTrouves.length})',
+                      style: Theme.of(context).textTheme.titleSmall),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(nonTrouves.join(', ')),
+                  ),
+                ),
+              ],
+              const Spacer(),
+              Text(
+                'Archiver retire cette liste de "Mes listes" (elle reste '
+                'visible dans "Listes archivées" et dans l\'historique des '
+                'statistiques).',
+                textAlign: TextAlign.center,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Theme.of(context).colorScheme.outline),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => _archiverEtFermer(context, ref),
+                child: const Text('Archiver cette liste'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: () => _retourAccueil(context),
+                child: const Text('Fermer sans archiver'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

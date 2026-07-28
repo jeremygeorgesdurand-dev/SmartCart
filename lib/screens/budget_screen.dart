@@ -7,7 +7,8 @@ import '../utils/theme_utils.dart';
 import 'historique_prix_screen.dart';
 
 // ================================================================
-// ÉCRAN BUDGET — prix estimés des articles + total par liste active
+// ÉCRAN BUDGET — prix estimés des articles + suivi des dépenses
+// réelles (uniquement les articles effectivement cochés/achetés)
 // ================================================================
 class BudgetScreen extends ConsumerWidget {
   const BudgetScreen({super.key});
@@ -61,9 +62,18 @@ class BudgetScreen extends ConsumerWidget {
                 loading: () => const SizedBox.shrink(),
                 error: (_, __) => const SizedBox.shrink(),
                 data: (listes) {
-                  final actives = listes.where((l) => !l.archivee).toList();
-                  if (actives.isEmpty) {
-                    return Text('Aucune liste active',
+                  // Seules les listes ayant au moins un article coché
+                  // comptent ici : le budget doit refléter ce qui a
+                  // vraiment été acheté, pas simplement ce qui est prévu
+                  // sur une liste pas encore faite.
+                  final avecAchats = listes.where((l) {
+                    final items =
+                        ref.watch(articlesListeProvider(l.id)).valueOrNull ??
+                            [];
+                    return items.any((i) => i.coche);
+                  }).toList();
+                  if (avecAchats.isEmpty) {
+                    return Text('Aucun achat effectué pour l\'instant',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context).colorScheme.outline));
                   }
@@ -71,18 +81,18 @@ class BudgetScreen extends ConsumerWidget {
                   // c'est le chiffre que l'utilisateur vient chercher en
                   // premier sur cet écran, pas un résultat à déduire en
                   // additionnant les cartes une par une plus bas.
-                  final totalGlobal = actives.fold<double>(
-                      0, (sum, l) => sum + ref.watch(totalListeProvider(l.id)));
+                  final totalGlobal = avecAchats.fold<double>(0,
+                      (sum, l) => sum + ref.watch(totalListeCochesProvider(l.id)));
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _ResumeBudgetCard(
-                          total: totalGlobal, nbListes: actives.length),
+                          total: totalGlobal, nbListes: avecAchats.length),
                       const SizedBox(height: 20),
                       Text('Par liste',
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
-                      ...actives.map((liste) => _ListeTotalTile(liste: liste)),
+                      ...avecAchats.map((liste) => _ListeTotalTile(liste: liste)),
                     ],
                   );
                 },
@@ -135,8 +145,8 @@ class _ResumeBudgetCard extends StatelessWidget {
         children: [
           Text(
             nbListes > 1
-                ? 'Total sur $nbListes listes actives'
-                : 'Total de la liste active',
+                ? 'Dépensé sur $nbListes listes'
+                : 'Dépensé sur cette liste',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onPrimaryContainer.withValues(alpha: 0.8)),
           ),
@@ -160,7 +170,7 @@ class _ListeTotalTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final total = ref.watch(totalListeProvider(liste.id));
+    final total = ref.watch(totalListeCochesProvider(liste.id));
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(

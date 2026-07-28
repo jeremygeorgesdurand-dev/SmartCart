@@ -408,8 +408,10 @@ class _CarteEvolutionBudget extends ConsumerWidget {
       final finMois = DateTime(m.year, m.month + 1);
       final listesDuMois = listes.where(
           (l) => !l.createdAt.isBefore(m) && l.createdAt.isBefore(finMois));
+      // Uniquement les articles cochés : un historique de dépenses doit
+      // refléter ce qui a été réellement acheté, pas ce qui était prévu.
       totaux.add(listesDuMois.fold<double>(
-          0, (s, l) => s + ref.watch(totalListeProvider(l.id))));
+          0, (s, l) => s + ref.watch(totalListeCochesProvider(l.id))));
     }
 
     if (totaux.every((t) => t == 0)) return const SizedBox.shrink();
@@ -427,7 +429,7 @@ class _CarteEvolutionBudget extends ConsumerWidget {
             Text('Dépenses par mois',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
-            Text('Estimation basée sur la date de création des listes',
+            Text('Articles achetés, groupés par date de création de la liste',
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall
