@@ -2352,9 +2352,17 @@ class RecapCoursesScreen extends ConsumerWidget {
   }
 
   Future<void> _archiverEtFermer(BuildContext context, WidgetRef ref) async {
-    await ref
-        .read(listesNotifierProvider.notifier)
-        .modifier(liste.copyWith(archivee: true));
+    // N'attend que l'écriture locale (quasi instantanée) avant de revenir à
+    // l'accueil : .modifier() attend aussi la synchro cloud, qui peut
+    // prendre plusieurs secondes sur un réseau lent — le bouton semblait
+    // alors ne rien faire. La synchro continue en arrière-plan.
+    final archivee = liste.copyWith(archivee: true);
+    await ref.read(dbServiceProvider).updateListe(archivee);
+    ref.invalidate(listesNotifierProvider);
+    unawaited(ref
+        .read(syncServiceProvider)
+        .sauvegarderListe(archivee)
+        .catchError((_) {}));
     if (context.mounted) _retourAccueil(context);
   }
 

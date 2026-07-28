@@ -129,9 +129,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         children: [
           // Contenu principal (en dessous) — PageView plutôt qu'IndexedStack
           // pour permettre de changer d'onglet en glissant, en plus des
-          // boutons de la barre de navigation.
+          // boutons de la barre de navigation. Désactivé sur l'onglet
+          // Catalogue (index 1) : ses articles se suppriment par glissement
+          // (Dismissible), un geste horizontal qui entre en conflit direct
+          // avec le changement d'onglet — glisser sur un article ne
+          // changeait pas d'onglet et pouvait déclencher une suppression
+          // accidentelle. Les autres onglets n'ont pas ce conflit.
           PageView(
             controller: _pageController,
+            physics: _currentIndex == 1
+                ? const NeverScrollableScrollPhysics()
+                : const ClampingScrollPhysics(),
             onPageChanged: (i) => setState(() => _currentIndex = i),
             children: screens,
           ),

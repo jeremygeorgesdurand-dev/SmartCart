@@ -1,9 +1,25 @@
 class VersionInfo {
-  static const String version = '1.0.0';
-  static const String buildNumber = '25';
-  static const String dateMiseAJour = '18 avril 2026';
+  static const String version = '1.1.0';
+  static const String buildNumber = '26';
+  static const String dateMiseAJour = '28 juillet 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.1.0',
+      date: '28 juillet 2026',
+      changements: [
+        'Paramètres réorganisés en sous-menus (Apparence, Organisation, '
+            'Fonctionnalités, Données, À propos)',
+        'Widget écran d\'accueil adaptatif à la taille choisie',
+        'Unité manuelle (kg/g/L/mL) sur les articles d\'une liste',
+        'Liste générée automatiquement d\'après les habitudes d\'achat',
+        'Récapitulatif de fin de courses en page dédiée',
+        'Rejoindre une liste collaborative par QR code',
+        'Budget et historique des dépenses basés sur les achats réels',
+        'Listes archivées enfin consultables',
+        'Navigation par glissement entre les onglets',
+      ],
+    ),
     Release(
       version: '1.0.0',
       date: '18 avril 2026',
