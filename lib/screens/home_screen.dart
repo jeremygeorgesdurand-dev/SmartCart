@@ -124,25 +124,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     final safeIndex = _currentIndex.clamp(0, screens.length - 1);
 
+    void changerDePage(int index) {
+      final cible = index.clamp(0, screens.length - 1);
+      if (cible == _currentIndex) return;
+      setState(() => _currentIndex = cible);
+      _pageController.animateToPage(
+        cible,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+
+    // Onglet Catalogue seulement : ses articles se suppriment par glissement
+    // horizontal (Dismissible), un geste qui entre en conflit direct avec le
+    // changement d'onglet par glissement plein écran (glisser sur un article
+    // ne changeait pas d'onglet et pouvait déclencher une suppression
+    // accidentelle). On garde le changement d'onglet possible en glissant,
+    // mais seulement depuis une fine bande sur chaque bord de l'écran, là où
+    // il n'y a jamais d'article — comme le glissement "retour" d'iOS.
+    void swipeDepuisBord(DragEndDetails details) {
+      final vitesse = details.primaryVelocity;
+      if (vitesse == null || vitesse.abs() < 200) return;
+      changerDePage(_currentIndex + (vitesse < 0 ? 1 : -1));
+    }
+
     return Scaffold(
       body: Stack(
         children: [
           // Contenu principal (en dessous) — PageView plutôt qu'IndexedStack
           // pour permettre de changer d'onglet en glissant, en plus des
-          // boutons de la barre de navigation. Désactivé sur l'onglet
-          // Catalogue (index 1) : ses articles se suppriment par glissement
-          // (Dismissible), un geste horizontal qui entre en conflit direct
-          // avec le changement d'onglet — glisser sur un article ne
-          // changeait pas d'onglet et pouvait déclencher une suppression
-          // accidentelle. Les autres onglets n'ont pas ce conflit.
+          // boutons de la barre de navigation.
           PageView(
             controller: _pageController,
-            physics: _currentIndex == 1
+            physics: safeIndex == 1
                 ? const NeverScrollableScrollPhysics()
                 : const ClampingScrollPhysics(),
             onPageChanged: (i) => setState(() => _currentIndex = i),
             children: screens,
           ),
+          if (safeIndex == 1) ...[
+            Positioned(
+              left: 0, top: 0, bottom: 0, width: 24,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragEnd: swipeDepuisBord,
+              ),
+            ),
+            Positioned(
+              right: 0, top: 0, bottom: 0, width: 24,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragEnd: swipeDepuisBord,
+              ),
+            ),
+          ],
           // Logo de fond — par dessus, non interactif
           if (fondActif)
             Positioned.fill(
@@ -164,14 +199,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: safeIndex,
-        onDestinationSelected: (i) {
-          setState(() => _currentIndex = i);
-          _pageController.animateToPage(
-            i,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        },
+        onDestinationSelected: changerDePage,
         destinations: destinations,
       ),
     );
