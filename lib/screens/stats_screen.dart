@@ -29,7 +29,7 @@ class StatsScreen extends ConsumerWidget {
             onPressed: () {
               ref.invalidate(statsProvider);
               ref.invalidate(suggestionsProvider);
-              ref.invalidate(_toutesLesListesProvider);
+              ref.invalidate(listesNotifierProvider);
             },
           ),
         ],
@@ -54,7 +54,7 @@ class StatsScreen extends ConsumerWidget {
         data: (stats) => RefreshIndicator(
           onRefresh: () => ref.refresh(statsProvider.future).then((_) {
             ref.invalidate(suggestionsProvider);
-            ref.invalidate(_toutesLesListesProvider);
+            ref.invalidate(listesNotifierProvider);
           }),
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -376,12 +376,6 @@ class _CarteBudget extends ConsumerWidget {
   }
 }
 
-// Les listes archivées ne sont pas incluses dans listesNotifierProvider
-// (utilisé pour l'affichage courant) : l'historique de dépenses a besoin
-// de son propre chargement incluant tout l'historique.
-final _toutesLesListesProvider = FutureProvider<List<ListeCourses>>(
-    (ref) => ref.read(dbServiceProvider).getListes(inclureArchivees: true));
-
 const _moisAbreges = [
   'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
   'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',
@@ -396,7 +390,7 @@ class _CarteEvolutionBudget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final listes = ref.watch(_toutesLesListesProvider).valueOrNull ?? [];
+    final listes = ref.watch(listesNotifierProvider).valueOrNull ?? [];
     if (listes.isEmpty) return const SizedBox.shrink();
 
     final maintenant = DateTime.now();

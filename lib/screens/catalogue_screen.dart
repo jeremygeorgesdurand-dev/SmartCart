@@ -233,7 +233,8 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
           listesAsync.when(
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
-            data: (listes) {
+            data: (toutes) {
+              final listes = toutes.where((l) => !l.archivee).toList();
               if (listes.isEmpty) return const SizedBox.shrink();
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 200),

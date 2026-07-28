@@ -287,8 +287,12 @@ final listesNotifierProvider =
 
 class ListesNotifier extends AsyncNotifier<List<ListeCourses>> {
   @override
+  // inclureArchivees: true — le filtrage actif/archivée se fait dans les
+  // écrans (Mes listes / Listes archivées), pas ici : sinon les listes
+  // archivées n'étaient jamais chargées du tout, et "Listes archivées"
+  // restait vide même après avoir archivé une liste.
   Future<List<ListeCourses>> build() =>
-      ref.read(dbServiceProvider).getListes();
+      ref.read(dbServiceProvider).getListes(inclureArchivees: true);
 
   Future<void> ajouter(ListeCourses l) async {
     await ref.read(dbServiceProvider).insertListe(l);

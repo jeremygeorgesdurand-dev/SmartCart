@@ -152,7 +152,8 @@ class _WidgetConfigScreenState extends ConsumerState<WidgetConfigScreen> {
           listesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Text(messageErreurLisible(e, 'Erreur')),
-            data: (listes) {
+            data: (toutes) {
+              final listes = toutes.where((l) => !l.archivee).toList();
               if (listes.isEmpty) {
                 return Text('Aucune liste disponible',
                     style: Theme.of(context)

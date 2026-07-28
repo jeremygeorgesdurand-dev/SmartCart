@@ -19,6 +19,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with WidgetsBindingObserver {
   int _currentIndex = 0;
+  final _pageController = PageController();
 
   @override
   void initState() {
@@ -39,6 +40,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -125,9 +127,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Scaffold(
       body: Stack(
         children: [
-          // Contenu principal (en dessous)
-          IndexedStack(
-            index: safeIndex,
+          // Contenu principal (en dessous) — PageView plutôt qu'IndexedStack
+          // pour permettre de changer d'onglet en glissant, en plus des
+          // boutons de la barre de navigation.
+          PageView(
+            controller: _pageController,
+            onPageChanged: (i) => setState(() => _currentIndex = i),
             children: screens,
           ),
           // Logo de fond — par dessus, non interactif
@@ -151,7 +156,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: safeIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        onDestinationSelected: (i) {
+          setState(() => _currentIndex = i);
+          _pageController.animateToPage(
+            i,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        },
         destinations: destinations,
       ),
     );
