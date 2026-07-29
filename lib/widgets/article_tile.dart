@@ -80,7 +80,7 @@ class ArticleTile extends ConsumerWidget {
                   .read(articlesNotifierProvider.notifier)
                   .ajouter(articleSupprime),
             ),
-            duration: const Duration(seconds: 4),
+            duration: const Duration(seconds: 3),
           ),
         );
       },

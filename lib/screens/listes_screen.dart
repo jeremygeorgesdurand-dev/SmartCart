@@ -790,7 +790,7 @@ class _ListeCard extends ConsumerWidget {
                             }
                           },
                         ),
-                        duration: const Duration(seconds: 4),
+                        duration: const Duration(seconds: 3),
                       ),
                     );
                   }
@@ -887,7 +887,7 @@ class _ListeCard extends ConsumerWidget {
                             }
                           },
                         ),
-                        duration: const Duration(seconds: 4),
+                        duration: const Duration(seconds: 3),
                       ),
                     );
                   }
@@ -1692,7 +1692,7 @@ class _ArticleListeTile extends ConsumerWidget {
                               .read(articlesListeProvider(listeId).notifier)
                               .ajouter(alSupprime),
                         ),
-                        duration: const Duration(seconds: 4),
+                        duration: const Duration(seconds: 3),
                       ),
                     );
                   },

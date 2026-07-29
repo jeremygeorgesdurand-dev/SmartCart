@@ -84,7 +84,7 @@ class CategoriesScreen extends ConsumerWidget {
                                       .read(categoriesNotifierProvider.notifier)
                                       .ajouter(catSupprimee),
                                 ),
-                                duration: const Duration(seconds: 4),
+                                duration: const Duration(seconds: 3),
                               ),
                             );
                           },

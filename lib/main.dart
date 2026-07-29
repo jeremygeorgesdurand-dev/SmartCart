@@ -245,9 +245,21 @@ class SmartCartApp extends ConsumerWidget {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
+      // Sans backgroundColor/contentTextStyle explicites, Material 3
+      // retombe sur colorScheme.inverseSurface — une surface INVERSÉE par
+      // rapport au thème courant (donc claire/blanche en thème sombre),
+      // qui tranche brutalement avec le reste de l'app et ressemble à un
+      // bloc générique non stylé plutôt qu'à un message de l'app.
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: colorScheme.surfaceContainerHigh,
+        contentTextStyle: TextStyle(
+          color: colorScheme.onSurface,
+          fontWeight: FontWeight.w500,
+        ),
+        actionTextColor: colorScheme.primary,
+        elevation: 3,
       ),
       dialogTheme: DialogThemeData(
         surfaceTintColor: Colors.transparent,

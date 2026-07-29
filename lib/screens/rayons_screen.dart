@@ -92,7 +92,7 @@ class RayonsScreen extends ConsumerWidget {
                                       .read(rayonsNotifierProvider.notifier)
                                       .ajouter(rayonSupprime),
                                 ),
-                                duration: const Duration(seconds: 4),
+                                duration: const Duration(seconds: 3),
                               ),
                             );
                           },
