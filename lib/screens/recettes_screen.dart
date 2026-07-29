@@ -5,6 +5,8 @@ import '../providers/providers.dart';
 import '../services/vocal_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
+import 'frigo_screen.dart';
+import 'recettes_en_ligne_screen.dart';
 
 // ================================================================
 // ÉCRAN RECETTES — liste, création, et génération de liste de courses
@@ -23,27 +25,16 @@ class RecettesScreen extends ConsumerWidget {
         error: (e, _) =>
             Center(child: Text(messageErreurLisible(e, 'Erreur'))),
         data: (recettes) {
-          if (recettes.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.menu_book_outlined,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)),
-                  const SizedBox(height: 16),
-                  const Text('Aucune recette'),
-                  const SizedBox(height: 8),
-                  const Text('Crée une recette pour générer sa liste de courses'),
-                ],
-              ),
-            );
-          }
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-            itemCount: recettes.length,
-            itemBuilder: (_, i) {
-              final r = recettes[i];
+            // +1 en tête : la zone "Explorer / Frigo", toujours présente
+            // même quand l'utilisateur n'a aucune recette perso enregistrée.
+            itemCount: recettes.length + 1,
+            itemBuilder: (_, index) {
+              if (index == 0) {
+                return _EnTeteDecouverte(aucuneRecettePerso: recettes.isEmpty);
+              }
+              final r = recettes[index - 1];
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
@@ -98,6 +89,114 @@ class RecettesScreen extends ConsumerWidget {
       // visible, avec l'air de ne plus exister.
       isScrollControlled: true,
       builder: (_) => _RecetteDetailSheet(recette: r),
+    );
+  }
+}
+
+// En-tête de l'écran Recettes : deux grandes portes d'entrée vers les
+// recettes en ligne (explorer par style/filtres) et le mode "frigo".
+class _EnTeteDecouverte extends StatelessWidget {
+  final bool aucuneRecettePerso;
+  const _EnTeteDecouverte({required this.aucuneRecettePerso});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _CarteDecouverte(
+                icone: Icons.explore_outlined,
+                titre: 'Explorer',
+                sousTitre: 'Des recettes par style',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const RecettesEnLigneScreen()),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _CarteDecouverte(
+                icone: Icons.kitchen_outlined,
+                titre: 'Mon frigo',
+                sousTitre: 'Que cuisiner avec…',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const FrigoScreen()),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Text('Mes recettes',
+            style: Theme.of(context).textTheme.titleMedium),
+        if (aucuneRecettePerso)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Aucune recette enregistrée. Crée-en une, ou enregistre-en '
+              'depuis l\'exploration ci-dessus.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.outline),
+            ),
+          ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+}
+
+class _CarteDecouverte extends StatelessWidget {
+  final IconData icone;
+  final String titre;
+  final String sousTitre;
+  final VoidCallback onTap;
+  const _CarteDecouverte({
+    required this.icone,
+    required this.titre,
+    required this.sousTitre,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icone,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer),
+              const SizedBox(height: 10),
+              Text(titre,
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color:
+                          Theme.of(context).colorScheme.onPrimaryContainer)),
+              const SizedBox(height: 2),
+              Text(sousTitre,
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onPrimaryContainer
+                          .withValues(alpha: 0.8))),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
