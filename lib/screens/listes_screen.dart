@@ -867,7 +867,15 @@ class _ListeCard extends ConsumerWidget {
                   final items = await ref
                       .read(dbServiceProvider)
                       .getArticlesListe(liste.id);
-                  ref.read(listesNotifierProvider.notifier).supprimer(liste.id);
+                  // Capturés ici : cette carte disparaît de "Mes listes" dès
+                  // que la liste est supprimée, donc son "ref" propre n'est
+                  // plus utilisable au moment où l'utilisateur appuie sur
+                  // "Annuler" quelques secondes plus tard.
+                  final listesNotifier =
+                      ref.read(listesNotifierProvider.notifier);
+                  final itemsNotifier =
+                      ref.read(articlesListeProvider(liste.id).notifier);
+                  listesNotifier.supprimer(liste.id);
                   if (context.mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -876,14 +884,9 @@ class _ListeCard extends ConsumerWidget {
                         action: SnackBarAction(
                           label: 'Annuler',
                           onPressed: () {
-                            ref
-                                .read(listesNotifierProvider.notifier)
-                                .ajouter(liste);
+                            listesNotifier.ajouter(liste);
                             for (final item in items) {
-                              ref
-                                  .read(
-                                      articlesListeProvider(liste.id).notifier)
-                                  .ajouter(item);
+                              itemsNotifier.ajouter(item);
                             }
                           },
                         ),
@@ -1679,18 +1682,21 @@ class _ArticleListeTile extends ConsumerWidget {
                       style: TextStyle(color: couleurDanger(ctx))),
                   onTap: () {
                     final alSupprime = alActuel;
-                    r
-                        .read(articlesListeProvider(listeId).notifier)
-                        .supprimer(alSupprime.id);
+                    // Capturé ici : la feuille se ferme et la tuile de cet
+                    // article disparaît juste après, donc ni "r" (le
+                    // Consumer de la feuille) ni "ref" (celui de la tuile)
+                    // ne sont plus utilisables au moment où l'utilisateur
+                    // appuie sur "Annuler" quelques secondes plus tard.
+                    final notifier =
+                        r.read(articlesListeProvider(listeId).notifier);
+                    notifier.supprimer(alSupprime.id);
                     Navigator.pop(sheetCtx);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('"${article.nom}" retiré de la liste'),
                         action: SnackBarAction(
                           label: 'Annuler',
-                          onPressed: () => ref
-                              .read(articlesListeProvider(listeId).notifier)
-                              .ajouter(alSupprime),
+                          onPressed: () => notifier.ajouter(alSupprime),
                         ),
                         duration: const Duration(seconds: 3),
                       ),

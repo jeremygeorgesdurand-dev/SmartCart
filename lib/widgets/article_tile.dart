@@ -68,17 +68,19 @@ class ArticleTile extends ConsumerWidget {
           false,
       onDismissed: () {
         final articleSupprime = article;
-        ref
-            .read(articlesNotifierProvider.notifier)
-            .supprimer(articleSupprime.id);
+        // Capturé une seule fois ici : cette tuile est retirée de la liste
+        // dès que l'article disparaît du catalogue, donc son "ref" propre
+        // n'est plus utilisable au moment où l'utilisateur appuie sur
+        // "Annuler" quelques secondes plus tard (le SnackBarAction se
+        // déclenchait alors silencieusement dans le vide).
+        final notifier = ref.read(articlesNotifierProvider.notifier);
+        notifier.supprimer(articleSupprime.id);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('"${articleSupprime.nom}" supprimé du catalogue'),
             action: SnackBarAction(
               label: 'Annuler',
-              onPressed: () => ref
-                  .read(articlesNotifierProvider.notifier)
-                  .ajouter(articleSupprime),
+              onPressed: () => notifier.ajouter(articleSupprime),
             ),
             duration: const Duration(seconds: 3),
           ),
