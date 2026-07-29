@@ -109,6 +109,7 @@ final realtimeSyncProvider = Provider<void>((ref) {
 final afficherStatsProvider = StateProvider<bool>((ref) => true);
 final afficherBudgetProvider = StateProvider<bool>((ref) => true);
 final afficherPrixProvider = StateProvider<bool>((ref) => true);
+final afficherRecettesProvider = StateProvider<bool>((ref) => true);
 final couleurThemeProvider = StateProvider<String>((ref) => 'vert');
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 final afficherOnboardingProvider = StateProvider<bool>((ref) => false);

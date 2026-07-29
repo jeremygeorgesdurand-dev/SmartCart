@@ -44,14 +44,70 @@ class IngredientEnLigne {
   const IngredientEnLigne(
       {required this.nom, required this.quantite, this.unite});
 
-  factory IngredientEnLigne.fromJson(Map<String, dynamic> j) =>
-      IngredientEnLigne(
-        nom: (j['nameClean'] as String?) ?? (j['name'] as String?) ?? '',
-        quantite: (j['amount'] as num?)?.toDouble() ?? 1,
-        unite: (j['unit'] as String?)?.trim().isEmpty ?? true
-            ? null
-            : (j['unit'] as String).trim(),
-      );
+  factory IngredientEnLigne.fromJson(Map<String, dynamic> j) {
+    // On privilégie les mesures MÉTRIQUES (g/ml…) plutôt que les mesures
+    // "US" par défaut (cups, ounces…) : bien plus lisibles pour un
+    // utilisateur français, et directement exploitables pour le prix.
+    final metric = j['measures']?['metric'] as Map<String, dynamic>?;
+    final nomBrut = (j['nameClean'] as String?)?.trim();
+    final nom = _nettoyerNom(
+        (nomBrut != null && nomBrut.isNotEmpty)
+            ? nomBrut
+            : (j['name'] as String? ?? ''));
+    final quantite = (metric?['amount'] as num?)?.toDouble() ??
+        (j['amount'] as num?)?.toDouble() ??
+        1;
+    final uniteBrute =
+        (metric?['unitShort'] as String?) ?? (j['unit'] as String?);
+    return IngredientEnLigne(
+        nom: nom, quantite: quantite, unite: _uniteFr(uniteBrute));
+  }
+}
+
+// Nettoie un nom d'ingrédient : supprime les entités HTML (&#10;, &amp;…),
+// normalise les espaces, retire la ponctuation de fin. Sans ça, des noms
+// comme "Écrasez les tomates…&#10;&#10;" apparaissaient tels quels.
+String _nettoyerNom(String s) {
+  var t = s
+      .replaceAll(RegExp(r'&#\d+;'), ' ')
+      .replaceAll(RegExp(r'&[a-zA-Z]+;'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  t = t.replaceAll(RegExp(r'[.;,]+$'), '').trim();
+  return t;
+}
+
+// Convertit une unité anglaise en français. Les unités de "taille" ou
+// "portion" (medium, serving…), qui ne sont pas de vraies unités de
+// mesure et polluaient l'affichage ("4 servings Bucatini"), sont retirées.
+String? _uniteFr(String? u) {
+  if (u == null) return null;
+  final k = u.trim().toLowerCase();
+  if (k.isEmpty) return null;
+  const aRetirer = {'serving', 'servings', 'medium', 'small', 'large', 'x'};
+  if (aRetirer.contains(k)) return null;
+  const map = {
+    'g': 'g', 'gram': 'g', 'grams': 'g',
+    'kg': 'kg', 'kilogram': 'kg',
+    'ml': 'ml', 'milliliter': 'ml', 'milliliters': 'ml',
+    'l': 'l', 'liter': 'l', 'liters': 'l',
+    'clove': 'gousse', 'cloves': 'gousses',
+    'cup': 'tasse', 'cups': 'tasses',
+    'tablespoon': 'c. à soupe', 'tablespoons': 'c. à soupe', 'tbsp': 'c. à soupe',
+    'teaspoon': 'c. à café', 'teaspoons': 'c. à café', 'tsp': 'c. à café',
+    'slice': 'tranche', 'slices': 'tranches',
+    'pinch': 'pincée', 'pinches': 'pincées',
+    'can': 'boîte', 'cans': 'boîtes',
+    'ounce': 'g', 'ounces': 'g', 'oz': 'g',
+    'pound': 'g', 'pounds': 'g', 'lb': 'g',
+    'package': 'paquet', 'packages': 'paquets', 'pkg': 'paquet',
+    'bunch': 'bouquet', 'bunches': 'bouquets',
+    'handful': 'poignée',
+    'stick': 'plaquette', 'sticks': 'plaquettes',
+    'sprig': 'brin', 'sprigs': 'brins',
+    'piece': 'morceau', 'pieces': 'morceaux',
+  };
+  return map[k] ?? u.trim();
 }
 
 // Détail complet d'une recette (étapes, ingrédients, nutrition).
@@ -158,7 +214,7 @@ class SpoonacularService {
     String? type,
     String? regime,
     bool proteine = false,
-    int nombre = 20,
+    int nombre = 40,
   }) async {
     final params = <String, String>{
       'number': '$nombre',
@@ -195,7 +251,7 @@ class SpoonacularService {
   // d'ingrédients manquants croissant (ranking=1).
   Future<List<RecetteEnLigneResume>> parIngredients(
       List<String> ingredients,
-      {int nombre = 20}) async {
+      {int nombre = 40}) async {
     final uri = Uri.https(_hote, '/recipes/findByIngredients', _params({
       'ingredients': ingredients.map((e) => e.trim()).join(','),
       'number': '$nombre',

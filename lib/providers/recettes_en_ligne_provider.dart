@@ -99,6 +99,11 @@ final detailRecetteProvider = FutureProvider.autoDispose
 // ── Frigo : ingrédients saisis → suggestions ────────────────────
 final frigoIngredientsProvider = StateProvider<List<String>>((_) => []);
 
+enum FrigoTri { moinsAAcheter, plusUtilises }
+
+// Tri appliqué côté client (pas de nouvel appel API) sur les suggestions.
+final frigoTriProvider = StateProvider<FrigoTri>((_) => FrigoTri.moinsAAcheter);
+
 final suggestionsFrigoProvider =
     FutureProvider.autoDispose<List<RecetteEnLigneResume>>((ref) async {
   final ingredients = ref.watch(frigoIngredientsProvider);

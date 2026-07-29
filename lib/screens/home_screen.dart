@@ -7,6 +7,7 @@ import 'budget_screen.dart';
 import 'catalogue_screen.dart';
 import 'listes_screen.dart';
 import 'parametres_screen.dart';
+import 'recettes_screen.dart';
 import 'stats_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -81,12 +82,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     final afficherStats = ref.watch(afficherStatsProvider);
     final afficherBudget = ref.watch(afficherBudgetProvider);
+    final afficherRecettes = ref.watch(afficherRecettesProvider);
     final fondActif = ref.watch(fondActiveProvider);
     final fondOpacite = ref.watch(fondOpaciteProvider);
 
     final screens = [
       const ListesScreen(),
       const CatalogueScreen(),
+      if (afficherRecettes) const RecettesScreen(),
       if (afficherBudget) const BudgetScreen(),
       if (afficherStats) const StatsScreen(),
       const ParametresScreen(),
@@ -103,6 +106,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         selectedIcon: Icon(Icons.inventory_2),
         label: 'Catalogue',
       ),
+      if (afficherRecettes)
+        const NavigationDestination(
+          icon: Icon(Icons.menu_book_outlined),
+          selectedIcon: Icon(Icons.menu_book),
+          label: 'Recettes',
+        ),
       if (afficherBudget)
         const NavigationDestination(
           icon: Icon(Icons.euro_outlined),
@@ -123,6 +132,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ];
 
     final safeIndex = _currentIndex.clamp(0, screens.length - 1);
+    // L'onglet Recettes (quand affiché) est à l'index 2 et possède son
+    // propre TabBar horizontal : on désactive le glissement inter-onglets
+    // principal quand on est dessus, sinon les deux gestes horizontaux
+    // s'annulent.
+    final indexRecettes = afficherRecettes ? 2 : -1;
 
     void changerDePage(int index) {
       final cible = index.clamp(0, screens.length - 1);
@@ -146,6 +160,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           // pas ici.
           PageView(
             controller: _pageController,
+            physics: safeIndex == indexRecettes
+                ? const NeverScrollableScrollPhysics()
+                : null,
             onPageChanged: (i) => setState(() => _currentIndex = i),
             children: screens,
           ),

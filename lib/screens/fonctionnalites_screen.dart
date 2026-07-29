@@ -14,6 +14,7 @@ class FonctionnalitesScreen extends ConsumerWidget {
     final afficherStats = ref.watch(afficherStatsProvider);
     final afficherBudget = ref.watch(afficherBudgetProvider);
     final afficherPrix = ref.watch(afficherPrixProvider);
+    final afficherRecettes = ref.watch(afficherRecettesProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Fonctionnalités')),
@@ -38,6 +39,17 @@ class FonctionnalitesScreen extends ConsumerWidget {
               ref.read(afficherBudgetProvider.notifier).state = v;
               final prefs = await SharedPreferences.getInstance();
               await prefs.setBool('afficher_budget', v);
+            },
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            title: const Text('Afficher les recettes'),
+            subtitle: const Text('Onglet Recettes dans la navigation'),
+            value: afficherRecettes,
+            onChanged: (v) async {
+              ref.read(afficherRecettesProvider.notifier).state = v;
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('afficher_recettes', v);
             },
           ),
           const Divider(height: 1),

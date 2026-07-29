@@ -290,7 +290,13 @@ class _BoutonCreerListeState extends ConsumerState<_BoutonCreerListe> {
         backgroundColor:
             incomplet ? couleurAvertissement(context) : couleurSucces(context),
       ));
-      Navigator.push(
+      // pushReplacement (pas push) : on remplace la fiche recette par la
+      // liste dans la pile de navigation. Deux bénéfices demandés :
+      //  - "Retour" depuis la liste ramène à l'écran Recettes, pas à la
+      //    recette qu'on vient de quitter ;
+      //  - la fiche recette n'est plus accessible, donc impossible de
+      //    recréer plusieurs fois la même liste en rappuyant sur le bouton.
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => DetailListeScreen(liste: liste)),
       );

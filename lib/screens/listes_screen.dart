@@ -15,7 +15,6 @@ import '../widgets/vocal_button.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 import 'recherche_globale_screen.dart';
-import 'recettes_screen.dart';
 
 // Provider local pour le tri des listes
 final _listeSortProvider = StateProvider<String>((_) => 'date');
@@ -64,15 +63,6 @@ class ListesScreen extends ConsumerWidget {
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const RechercheGlobaleScreen()),
-            ),
-          ),
-          // Recettes → génération de liste de courses
-          IconButton(
-            icon: const Icon(Icons.menu_book_outlined),
-            tooltip: 'Recettes',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const RecettesScreen()),
             ),
           ),
           PopupMenuButton<String>(

@@ -150,8 +150,8 @@ class _FrigoTabState extends ConsumerState<FrigoTab> {
                             textAlign: TextAlign.center),
                       ),
                     ),
-                    data: (recettes) {
-                      if (recettes.isEmpty) {
+                    data: (brut) {
+                      if (brut.isEmpty) {
                         return const Center(
                           child: Padding(
                             padding: EdgeInsets.all(32),
@@ -161,16 +161,78 @@ class _FrigoTabState extends ConsumerState<FrigoTab> {
                           ),
                         );
                       }
-                      return ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: recettes.length,
-                        itemBuilder: (_, i) =>
-                            _LigneSuggestion(recette: recettes[i]),
+                      final tri = ref.watch(frigoTriProvider);
+                      final recettes = [...brut];
+                      recettes.sort((a, b) {
+                        if (tri == FrigoTri.moinsAAcheter) {
+                          return (a.ingredientsManquants ?? 99)
+                              .compareTo(b.ingredientsManquants ?? 99);
+                        }
+                        return (b.ingredientsUtilises ?? 0)
+                            .compareTo(a.ingredientsUtilises ?? 0);
+                      });
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding:
+                                const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                            child: Row(
+                              children: [
+                                Text('Trier :',
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall),
+                                const SizedBox(width: 8),
+                                _BoutonTri(
+                                  label: 'Moins à acheter',
+                                  actif: tri == FrigoTri.moinsAAcheter,
+                                  onTap: () => ref
+                                      .read(frigoTriProvider.notifier)
+                                      .state = FrigoTri.moinsAAcheter,
+                                ),
+                                const SizedBox(width: 6),
+                                _BoutonTri(
+                                  label: 'Plus d\'ingrédients',
+                                  actif: tri == FrigoTri.plusUtilises,
+                                  onTap: () => ref
+                                      .read(frigoTriProvider.notifier)
+                                      .state = FrigoTri.plusUtilises,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(12),
+                              itemCount: recettes.length,
+                              itemBuilder: (_, i) =>
+                                  _LigneSuggestion(recette: recettes[i]),
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),
           ),
         ],
+    );
+  }
+}
+
+class _BoutonTri extends StatelessWidget {
+  final String label;
+  final bool actif;
+  final VoidCallback onTap;
+  const _BoutonTri(
+      {required this.label, required this.actif, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      selected: actif,
+      onSelected: (_) => onTap(),
+      visualDensity: VisualDensity.compact,
     );
   }
 }

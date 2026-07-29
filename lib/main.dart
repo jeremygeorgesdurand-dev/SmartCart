@@ -51,6 +51,7 @@ void main() async {
   final afficherStats = prefs.getBool('afficher_stats') ?? true;
   final afficherBudget = prefs.getBool('afficher_budget') ?? true;
   final afficherPrix = prefs.getBool('afficher_prix') ?? true;
+  final afficherRecettes = prefs.getBool('afficher_recettes') ?? true;
   final couleurTheme = prefs.getString('couleur_theme') ?? 'vert';
   final fondActif = prefs.getBool('fond_actif') ?? true;
   final fondOpacite = prefs.getDouble('fond_opacite') ?? 0.06;
@@ -70,6 +71,7 @@ void main() async {
       afficherStatsProvider.overrideWith((ref) => afficherStats),
       afficherBudgetProvider.overrideWith((ref) => afficherBudget),
       afficherPrixProvider.overrideWith((ref) => afficherPrix),
+      afficherRecettesProvider.overrideWith((ref) => afficherRecettes),
       couleurThemeProvider.overrideWith((ref) => couleurTheme),
       fondActiveProvider.overrideWith((ref) => fondActif),
       fondOpaciteProvider.overrideWith((ref) => fondOpacite),

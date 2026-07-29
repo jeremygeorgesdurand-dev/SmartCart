@@ -79,6 +79,26 @@ class TraductionService {
     return resultats;
   }
 
+  // Décode les entités HTML que MyMemory (et les données Spoonacular)
+  // laissent parfois passer : apostrophes, guillemets, sauts de ligne
+  // (&#10;), etc.
+  static String _decoderEntites(String s) {
+    return s
+        .replaceAll('&#39;', "'")
+        .replaceAll('&#34;', '"')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&amp;', '&')
+        .replaceAllMapped(
+            RegExp(r'&#(\d+);'), (m) {
+          final code = int.tryParse(m.group(1)!);
+          // 10/13 = sauts de ligne → espace ; sinon on tente le caractère.
+          if (code == 10 || code == 13) return ' ';
+          return code != null ? String.fromCharCode(code) : m.group(0)!;
+        })
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
   Future<String?> _appeler(String texte, String de, String vers) async {
     try {
       final uri = Uri.https('api.mymemory.translated.net', '/get', {
@@ -91,11 +111,7 @@ class TraductionService {
       final data = jsonDecode(reponse.body);
       final trad = data['responseData']?['translatedText'];
       if (trad is String && trad.trim().isNotEmpty) {
-        // MyMemory encode parfois les entités HTML (&#39; etc.).
-        return trad
-            .replaceAll('&#39;', "'")
-            .replaceAll('&quot;', '"')
-            .replaceAll('&amp;', '&');
+        return _decoderEntites(trad);
       }
       return null;
     } catch (_) {
