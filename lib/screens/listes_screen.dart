@@ -878,21 +878,23 @@ class _ListeCard extends ConsumerWidget {
                   listesNotifier.supprimer(liste.id);
                   if (context.mounted) {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Liste "${liste.nom}" supprimée'),
-                        action: SnackBarAction(
-                          label: 'Annuler',
-                          onPressed: () {
-                            listesNotifier.ajouter(liste);
-                            for (final item in items) {
-                              itemsNotifier.ajouter(item);
-                            }
-                          },
+                    ScaffoldMessenger.of(context)
+                      ..clearSnackBars()
+                      ..showSnackBar(
+                        SnackBar(
+                          content: Text('Liste "${liste.nom}" supprimée'),
+                          action: SnackBarAction(
+                            label: 'Annuler',
+                            onPressed: () {
+                              listesNotifier.ajouter(liste);
+                              for (final item in items) {
+                                itemsNotifier.ajouter(item);
+                              }
+                            },
+                          ),
+                          duration: const Duration(seconds: 3),
                         ),
-                        duration: const Duration(seconds: 3),
-                      ),
-                    );
+                      );
                   }
                 },
                 child: const Text('Supprimer'),
@@ -1691,16 +1693,18 @@ class _ArticleListeTile extends ConsumerWidget {
                         r.read(articlesListeProvider(listeId).notifier);
                     notifier.supprimer(alSupprime.id);
                     Navigator.pop(sheetCtx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('"${article.nom}" retiré de la liste'),
-                        action: SnackBarAction(
-                          label: 'Annuler',
-                          onPressed: () => notifier.ajouter(alSupprime),
+                    ScaffoldMessenger.of(context)
+                      ..clearSnackBars()
+                      ..showSnackBar(
+                        SnackBar(
+                          content: Text('"${article.nom}" retiré de la liste'),
+                          action: SnackBarAction(
+                            label: 'Annuler',
+                            onPressed: () => notifier.ajouter(alSupprime),
+                          ),
+                          duration: const Duration(seconds: 3),
                         ),
-                        duration: const Duration(seconds: 3),
-                      ),
-                    );
+                      );
                   },
                 ),
               ],

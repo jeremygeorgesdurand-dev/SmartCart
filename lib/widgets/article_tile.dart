@@ -75,16 +75,25 @@ class ArticleTile extends ConsumerWidget {
         // déclenchait alors silencieusement dans le vide).
         final notifier = ref.read(articlesNotifierProvider.notifier);
         notifier.supprimer(articleSupprime.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('"${articleSupprime.nom}" supprimé du catalogue'),
-            action: SnackBarAction(
-              label: 'Annuler',
-              onPressed: () => notifier.ajouter(articleSupprime),
+        // clearSnackBars() : en cas de suppressions rapprochées, la file
+        // d'attente par défaut de ScaffoldMessenger empilait les messages
+        // les uns après les autres — celui affiché à l'écran n'était alors
+        // pas forcément le dernier déclenché. Un margin explicite écarte
+        // aussi le message des boutons flottants "Ajout rapide"/"Ajout avec
+        // options" du Catalogue, avec lesquels il se superposait sinon.
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(
+              content: Text('"${articleSupprime.nom}" supprimé du catalogue'),
+              action: SnackBarAction(
+                label: 'Annuler',
+                onPressed: () => notifier.ajouter(articleSupprime),
+              ),
+              duration: const Duration(seconds: 3),
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 90),
             ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+          );
       },
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
