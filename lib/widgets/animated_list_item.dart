@@ -259,7 +259,24 @@ class _SwipeZoneDismissibleState extends State<SwipeZoneDismissible>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Positioned.fill(child: widget.background),
+        // Largeur exactement égale à la distance glissée (0 au repos) :
+        // un Positioned.fill classique laissait dépasser un fin liseré du
+        // fond rouge derrière la carte au repos, les deux n'ayant pas
+        // exactement le même arrondi/marge.
+        Positioned(
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: -_dx,
+          child: ClipRect(
+            child: OverflowBox(
+              minWidth: 0,
+              maxWidth: 320,
+              alignment: Alignment.centerRight,
+              child: widget.background,
+            ),
+          ),
+        ),
         Transform.translate(offset: Offset(_dx, 0), child: widget.child),
         Positioned(
           right: 0,
