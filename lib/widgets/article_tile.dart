@@ -5,6 +5,7 @@ import '../providers/providers.dart';
 import '../providers/off_details_provider.dart';
 import '../utils/theme_utils.dart';
 import 'ajouter_article_dialog.dart';
+import 'animated_list_item.dart';
 import 'prix_article_badge.dart';
 
 class ArticleTile extends ConsumerWidget {
@@ -18,9 +19,8 @@ class ArticleTile extends ConsumerWidget {
     final rayon = ref.watch(rayonsNotifierProvider).valueOrNull
         ?.where((r) => r.id == article.rayonId).firstOrNull;
 
-    return Dismissible(
+    return SwipeZoneDismissible(
       key: Key('article_${article.id}'),
-      direction: DismissDirection.endToStart,
       background: Builder(builder: (context) {
         final danger = couleurDanger(context);
         return Container(
@@ -45,7 +45,7 @@ class ArticleTile extends ConsumerWidget {
           ),
         );
       }),
-      confirmDismiss: (_) async => await showDialog<bool>(
+      confirmDismiss: () async => await showDialog<bool>(
             context: context,
             builder: (dialogCtx) => AlertDialog(
               title: const Text('Supprimer ?'),
@@ -66,7 +66,7 @@ class ArticleTile extends ConsumerWidget {
             ),
           ) ??
           false,
-      onDismissed: (_) {
+      onDismissed: () {
         final articleSupprime = article;
         ref
             .read(articlesNotifierProvider.notifier)

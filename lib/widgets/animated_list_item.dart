@@ -173,6 +173,110 @@ class _AnimatedCheckIconState extends State<AnimatedCheckIcon>
   }
 }
 
+/// Comme [Dismissible], mais le glissement ne se déclenche que si le doigt
+/// se pose dans une zone étroite à droite (par défaut là où se trouve une
+/// icône/flèche de fin de ligne) : glisser au milieu de la ligne ne fait
+/// rien, ce qui permet de superposer un geste de glissement plein écran
+/// ailleurs (ex: changer d'onglet) sans que les deux gestes se disputent
+/// la ligne entière comme le ferait un Dismissible classique.
+class SwipeZoneDismissible extends StatefulWidget {
+  final Widget child;
+  final Widget background;
+  final Future<bool> Function() confirmDismiss;
+  final VoidCallback onDismissed;
+  final double zoneDeclenchement;
+
+  const SwipeZoneDismissible({
+    super.key,
+    required this.child,
+    required this.background,
+    required this.confirmDismiss,
+    required this.onDismissed,
+    this.zoneDeclenchement = 64,
+  });
+
+  @override
+  State<SwipeZoneDismissible> createState() => _SwipeZoneDismissibleState();
+}
+
+class _SwipeZoneDismissibleState extends State<SwipeZoneDismissible>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  double _dx = 0;
+
+  static const _seuil = 90.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _animerVers(double cible, {Duration? duree}) async {
+    final depart = _dx;
+    _ctrl.duration = duree ?? const Duration(milliseconds: 200);
+    _ctrl.reset();
+    final anim = Tween<double>(begin: depart, end: cible)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    void listener() => setState(() => _dx = anim.value);
+    anim.addListener(listener);
+    await _ctrl.forward();
+    anim.removeListener(listener);
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    setState(() => _dx = (_dx + details.delta.dx).clamp(-320.0, 0.0));
+  }
+
+  Future<void> _onDragEnd(DragEndDetails details) async {
+    if (_dx.abs() < _seuil) {
+      await _animerVers(0);
+      return;
+    }
+    // Reste dans une position "révélée" pendant la confirmation, plutôt
+    // que de continuer jusqu'au bout avant même de savoir si l'utilisateur
+    // confirme.
+    await _animerVers(-widget.zoneDeclenchement * 1.4);
+    if (!mounted) return;
+    final confirme = await widget.confirmDismiss();
+    if (!mounted) return;
+    if (!confirme) {
+      await _animerVers(0);
+      return;
+    }
+    final largeur = context.size?.width ?? 400;
+    await _animerVers(-largeur, duree: const Duration(milliseconds: 250));
+    widget.onDismissed();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(child: widget.background),
+        Transform.translate(offset: Offset(_dx, 0), child: widget.child),
+        Positioned(
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: widget.zoneDeclenchement,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragUpdate: _onDragUpdate,
+            onHorizontalDragEnd: _onDragEnd,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Card avec animation de suppression (slide + fade)
 class DismissibleCard extends StatelessWidget {
   final String id;
