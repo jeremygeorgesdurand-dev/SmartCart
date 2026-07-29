@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Clés API locales (contient la clé Spoonacular en clair — jamais sur GitHub)
+lib/config/api_config.dart

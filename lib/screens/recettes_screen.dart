@@ -9,194 +9,151 @@ import 'frigo_screen.dart';
 import 'recettes_en_ligne_screen.dart';
 
 // ================================================================
-// ÉCRAN RECETTES — liste, création, et génération de liste de courses
+// ÉCRAN RECETTES — une seule page à onglets : Explorer (recettes en
+// ligne), Mon frigo (suggestions par ingrédients), Mes recettes
+// (recettes perso enregistrées + création).
 // ================================================================
-class RecettesScreen extends ConsumerWidget {
+class RecettesScreen extends StatefulWidget {
   const RecettesScreen({super.key});
+
+  @override
+  State<RecettesScreen> createState() => _RecettesScreenState();
+}
+
+class _RecettesScreenState extends State<RecettesScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tab = TabController(length: 3, vsync: this)
+    ..addListener(() => setState(() {}));
+
+  @override
+  void dispose() {
+    _tab.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Recettes'),
+        bottom: TabBar(
+          controller: _tab,
+          tabs: const [
+            Tab(text: 'Explorer'),
+            Tab(text: 'Mon frigo'),
+            Tab(text: 'Mes recettes'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tab,
+        children: const [
+          ExplorerRecettesTab(),
+          FrigoTab(),
+          _MesRecettesTab(),
+        ],
+      ),
+      // Le bouton "Nouvelle recette" n'a de sens que sur l'onglet perso.
+      floatingActionButton: _tab.index == 2
+          ? FloatingActionButton.extended(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RecetteFormScreen()),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('Nouvelle recette'),
+            )
+          : null,
+    );
+  }
+}
+
+// Onglet "Mes recettes" : les recettes perso enregistrées localement.
+class _MesRecettesTab extends ConsumerWidget {
+  const _MesRecettesTab();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recettesAsync = ref.watch(recettesNotifierProvider);
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Recettes')),
-      body: recettesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) =>
-            Center(child: Text(messageErreurLisible(e, 'Erreur'))),
-        data: (recettes) {
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-            // +1 en tête : la zone "Explorer / Frigo", toujours présente
-            // même quand l'utilisateur n'a aucune recette perso enregistrée.
-            itemCount: recettes.length + 1,
-            itemBuilder: (_, index) {
-              if (index == 0) {
-                return _EnTeteDecouverte(aucuneRecettePerso: recettes.isEmpty);
-              }
-              final r = recettes[index - 1];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: const Icon(Icons.menu_book_outlined),
-                  title: Text(r.nom),
-                  subtitle: Text(
-                      '${r.ingredients.length} ingrédient(s) · ${r.portions} portions'),
-                  onTap: () => _ouvrirDetail(context, ref, r),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (action) {
-                      switch (action) {
-                        case 'modifier':
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => RecetteFormScreen(recette: r)),
-                          );
-                        case 'supprimer':
-                          ref.read(recettesNotifierProvider.notifier).supprimer(r.id);
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'modifier', child: Text('Modifier')),
-                      PopupMenuItem(value: 'supprimer', child: Text('Supprimer')),
-                    ],
+    return recettesAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
+      data: (recettes) {
+        if (recettes.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.menu_book_outlined,
+                      size: 64,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outline
+                          .withValues(alpha: 0.5)),
+                  const SizedBox(height: 16),
+                  const Text('Aucune recette enregistrée'),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Crée-en une avec le bouton « Nouvelle recette », ou '
+                    'depuis l\'onglet Explorer.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline),
                   ),
-                ),
-              );
-            },
+                ],
+              ),
+            ),
           );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const RecetteFormScreen()),
-        ),
-        icon: const Icon(Icons.add),
-        label: const Text('Nouvelle recette'),
-      ),
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+          itemCount: recettes.length,
+          itemBuilder: (_, i) {
+            final r = recettes[i];
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                leading: const Icon(Icons.menu_book_outlined),
+                title: Text(r.nom),
+                subtitle: Text(
+                    '${r.ingredients.length} ingrédient(s) · ${r.portions} portions'),
+                onTap: () => _ouvrirDetail(context, r),
+                trailing: PopupMenuButton<String>(
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'modifier':
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => RecetteFormScreen(recette: r)),
+                        );
+                      case 'supprimer':
+                        ref
+                            .read(recettesNotifierProvider.notifier)
+                            .supprimer(r.id);
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'modifier', child: Text('Modifier')),
+                    PopupMenuItem(value: 'supprimer', child: Text('Supprimer')),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
-  void _ouvrirDetail(BuildContext context, WidgetRef ref, Recette r) {
+  void _ouvrirDetail(BuildContext context, Recette r) {
     showModalBottomSheet(
       context: context,
       useSafeArea: true,
-      // Sans ça, le contenu (nom + portions + ingrédients + bouton) est
-      // limité à une hauteur fixe et non scrollable : pour une recette
-      // avec beaucoup d'ingrédients (import depuis une URL), le bouton
-      // "Générer une liste de courses" finissait poussé hors de l'écran
-      // visible, avec l'air de ne plus exister.
       isScrollControlled: true,
       builder: (_) => _RecetteDetailSheet(recette: r),
-    );
-  }
-}
-
-// En-tête de l'écran Recettes : deux grandes portes d'entrée vers les
-// recettes en ligne (explorer par style/filtres) et le mode "frigo".
-class _EnTeteDecouverte extends StatelessWidget {
-  final bool aucuneRecettePerso;
-  const _EnTeteDecouverte({required this.aucuneRecettePerso});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _CarteDecouverte(
-                icone: Icons.explore_outlined,
-                titre: 'Explorer',
-                sousTitre: 'Des recettes par style',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const RecettesEnLigneScreen()),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _CarteDecouverte(
-                icone: Icons.kitchen_outlined,
-                titre: 'Mon frigo',
-                sousTitre: 'Que cuisiner avec…',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const FrigoScreen()),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        Text('Mes recettes',
-            style: Theme.of(context).textTheme.titleMedium),
-        if (aucuneRecettePerso)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              'Aucune recette enregistrée. Crée-en une, ou enregistre-en '
-              'depuis l\'exploration ci-dessus.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.outline),
-            ),
-          ),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-}
-
-class _CarteDecouverte extends StatelessWidget {
-  final IconData icone;
-  final String titre;
-  final String sousTitre;
-  final VoidCallback onTap;
-  const _CarteDecouverte({
-    required this.icone,
-    required this.titre,
-    required this.sousTitre,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: Theme.of(context).colorScheme.primaryContainer,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icone,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer),
-              const SizedBox(height: 10),
-              Text(titre,
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color:
-                          Theme.of(context).colorScheme.onPrimaryContainer)),
-              const SizedBox(height: 2),
-              Text(sousTitre,
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onPrimaryContainer
-                          .withValues(alpha: 0.8))),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

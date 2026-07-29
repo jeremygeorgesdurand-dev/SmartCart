@@ -9,15 +9,16 @@ import 'recette_en_ligne_detail_screen.dart';
 // ================================================================
 // FRIGO — l'utilisateur saisit ce qu'il a, l'app propose des recettes
 // qui utilisent au mieux ces ingrédients (Spoonacular findByIngredients).
+// Contenu intégrable comme onglet (pas de Scaffold propre).
 // ================================================================
-class FrigoScreen extends ConsumerStatefulWidget {
-  const FrigoScreen({super.key});
+class FrigoTab extends ConsumerStatefulWidget {
+  const FrigoTab({super.key});
 
   @override
-  ConsumerState<FrigoScreen> createState() => _FrigoScreenState();
+  ConsumerState<FrigoTab> createState() => _FrigoTabState();
 }
 
-class _FrigoScreenState extends ConsumerState<FrigoScreen> {
+class _FrigoTabState extends ConsumerState<FrigoTab> {
   final _ctrl = TextEditingController();
 
   @override
@@ -54,21 +55,18 @@ class _FrigoScreenState extends ConsumerState<FrigoScreen> {
   @override
   Widget build(BuildContext context) {
     if (!ApiConfig.spoonacularConfigure) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Dans mon frigo')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Text(
-              'Ajoute une clé Spoonacular gratuite dans '
-              'lib/config/api_config.dart pour activer les suggestions de '
-              'recettes à partir de ton frigo.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: Theme.of(context).colorScheme.outline),
-            ),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'Ajoute une clé Spoonacular gratuite dans '
+            'lib/config/api_config.dart pour activer les suggestions de '
+            'recettes à partir de ton frigo.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: Theme.of(context).colorScheme.outline),
           ),
         ),
       );
@@ -77,9 +75,7 @@ class _FrigoScreenState extends ConsumerState<FrigoScreen> {
     final ingredients = ref.watch(frigoIngredientsProvider);
     final suggestions = ref.watch(suggestionsFrigoProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Dans mon frigo')),
-      body: Column(
+    return Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -175,7 +171,6 @@ class _FrigoScreenState extends ConsumerState<FrigoScreen> {
                   ),
           ),
         ],
-      ),
     );
   }
 }

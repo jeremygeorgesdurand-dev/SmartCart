@@ -7,18 +7,20 @@ import '../utils/erreur_utils.dart';
 import 'recette_en_ligne_detail_screen.dart';
 
 // ================================================================
-// EXPLORER DES RECETTES EN LIGNE (Spoonacular) — recherche + filtres
+// EXPLORER DES RECETTES EN LIGNE (Spoonacular) — recherche + filtres.
+// Contenu conçu pour être intégré comme onglet dans l'écran Recettes
+// (pas de Scaffold ni d'AppBar propre : la page hôte les fournit).
 // ================================================================
-class RecettesEnLigneScreen extends ConsumerStatefulWidget {
-  const RecettesEnLigneScreen({super.key});
+class ExplorerRecettesTab extends ConsumerStatefulWidget {
+  const ExplorerRecettesTab({super.key});
 
   @override
-  ConsumerState<RecettesEnLigneScreen> createState() =>
-      _RecettesEnLigneScreenState();
+  ConsumerState<ExplorerRecettesTab> createState() =>
+      _ExplorerRecettesTabState();
 }
 
-class _RecettesEnLigneScreenState
-    extends ConsumerState<RecettesEnLigneScreen> {
+class _ExplorerRecettesTabState
+    extends ConsumerState<ExplorerRecettesTab> {
   final _rechercheCtrl = TextEditingController();
 
   static const _types = [
@@ -44,19 +46,14 @@ class _RecettesEnLigneScreenState
   @override
   Widget build(BuildContext context) {
     if (!ApiConfig.spoonacularConfigure) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Recettes en ligne')),
-        body: const _MessageConfiguration(),
-      );
+      return const _MessageConfiguration();
     }
 
     final filtres = ref.watch(filtresRecettesProvider);
     final resultats = ref.watch(rechercheRecettesProvider);
     final notifier = ref.read(filtresRecettesProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Recettes en ligne')),
-      body: Column(
+    return Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -146,7 +143,6 @@ class _RecettesEnLigneScreenState
             ),
           ),
         ],
-      ),
     );
   }
 }
