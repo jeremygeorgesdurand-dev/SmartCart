@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../providers/recettes_en_ligne_provider.dart';
-import '../services/spoonacular_service.dart';
+import '../services/recettes_dataset_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 import 'listes_screen.dart';
 
 // ================================================================
-// DÉTAIL D'UNE RECETTE EN LIGNE — étapes, ingrédients, nutrition,
+// DÉTAIL D'UNE RECETTE (dataset local) — image, ingrédients, étapes,
 // et génération d'une liste de courses avec prix estimé.
 // ================================================================
 class RecetteEnLigneDetailScreen extends ConsumerWidget {
-  final int id;
+  final String id;
   const RecetteEnLigneDetailScreen({super.key, required this.id});
 
   @override
@@ -22,7 +23,10 @@ class RecetteEnLigneDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       body: detail.when(
-        loading: () => const _CharementDetail(),
+        loading: () => Scaffold(
+          appBar: AppBar(),
+          body: const Center(child: CircularProgressIndicator()),
+        ),
         error: (e, _) => Scaffold(
           appBar: AppBar(),
           body: Center(
@@ -33,27 +37,25 @@ class RecetteEnLigneDetailScreen extends ConsumerWidget {
             ),
           ),
         ),
-        data: (recette) => _Contenu(recette: recette),
+        data: (recette) => recette == null
+            ? Scaffold(
+                appBar: AppBar(),
+                body: const Center(child: Text('Recette introuvable')),
+              )
+            : _Contenu(recette: recette),
       ),
     );
   }
 }
 
-class _CharementDetail extends StatelessWidget {
-  const _CharementDetail();
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-}
-
 class _Contenu extends ConsumerWidget {
-  final RecetteEnLigne recette;
+  final RecetteDataset recette;
   const _Contenu({required this.recette});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final attribution =
+        ref.read(recettesDatasetServiceProvider).attribution;
     return CustomScrollView(
       slivers: [
         SliverAppBar(
@@ -66,8 +68,9 @@ class _Contenu extends ConsumerWidget {
                     recette.image!,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
-                        color:
-                            Theme.of(context).colorScheme.surfaceContainerHighest),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest),
                   ),
                 ),
         ),
@@ -79,18 +82,19 @@ class _Contenu extends ConsumerWidget {
               children: [
                 Text(recette.titre,
                     style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 12),
-                _Infos(recette: recette),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  _Puce(icone: Icons.category_outlined, texte: recette.categorie),
+                  _Puce(
+                      icone: Icons.people_outline,
+                      texte: '${recette.portions} portions'),
+                ]),
                 const SizedBox(height: 20),
-
                 _BoutonCreerListe(recette: recette),
                 const SizedBox(height: 24),
 
                 Text('Ingrédients',
                     style: Theme.of(context).textTheme.titleMedium),
-                Text('${recette.portions} portions',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.outline)),
                 const SizedBox(height: 8),
                 for (final ing in recette.ingredients)
                   Padding(
@@ -104,7 +108,7 @@ class _Contenu extends ConsumerWidget {
                               size: 7,
                               color: Theme.of(context).colorScheme.primary),
                         ),
-                        Expanded(child: Text(_libelleIngredient(ing))),
+                        Expanded(child: Text(ing.texte)),
                       ],
                     ),
                   ),
@@ -119,12 +123,17 @@ class _Contenu extends ConsumerWidget {
                 ],
 
                 const SizedBox(height: 24),
-                Text(
-                  'Recette fournie par Spoonacular, traduite automatiquement. '
-                  'La traduction et les quantités peuvent comporter des '
-                  'approximations.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline),
+                InkWell(
+                  onLongPress: () {
+                    Clipboard.setData(ClipboardData(text: recette.url));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Lien de la source copié')));
+                  },
+                  child: Text(
+                    'Recette : $attribution.\n${recette.url}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline),
+                  ),
                 ),
               ],
             ),
@@ -132,41 +141,6 @@ class _Contenu extends ConsumerWidget {
         ),
       ],
     );
-  }
-
-  String _libelleIngredient(IngredientEnLigne ing) {
-    final q = ing.quantite;
-    final qTexte = q == q.roundToDouble()
-        ? q.round().toString()
-        : q.toStringAsFixed(1);
-    final unite = ing.unite != null ? ' ${ing.unite}' : '';
-    return '$qTexte$unite ${ing.nom}'.trim();
-  }
-}
-
-class _Infos extends StatelessWidget {
-  final RecetteEnLigne recette;
-  const _Infos({required this.recette});
-
-  @override
-  Widget build(BuildContext context) {
-    final puces = <Widget>[
-      if (recette.tempsMinutes != null)
-        _Puce(icone: Icons.schedule, texte: '${recette.tempsMinutes} min'),
-      if (recette.calories != null)
-        _Puce(
-            icone: Icons.local_fire_department,
-            texte: '${recette.calories} kcal/pers.'),
-      if (recette.proteines != null)
-        _Puce(
-            icone: Icons.fitness_center,
-            texte: '${recette.proteines} g protéines'),
-      if (recette.vegetarien == true)
-        const _Puce(icone: Icons.eco, texte: 'Végétarien'),
-      if (recette.sansGluten == true)
-        const _Puce(icone: Icons.spa, texte: 'Sans gluten'),
-    ];
-    return Wrap(spacing: 8, runSpacing: 8, children: puces);
   }
 }
 
@@ -241,7 +215,7 @@ class _Etape extends StatelessWidget {
 }
 
 class _BoutonCreerListe extends ConsumerStatefulWidget {
-  final RecetteEnLigne recette;
+  final RecetteDataset recette;
   const _BoutonCreerListe({required this.recette});
 
   @override
@@ -253,25 +227,21 @@ class _BoutonCreerListeState extends ConsumerState<_BoutonCreerListe> {
 
   Future<void> _creer() async {
     setState(() => _generation = true);
-    final recetteEnLigne = widget.recette;
+    final r = widget.recette;
 
-    // Convertit la recette en ligne en Recette locale pour réutiliser la
-    // génération de liste existante (matching catalogue + prix estimés).
+    // Convertit en Recette locale pour réutiliser la génération de liste
+    // existante (matching catalogue + prix estimés). On prend le "nom"
+    // court de chaque ingrédient comme article.
     final recetteLocale = Recette(
-      id: 'recette_en_ligne_${recetteEnLigne.id}',
-      nom: recetteEnLigne.titre,
-      portions: recetteEnLigne.portions,
-      ingredients: recetteEnLigne.ingredients
-          .map((i) => IngredientRecette(
-                nom: i.nom,
-                quantite: i.quantite < 1 ? 1 : i.quantite.round(),
-                unite: i.unite,
-              ))
+      id: 'recette_dataset_${r.id}',
+      nom: r.titre,
+      portions: r.portions,
+      ingredients: r.ingredients
+          .where((i) => i.nom.trim().isNotEmpty)
+          .map((i) => IngredientRecette(nom: i.nom))
           .toList(),
     );
 
-    // On crée la liste nous-mêmes pour connaître son id et pouvoir y
-    // naviguer (genererListe ne renvoie que des compteurs).
     final liste = ListeCourses(
       id: 'liste_${DateTime.now().millisecondsSinceEpoch}',
       nom: recetteLocale.nom,
@@ -290,12 +260,8 @@ class _BoutonCreerListeState extends ConsumerState<_BoutonCreerListe> {
         backgroundColor:
             incomplet ? couleurAvertissement(context) : couleurSucces(context),
       ));
-      // pushReplacement (pas push) : on remplace la fiche recette par la
-      // liste dans la pile de navigation. Deux bénéfices demandés :
-      //  - "Retour" depuis la liste ramène à l'écran Recettes, pas à la
-      //    recette qu'on vient de quitter ;
-      //  - la fiche recette n'est plus accessible, donc impossible de
-      //    recréer plusieurs fois la même liste en rappuyant sur le bouton.
+      // pushReplacement : "Retour" ramène à l'écran Recettes (pas à la
+      // recette) et empêche de recréer plusieurs fois la même liste.
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => DetailListeScreen(liste: liste)),
