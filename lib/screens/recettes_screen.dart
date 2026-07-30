@@ -178,11 +178,26 @@ class _RecetteDetailSheet extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (recette.imageUrl != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  recette.imageUrl!,
+                  height: 160,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             Text(recette.nom, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 4),
             Text('${recette.portions} portions',
                 style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 16),
+            Text('Ingrédients',
+                style: Theme.of(context).textTheme.titleMedium),
             for (final ing in recette.ingredients)
               ListTile(
                 dense: true,
@@ -192,7 +207,45 @@ class _RecetteDetailSheet extends ConsumerWidget {
                     ? '${ing.quantite} ${ing.unite}'
                     : '${ing.quantite}'),
               ),
-            const SizedBox(height: 20),
+            if (recette.etapes.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text('Préparation',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              for (var i = 0; i < recette.etapes.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text('${i + 1}',
+                            style: TextStyle(
+                                color: texteContrastant(
+                                    Theme.of(context).colorScheme.primary),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(recette.etapes[i],
+                              style: const TextStyle(height: 1.35)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+            const SizedBox(height: 12),
             _BoutonGenererListe(recette: recette),
           ],
         ),
@@ -284,6 +337,11 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
   late final TextEditingController _nomCtrl;
   late int _portions;
   late List<_LigneIngredient> _lignes;
+  // Étapes et image conservées telles quelles (renseignées à l'import ou sur
+  // une recette existante) : pas encore éditables champ par champ, mais
+  // affichées et sauvegardées avec la recette.
+  List<String> _etapes = [];
+  String? _imageUrl;
 
   @override
   void initState() {
@@ -291,6 +349,8 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
     final r = widget.recette;
     _nomCtrl = TextEditingController(text: r?.nom ?? '');
     _portions = r?.portions ?? 4;
+    _etapes = r?.etapes ?? [];
+    _imageUrl = r?.imageUrl;
     _lignes = r != null && r.ingredients.isNotEmpty
         ? r.ingredients
             .map((i) => _LigneIngredient(
@@ -332,6 +392,8 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
       nom: nom,
       portions: _portions,
       ingredients: ingredients,
+      etapes: _etapes,
+      imageUrl: _imageUrl,
     );
 
     final notifier = ref.read(recettesNotifierProvider.notifier);
@@ -389,6 +451,8 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
     setState(() {
       _nomCtrl.text = recette.nom;
       _portions = recette.portions;
+      _etapes = recette.etapes;
+      _imageUrl = recette.imageUrl;
       for (final l in _lignes) {
         l.nom.dispose();
         l.quantite.dispose();
@@ -406,9 +470,13 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
             }).toList()
           : [_LigneIngredient.vide()];
     });
+    final nbEtapes = recette.etapes.length;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(
-          '"${recette.nom}" importée — vérifie les quantités avant d\'enregistrer'),
+          '"${recette.nom}" importée : ${recette.ingredientsBruts.length} '
+          'ingrédient(s)${nbEtapes > 0 ? ", $nbEtapes étape(s)" : ""}'
+          '${recette.imageUrl != null ? ", photo" : ""} — vérifie avant '
+          'd\'enregistrer'),
       backgroundColor: couleurSucces(context),
     ));
   }
@@ -466,6 +534,35 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
               ),
             ],
           ),
+          // Étapes/photo importées : signalées ici (conservées à
+          // l'enregistrement même si non éditables champ par champ).
+          if (_etapes.isNotEmpty || _imageUrl != null)
+            Card(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '${[
+                          if (_imageUrl != null) 'Photo',
+                          if (_etapes.isNotEmpty)
+                            '${_etapes.length} étape(s) de préparation',
+                        ].join(' + ')} importée(s), conservée(s).',
+                        style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           const Divider(),
           Text('Ingrédients', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),

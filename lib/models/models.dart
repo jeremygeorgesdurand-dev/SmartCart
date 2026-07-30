@@ -372,24 +372,34 @@ class Recette {
   final String nom;
   final int portions;
   final List<IngredientRecette> ingredients;
+  // Étapes de préparation et image (renseignées par l'import depuis une URL ;
+  // vides pour une recette créée à la main sans les saisir).
+  final List<String> etapes;
+  final String? imageUrl;
 
   Recette({
     required this.id,
     required this.nom,
     this.portions = 4,
     this.ingredients = const [],
+    this.etapes = const [],
+    this.imageUrl,
   });
 
   Recette copyWith({
     String? nom,
     int? portions,
     List<IngredientRecette>? ingredients,
+    List<String>? etapes,
+    String? imageUrl,
   }) =>
       Recette(
         id: id,
         nom: nom ?? this.nom,
         portions: portions ?? this.portions,
         ingredients: ingredients ?? this.ingredients,
+        etapes: etapes ?? this.etapes,
+        imageUrl: imageUrl ?? this.imageUrl,
       );
 
   Map<String, dynamic> toMap() => {
@@ -398,6 +408,8 @@ class Recette {
         'portions': portions,
         'ingredientsJson':
             jsonEncode(ingredients.map((i) => i.toMap()).toList()),
+        'etapesJson': jsonEncode(etapes),
+        'imageUrl': imageUrl,
       };
 
   factory Recette.fromMap(Map<String, dynamic> map) {
@@ -405,11 +417,17 @@ class Recette {
     final ingredients = (jsonDecode(ingredientsRaw) as List)
         .map((e) => IngredientRecette.fromMap(e as Map<String, dynamic>))
         .toList();
+    final etapesRaw = map['etapesJson'] as String? ?? '[]';
+    final etapes = (jsonDecode(etapesRaw) as List)
+        .map((e) => e.toString())
+        .toList();
     return Recette(
       id: map['id'] as String,
       nom: map['nom'] as String,
       portions: map['portions'] as int? ?? 4,
       ingredients: ingredients,
+      etapes: etapes,
+      imageUrl: map['imageUrl'] as String?,
     );
   }
 }

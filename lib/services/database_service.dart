@@ -29,7 +29,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -169,6 +169,19 @@ class DatabaseService {
             await db.execute('DELETE FROM prix_cache_web WHERE trouve = 0');
           }
         }
+        if (oldV < 11) {
+          // Étapes de préparation et image pour les recettes (import depuis
+          // une URL type Marmiton, qui capture aussi instructions + photo).
+          final tables = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name = 'recettes'");
+          if (tables.isNotEmpty) {
+            await db.execute(
+                "ALTER TABLE recettes ADD COLUMN etapesJson TEXT NOT NULL DEFAULT '[]'");
+            await db.execute(
+                'ALTER TABLE recettes ADD COLUMN imageUrl TEXT');
+          }
+        }
       },
     );
   }
@@ -251,7 +264,9 @@ class DatabaseService {
         id TEXT PRIMARY KEY,
         nom TEXT NOT NULL,
         portions INTEGER NOT NULL DEFAULT 4,
-        ingredientsJson TEXT NOT NULL DEFAULT '[]'
+        ingredientsJson TEXT NOT NULL DEFAULT '[]',
+        etapesJson TEXT NOT NULL DEFAULT '[]',
+        imageUrl TEXT
       )
     ''');
 

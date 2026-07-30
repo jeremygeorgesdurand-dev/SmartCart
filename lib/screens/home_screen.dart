@@ -99,7 +99,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       const NavigationDestination(
         icon: Icon(Icons.shopping_cart_outlined),
         selectedIcon: Icon(Icons.shopping_cart),
-        label: 'Mes listes',
+        label: 'Listes',
       ),
       const NavigationDestination(
         icon: Icon(Icons.inventory_2_outlined),
@@ -127,7 +127,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       const NavigationDestination(
         icon: Icon(Icons.settings_outlined),
         selectedIcon: Icon(Icons.settings),
-        label: 'Paramètres',
+        label: 'Réglages',
       ),
     ];
 

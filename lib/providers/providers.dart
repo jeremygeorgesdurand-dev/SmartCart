@@ -442,6 +442,7 @@ class ArticlesListeNotifier
     await ref.read(dbServiceProvider).updateArticleListe(updated);
     await _syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(updated));
     ref.invalidateSelf();
+    _syncWidget();
   }
 
   // unite == null retire l'unité (retour à un simple compte d'unités).
@@ -460,6 +461,7 @@ class ArticlesListeNotifier
     await ref.read(dbServiceProvider).updateArticleListe(updated);
     await _syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(updated));
     ref.invalidateSelf();
+    _syncWidget();
   }
 
   Future<void> supprimer(String id) async {
@@ -468,6 +470,7 @@ class ArticlesListeNotifier
     final item = items.where((i) => i.id == id).firstOrNull;
     await ref.read(dbServiceProvider).deleteArticleListe(id);
     ref.invalidateSelf();
+    _syncWidget();
     if (item != null) {
       unawaited(_syncSilencieux(
           () => ref.read(syncServiceProvider).supprimerArticleListe(item.listeId, id)));
@@ -484,6 +487,7 @@ class ArticlesListeNotifier
       await _syncSilencieux(() => sync.sauvegarderArticleListe(item.copyWith(coche: valeur)));
     }
     ref.invalidateSelf();
+    _syncWidget();
   }
 }
 

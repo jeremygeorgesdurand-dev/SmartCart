@@ -8,11 +8,15 @@ class RecetteImportee {
   final String nom;
   final int portions;
   final List<String> ingredientsBruts;
+  final List<String> etapes;
+  final String? imageUrl;
 
   const RecetteImportee({
     required this.nom,
     required this.portions,
     required this.ingredientsBruts,
+    this.etapes = const [],
+    this.imageUrl,
   });
 }
 
@@ -95,7 +99,56 @@ class RecipeImportService {
       nom: nom,
       portions: _extrairePortions(map['recipeYield']),
       ingredientsBruts: ingredients,
+      etapes: _extraireEtapes(map['recipeInstructions']),
+      imageUrl: _extraireImage(map['image']),
     );
+  }
+
+  // recipeInstructions peut être : une chaîne (étapes séparées par des sauts
+  // de ligne), une liste de chaînes, une liste d'objets HowToStep {text},
+  // ou une liste de HowToSection contenant des HowToStep. On aplatit tout
+  // en une simple liste de phrases.
+  List<String> _extraireEtapes(dynamic instr) {
+    final out = <String>[];
+    void ajouter(String? s) {
+      final t = s?.trim();
+      if (t != null && t.isNotEmpty) out.add(t);
+    }
+
+    void visiter(dynamic node) {
+      if (node is String) {
+        // Chaîne unique : découper sur les sauts de ligne.
+        for (final part in node.split(RegExp(r'[\r\n]+'))) {
+          ajouter(part);
+        }
+      } else if (node is List) {
+        for (final e in node) {
+          visiter(e);
+        }
+      } else if (node is Map) {
+        final type = node['@type'];
+        if (type == 'HowToSection' && node['itemListElement'] != null) {
+          visiter(node['itemListElement']);
+        } else {
+          ajouter((node['text'] ?? node['name'] ?? node['description'])
+              ?.toString());
+        }
+      }
+    }
+
+    visiter(instr);
+    return out;
+  }
+
+  // image peut être une chaîne, une liste, ou un ImageObject {url}.
+  String? _extraireImage(dynamic img) {
+    if (img is String) return img.trim().isEmpty ? null : img.trim();
+    if (img is List && img.isNotEmpty) return _extraireImage(img.first);
+    if (img is Map) {
+      final u = img['url'] ?? img['contentUrl'];
+      if (u is String && u.trim().isNotEmpty) return u.trim();
+    }
+    return null;
   }
 
   int _extrairePortions(dynamic yieldVal) {
