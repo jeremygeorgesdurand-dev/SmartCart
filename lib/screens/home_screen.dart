@@ -132,11 +132,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ];
 
     final safeIndex = _currentIndex.clamp(0, screens.length - 1);
-    // L'onglet Recettes (quand affiché) est à l'index 2 et possède son
-    // propre TabBar horizontal : on désactive le glissement inter-onglets
-    // principal quand on est dessus, sinon les deux gestes horizontaux
-    // s'annulent.
-    final indexRecettes = afficherRecettes ? 2 : -1;
 
     void changerDePage(int index) {
       final cible = index.clamp(0, screens.length - 1);
@@ -160,9 +155,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           // pas ici.
           PageView(
             controller: _pageController,
-            physics: safeIndex == indexRecettes
-                ? const NeverScrollableScrollPhysics()
-                : null,
             onPageChanged: (i) => setState(() => _currentIndex = i),
             children: screens,
           ),

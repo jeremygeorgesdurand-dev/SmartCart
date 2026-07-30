@@ -47,6 +47,11 @@ class _RecettesScreenState extends State<RecettesScreen>
       ),
       body: TabBarView(
         controller: _tab,
+        // Sous-onglets changés au tap uniquement (pas par glissement) : sinon
+        // le glissement horizontal entrerait en conflit avec le glissement
+        // principal entre écrans (Listes/Catalogue/Recettes/…). Ainsi, glisser
+        // sur la page Recettes continue de changer d'écran comme ailleurs.
+        physics: const NeverScrollableScrollPhysics(),
         children: const [
           ExplorerRecettesTab(),
           FrigoTab(),

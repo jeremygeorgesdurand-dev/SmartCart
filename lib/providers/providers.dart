@@ -53,6 +53,27 @@ Future<void> _syncSilencieux(Future<void> Function() action) async {
   }
 }
 
+// Rafraîchit le widget d'écran d'accueil pour la liste qu'il affiche, quelle
+// que soit l'origine du changement (utile depuis le catalogue, dont la
+// suppression d'un article impacte les listes en cascade). Sans effet si
+// aucun widget n'est configuré.
+Future<void> _rafraichirWidgetConfigure(Ref ref) async {
+  try {
+    final widgetListeId = await WidgetService.getListeWidgetId();
+    if (widgetListeId == null || widgetListeId.isEmpty) return;
+    final db = ref.read(dbServiceProvider);
+    final items = await db.getArticlesListe(widgetListeId);
+    final catalogue = await ref.read(articlesNotifierProvider.future);
+    final listes = await ref.read(listesNotifierProvider.future);
+    final liste = listes.where((l) => l.id == widgetListeId).firstOrNull;
+    if (liste == null) return;
+    await WidgetService.mettreAJourWidget(
+        liste: liste, items: items, catalogue: catalogue);
+  } catch (_) {
+    // Widget non installé / non configuré : sans effet.
+  }
+}
+
 final statsProvider = FutureProvider<StatsData>((ref) {
   ref.watch(listesNotifierProvider);
   ref.watch(articlesNotifierProvider);
@@ -229,12 +250,20 @@ class ArticlesNotifier extends AsyncNotifier<List<Article>> {
     await ref.read(dbServiceProvider).updateArticle(a);
     await _syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticle(a));
     ref.invalidateSelf();
+    // Renommer/recatégoriser un article change son affichage dans le widget.
+    unawaited(_rafraichirWidgetConfigure(ref));
   }
 
   Future<void> supprimer(String id) async {
     await ref.read(dbServiceProvider).deleteArticle(id);
     await _syncSilencieux(() => ref.read(syncServiceProvider).supprimerArticle(id));
     ref.invalidateSelf();
+    // deleteArticle retire aussi l'article des listes (cascade) : le widget,
+    // qui affiche une liste, doit donc être rafraîchi même si la suppression
+    // vient du catalogue et pas de la liste elle-même. Les lignes de listes
+    // ayant changé, on invalide aussi leur provider pour que l'app suive.
+    ref.invalidate(articlesListeProvider);
+    unawaited(_rafraichirWidgetConfigure(ref));
   }
 }
 
