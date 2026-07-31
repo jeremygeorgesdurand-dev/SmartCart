@@ -5,10 +5,8 @@ import '../services/widget_service.dart';
 import '../widgets/background_logo.dart';
 import 'budget_screen.dart';
 import 'catalogue_screen.dart';
-import 'frigo_screen.dart';
 import 'listes_screen.dart';
 import 'parametres_screen.dart';
-import 'recettes_en_ligne_screen.dart';
 import 'recettes_screen.dart';
 import 'stats_screen.dart';
 
@@ -22,6 +20,9 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with WidgetsBindingObserver {
   int _currentIndex = 0;
+  // Nombre d'écrans de navigation (dépend des onglets activés) — tenu à jour
+  // à chaque build, lu par les rappels de débordement de Recettes.
+  int _nbEcrans = 6;
   final _pageController = PageController();
 
   @override
@@ -88,62 +89,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final fondActif = ref.watch(fondActiveProvider);
     final fondOpacite = ref.watch(fondOpaciteProvider);
 
-    void allerAFlat(int i) {
-      if (i == _currentIndex) return;
-      setState(() => _currentIndex = i);
+    void allerA(int index, int nbEcrans) {
+      final cible = index.clamp(0, nbEcrans - 1);
+      if (cible == _currentIndex) return;
+      setState(() => _currentIndex = cible);
       _pageController.animateToPage(
-        i,
+        cible,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     }
 
-    // Recettes est composé de 3 sous-onglets. Plutôt que de les imbriquer
-    // dans un TabBarView (dont le glissement entrait en conflit avec le
-    // glissement principal), on les met À PLAT : chaque sous-onglet est une
-    // page consécutive du défilement principal. Ainsi glisser sur Recettes
-    // fait défiler Explorer → Frigo → Mes recettes, puis continue vers
-    // l'écran voisin — comme partout ailleurs. Listes(0) + Catalogue(1)
-    // étant toujours présents, la 1re page Recettes est à l'index 2.
-    const recettesDebut = 2;
-    Widget pageRecette(int sousIndex) {
-      const contenus = [
-        ExplorerRecettesTab(),
-        FrigoTab(),
-        MesRecettesTab(),
-      ];
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Recettes'),
-          bottom: EnTeteSousOngletsRecettes(
-            actif: sousIndex,
-            onTap: (i) => allerAFlat(recettesDebut + i),
-          ),
-        ),
-        floatingActionButton: sousIndex == 2
-            ? FloatingActionButton.extended(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const RecetteFormScreen()),
-                ),
-                icon: const Icon(Icons.add),
-                label: const Text('Nouvelle recette'),
-              )
-            : null,
-        body: contenus[sousIndex],
-      );
-    }
-
-    // Chaque "section" = une entrée de la barre de navigation + ses pages
-    // (Recettes en a 3, les autres une seule).
-    final sections = <({NavigationDestination dest, List<Widget> pages})>[
+    // Un écran = une entrée de la barre de navigation. Recettes reste UNE
+    // page (barre fixe + sous-onglets glissables) ; à ses bords, elle passe
+    // le relais au défilement principal pour continuer vers l'écran voisin
+    // (voir RecettesScreen.onDeborderGauche/Droite).
+    final ecrans = <({NavigationDestination dest, Widget page})>[
       (
         dest: const NavigationDestination(
           icon: Icon(Icons.shopping_cart_outlined),
           selectedIcon: Icon(Icons.shopping_cart),
           label: 'Listes',
         ),
-        pages: [const ListesScreen()],
+        page: const ListesScreen(),
       ),
       (
         dest: const NavigationDestination(
@@ -151,7 +119,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           selectedIcon: Icon(Icons.inventory_2),
           label: 'Catalogue',
         ),
-        pages: [const CatalogueScreen()],
+        page: const CatalogueScreen(),
       ),
       if (afficherRecettes)
         (
@@ -160,7 +128,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             selectedIcon: Icon(Icons.menu_book),
             label: 'Recettes',
           ),
-          pages: [pageRecette(0), pageRecette(1), pageRecette(2)],
+          // Index de Recettes = 2 (Listes + Catalogue toujours avant).
+          page: RecettesScreen(
+            onDeborderGauche: () => allerA(1, _nbEcrans),
+            onDeborderDroite: () => allerA(3, _nbEcrans),
+          ),
         ),
       if (afficherBudget)
         (
@@ -169,7 +141,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             selectedIcon: Icon(Icons.euro),
             label: 'Budget',
           ),
-          pages: [const BudgetScreen()],
+          page: const BudgetScreen(),
         ),
       if (afficherStats)
         (
@@ -178,7 +150,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             selectedIcon: Icon(Icons.bar_chart),
             label: 'Stats',
           ),
-          pages: [const StatsScreen()],
+          page: const StatsScreen(),
         ),
       (
         dest: const NavigationDestination(
@@ -186,36 +158,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           selectedIcon: Icon(Icons.settings),
           label: 'Réglages',
         ),
-        pages: [const ParametresScreen()],
+        page: const ParametresScreen(),
       ),
     ];
 
-    // Aplatissement : liste de toutes les pages + pour chacune la section
-    // (donc l'onglet de barre) à laquelle elle appartient, et l'index de la
-    // 1re page de chaque section (cible d'un tap sur la barre).
-    final flatPages = <Widget>[];
-    final navDePage = <int>[];
-    final debutDeNav = <int>[];
-    for (var s = 0; s < sections.length; s++) {
-      debutDeNav.add(flatPages.length);
-      for (final p in sections[s].pages) {
-        navDePage.add(s);
-        flatPages.add(p);
-      }
-    }
-    final destinations = [for (final s in sections) s.dest];
-    final safeFlat = _currentIndex.clamp(0, flatPages.length - 1);
+    _nbEcrans = ecrans.length;
+    final safeIndex = _currentIndex.clamp(0, ecrans.length - 1);
+    // Sur la page Recettes (index 2), on laisse le TabBarView interne capter
+    // le glissement (sous-onglets + relais aux bords) en désactivant le
+    // glissement principal ; le relais anime quand même la page via allerA.
+    final surRecettes = afficherRecettes && safeIndex == 2;
 
     return Scaffold(
       body: Stack(
         children: [
-          // Défilement principal à plat : glisser change de page (y compris
-          // entre les sous-onglets Recettes) ; la barre du bas permet aussi
-          // de sauter directement à une section.
           PageView(
             controller: _pageController,
+            physics: surRecettes
+                ? const NeverScrollableScrollPhysics()
+                : null,
             onPageChanged: (i) => setState(() => _currentIndex = i),
-            children: flatPages,
+            children: [for (final e in ecrans) e.page],
           ),
           // Logo de fond — par dessus, non interactif
           if (fondActif)
@@ -237,9 +200,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ],
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: navDePage[safeFlat],
-        onDestinationSelected: (navIndex) => allerAFlat(debutDeNav[navIndex]),
-        destinations: destinations,
+        selectedIndex: safeIndex,
+        onDestinationSelected: (i) => allerA(i, ecrans.length),
+        destinations: [for (final e in ecrans) e.dest],
       ),
     );
   }

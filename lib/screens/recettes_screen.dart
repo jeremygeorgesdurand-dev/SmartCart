@@ -5,71 +5,92 @@ import '../providers/providers.dart';
 import '../services/vocal_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
+import 'frigo_screen.dart';
+import 'recettes_en_ligne_screen.dart';
 
 // ================================================================
-// RECETTES — les 3 sous-onglets (Explorer / Mon frigo / Mes recettes)
-// sont désormais des pages consécutives du défilement principal (voir
-// HomeScreen), pour que le glissement traverse les sous-onglets puis
-// continue vers les écrans voisins. Ce qui reste ici : l'en-tête de
-// sous-onglets réutilisable, l'onglet "Mes recettes", et le formulaire.
+// ÉCRAN RECETTES — une page à barre fixe avec 3 sous-onglets (Explorer /
+// Mon frigo / Mes recettes). Le contenu glisse sous la barre (transition
+// nette, trait qui suit le doigt) ; aux BORDS (glissement au-delà du 1er
+// ou du dernier sous-onglet), on passe le relais au défilement principal
+// via onDeborderGauche/onDeborderDroite pour continuer vers l'écran voisin.
 // ================================================================
-
-// En-tête de sous-onglets (Explorer / Mon frigo / Mes recettes), utilisé
-// comme `bottom` de l'AppBar de chaque page Recettes. Change au tap ; le
-// glissement, lui, est géré par le défilement principal.
-class EnTeteSousOngletsRecettes extends StatelessWidget
-    implements PreferredSizeWidget {
-  final int actif;
-  final ValueChanged<int> onTap;
-  const EnTeteSousOngletsRecettes(
-      {super.key, required this.actif, required this.onTap});
-
-  static const _labels = ['Explorer', 'Mon frigo', 'Mes recettes'];
+class RecettesScreen extends StatefulWidget {
+  final VoidCallback? onDeborderGauche;
+  final VoidCallback? onDeborderDroite;
+  const RecettesScreen({
+    super.key,
+    this.onDeborderGauche,
+    this.onDeborderDroite,
+  });
 
   @override
-  Size get preferredSize => const Size.fromHeight(46);
+  State<RecettesScreen> createState() => _RecettesScreenState();
+}
+
+class _RecettesScreenState extends State<RecettesScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tab = TabController(length: 3, vsync: this)
+    ..addListener(() => setState(() {}));
+  // Évite de déclencher plusieurs fois le passage de relais pendant un même
+  // geste (l'overscroll émet en continu tant que le doigt pousse le bord).
+  bool _relaisDeclenche = false;
+
+  @override
+  void dispose() {
+    _tab.dispose();
+    super.dispose();
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    if (n is OverscrollNotification && !_relaisDeclenche) {
+      if (n.overscroll < 0 && _tab.index == 0) {
+        _relaisDeclenche = true;
+        widget.onDeborderGauche?.call();
+      } else if (n.overscroll > 0 && _tab.index == _tab.length - 1) {
+        _relaisDeclenche = true;
+        widget.onDeborderDroite?.call();
+      }
+    } else if (n is ScrollEndNotification) {
+      _relaisDeclenche = false;
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final surLignee = Theme.of(context).appBarTheme.foregroundColor ??
-        scheme.onSurface;
-    return SizedBox(
-      height: 46,
-      child: Row(
-        children: [
-          for (var i = 0; i < _labels.length; i++)
-            Expanded(
-              child: InkWell(
-                onTap: () => onTap(i),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Spacer(),
-                    Text(
-                      _labels[i],
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight:
-                            i == actif ? FontWeight.bold : FontWeight.w500,
-                        color: i == actif
-                            ? surLignee
-                            : surLignee.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: i == actif ? surLignee : Colors.transparent,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ],
-                ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Recettes'),
+        bottom: TabBar(
+          controller: _tab,
+          tabs: const [
+            Tab(text: 'Explorer'),
+            Tab(text: 'Mon frigo'),
+            Tab(text: 'Mes recettes'),
+          ],
+        ),
+      ),
+      floatingActionButton: _tab.index == 2
+          ? FloatingActionButton.extended(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RecetteFormScreen()),
               ),
-            ),
-        ],
+              icon: const Icon(Icons.add),
+              label: const Text('Nouvelle recette'),
+            )
+          : null,
+      body: NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: TabBarView(
+          controller: _tab,
+          children: const [
+            ExplorerRecettesTab(),
+            FrigoTab(),
+            MesRecettesTab(),
+          ],
+        ),
       ),
     );
   }
