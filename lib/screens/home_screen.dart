@@ -5,8 +5,10 @@ import '../services/widget_service.dart';
 import '../widgets/background_logo.dart';
 import 'budget_screen.dart';
 import 'catalogue_screen.dart';
+import 'frigo_screen.dart';
 import 'listes_screen.dart';
 import 'parametres_screen.dart';
+import 'recettes_en_ligne_screen.dart';
 import 'recettes_screen.dart';
 import 'stats_screen.dart';
 
@@ -86,77 +88,134 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final fondActif = ref.watch(fondActiveProvider);
     final fondOpacite = ref.watch(fondOpaciteProvider);
 
-    final screens = [
-      const ListesScreen(),
-      const CatalogueScreen(),
-      if (afficherRecettes) const RecettesScreen(),
-      if (afficherBudget) const BudgetScreen(),
-      if (afficherStats) const StatsScreen(),
-      const ParametresScreen(),
-    ];
-
-    final destinations = [
-      const NavigationDestination(
-        icon: Icon(Icons.shopping_cart_outlined),
-        selectedIcon: Icon(Icons.shopping_cart),
-        label: 'Listes',
-      ),
-      const NavigationDestination(
-        icon: Icon(Icons.inventory_2_outlined),
-        selectedIcon: Icon(Icons.inventory_2),
-        label: 'Catalogue',
-      ),
-      if (afficherRecettes)
-        const NavigationDestination(
-          icon: Icon(Icons.menu_book_outlined),
-          selectedIcon: Icon(Icons.menu_book),
-          label: 'Recettes',
-        ),
-      if (afficherBudget)
-        const NavigationDestination(
-          icon: Icon(Icons.euro_outlined),
-          selectedIcon: Icon(Icons.euro),
-          label: 'Budget',
-        ),
-      if (afficherStats)
-        const NavigationDestination(
-          icon: Icon(Icons.bar_chart_outlined),
-          selectedIcon: Icon(Icons.bar_chart),
-          label: 'Stats',
-        ),
-      const NavigationDestination(
-        icon: Icon(Icons.settings_outlined),
-        selectedIcon: Icon(Icons.settings),
-        label: 'Réglages',
-      ),
-    ];
-
-    final safeIndex = _currentIndex.clamp(0, screens.length - 1);
-
-    void changerDePage(int index) {
-      final cible = index.clamp(0, screens.length - 1);
-      if (cible == _currentIndex) return;
-      setState(() => _currentIndex = cible);
+    void allerAFlat(int i) {
+      if (i == _currentIndex) return;
+      setState(() => _currentIndex = i);
       _pageController.animateToPage(
-        cible,
+        i,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     }
 
+    // Recettes est composé de 3 sous-onglets. Plutôt que de les imbriquer
+    // dans un TabBarView (dont le glissement entrait en conflit avec le
+    // glissement principal), on les met À PLAT : chaque sous-onglet est une
+    // page consécutive du défilement principal. Ainsi glisser sur Recettes
+    // fait défiler Explorer → Frigo → Mes recettes, puis continue vers
+    // l'écran voisin — comme partout ailleurs. Listes(0) + Catalogue(1)
+    // étant toujours présents, la 1re page Recettes est à l'index 2.
+    const recettesDebut = 2;
+    Widget pageRecette(int sousIndex) {
+      const contenus = [
+        ExplorerRecettesTab(),
+        FrigoTab(),
+        MesRecettesTab(),
+      ];
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Recettes'),
+          bottom: EnTeteSousOngletsRecettes(
+            actif: sousIndex,
+            onTap: (i) => allerAFlat(recettesDebut + i),
+          ),
+        ),
+        floatingActionButton: sousIndex == 2
+            ? FloatingActionButton.extended(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const RecetteFormScreen()),
+                ),
+                icon: const Icon(Icons.add),
+                label: const Text('Nouvelle recette'),
+              )
+            : null,
+        body: contenus[sousIndex],
+      );
+    }
+
+    // Chaque "section" = une entrée de la barre de navigation + ses pages
+    // (Recettes en a 3, les autres une seule).
+    final sections = <({NavigationDestination dest, List<Widget> pages})>[
+      (
+        dest: const NavigationDestination(
+          icon: Icon(Icons.shopping_cart_outlined),
+          selectedIcon: Icon(Icons.shopping_cart),
+          label: 'Listes',
+        ),
+        pages: [const ListesScreen()],
+      ),
+      (
+        dest: const NavigationDestination(
+          icon: Icon(Icons.inventory_2_outlined),
+          selectedIcon: Icon(Icons.inventory_2),
+          label: 'Catalogue',
+        ),
+        pages: [const CatalogueScreen()],
+      ),
+      if (afficherRecettes)
+        (
+          dest: const NavigationDestination(
+            icon: Icon(Icons.menu_book_outlined),
+            selectedIcon: Icon(Icons.menu_book),
+            label: 'Recettes',
+          ),
+          pages: [pageRecette(0), pageRecette(1), pageRecette(2)],
+        ),
+      if (afficherBudget)
+        (
+          dest: const NavigationDestination(
+            icon: Icon(Icons.euro_outlined),
+            selectedIcon: Icon(Icons.euro),
+            label: 'Budget',
+          ),
+          pages: [const BudgetScreen()],
+        ),
+      if (afficherStats)
+        (
+          dest: const NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined),
+            selectedIcon: Icon(Icons.bar_chart),
+            label: 'Stats',
+          ),
+          pages: [const StatsScreen()],
+        ),
+      (
+        dest: const NavigationDestination(
+          icon: Icon(Icons.settings_outlined),
+          selectedIcon: Icon(Icons.settings),
+          label: 'Réglages',
+        ),
+        pages: [const ParametresScreen()],
+      ),
+    ];
+
+    // Aplatissement : liste de toutes les pages + pour chacune la section
+    // (donc l'onglet de barre) à laquelle elle appartient, et l'index de la
+    // 1re page de chaque section (cible d'un tap sur la barre).
+    final flatPages = <Widget>[];
+    final navDePage = <int>[];
+    final debutDeNav = <int>[];
+    for (var s = 0; s < sections.length; s++) {
+      debutDeNav.add(flatPages.length);
+      for (final p in sections[s].pages) {
+        navDePage.add(s);
+        flatPages.add(p);
+      }
+    }
+    final destinations = [for (final s in sections) s.dest];
+    final safeFlat = _currentIndex.clamp(0, flatPages.length - 1);
+
     return Scaffold(
       body: Stack(
         children: [
-          // Contenu principal (en dessous) — PageView plutôt qu'IndexedStack
-          // pour permettre de changer d'onglet en glissant n'importe où, en
-          // plus des boutons de la barre de navigation. Le conflit avec la
-          // suppression par glissement des articles du Catalogue est réglé
-          // côté ArticleTile (zone de déclenchement limitée à la flèche),
-          // pas ici.
+          // Défilement principal à plat : glisser change de page (y compris
+          // entre les sous-onglets Recettes) ; la barre du bas permet aussi
+          // de sauter directement à une section.
           PageView(
             controller: _pageController,
             onPageChanged: (i) => setState(() => _currentIndex = i),
-            children: screens,
+            children: flatPages,
           ),
           // Logo de fond — par dessus, non interactif
           if (fondActif)
@@ -178,8 +237,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ],
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: safeIndex,
-        onDestinationSelected: changerDePage,
+        selectedIndex: navDePage[safeFlat],
+        onDestinationSelected: (navIndex) => allerAFlat(debutDeNav[navIndex]),
         destinations: destinations,
       ),
     );

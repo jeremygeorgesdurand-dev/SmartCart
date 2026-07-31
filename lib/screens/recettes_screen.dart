@@ -5,77 +5,79 @@ import '../providers/providers.dart';
 import '../services/vocal_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
-import 'frigo_screen.dart';
-import 'recettes_en_ligne_screen.dart';
 
 // ================================================================
-// ÉCRAN RECETTES — une seule page à onglets : Explorer (recettes en
-// ligne), Mon frigo (suggestions par ingrédients), Mes recettes
-// (recettes perso enregistrées + création).
+// RECETTES — les 3 sous-onglets (Explorer / Mon frigo / Mes recettes)
+// sont désormais des pages consécutives du défilement principal (voir
+// HomeScreen), pour que le glissement traverse les sous-onglets puis
+// continue vers les écrans voisins. Ce qui reste ici : l'en-tête de
+// sous-onglets réutilisable, l'onglet "Mes recettes", et le formulaire.
 // ================================================================
-class RecettesScreen extends StatefulWidget {
-  const RecettesScreen({super.key});
+
+// En-tête de sous-onglets (Explorer / Mon frigo / Mes recettes), utilisé
+// comme `bottom` de l'AppBar de chaque page Recettes. Change au tap ; le
+// glissement, lui, est géré par le défilement principal.
+class EnTeteSousOngletsRecettes extends StatelessWidget
+    implements PreferredSizeWidget {
+  final int actif;
+  final ValueChanged<int> onTap;
+  const EnTeteSousOngletsRecettes(
+      {super.key, required this.actif, required this.onTap});
+
+  static const _labels = ['Explorer', 'Mon frigo', 'Mes recettes'];
 
   @override
-  State<RecettesScreen> createState() => _RecettesScreenState();
-}
-
-class _RecettesScreenState extends State<RecettesScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(length: 3, vsync: this)
-    ..addListener(() => setState(() {}));
-
-  @override
-  void dispose() {
-    _tab.dispose();
-    super.dispose();
-  }
+  Size get preferredSize => const Size.fromHeight(46);
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Recettes'),
-        bottom: TabBar(
-          controller: _tab,
-          tabs: const [
-            Tab(text: 'Explorer'),
-            Tab(text: 'Mon frigo'),
-            Tab(text: 'Mes recettes'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tab,
-        // Sous-onglets changés au tap uniquement (pas par glissement) : sinon
-        // le glissement horizontal entrerait en conflit avec le glissement
-        // principal entre écrans (Listes/Catalogue/Recettes/…). Ainsi, glisser
-        // sur la page Recettes continue de changer d'écran comme ailleurs.
-        physics: const NeverScrollableScrollPhysics(),
-        children: const [
-          ExplorerRecettesTab(),
-          FrigoTab(),
-          _MesRecettesTab(),
+    final scheme = Theme.of(context).colorScheme;
+    final surLignee = Theme.of(context).appBarTheme.foregroundColor ??
+        scheme.onSurface;
+    return SizedBox(
+      height: 46,
+      child: Row(
+        children: [
+          for (var i = 0; i < _labels.length; i++)
+            Expanded(
+              child: InkWell(
+                onTap: () => onTap(i),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Spacer(),
+                    Text(
+                      _labels[i],
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                            i == actif ? FontWeight.bold : FontWeight.w500,
+                        color: i == actif
+                            ? surLignee
+                            : surLignee.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: i == actif ? surLignee : Colors.transparent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
-      // Le bouton "Nouvelle recette" n'a de sens que sur l'onglet perso.
-      floatingActionButton: _tab.index == 2
-          ? FloatingActionButton.extended(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const RecetteFormScreen()),
-              ),
-              icon: const Icon(Icons.add),
-              label: const Text('Nouvelle recette'),
-            )
-          : null,
     );
   }
 }
 
 // Onglet "Mes recettes" : les recettes perso enregistrées localement.
-class _MesRecettesTab extends ConsumerWidget {
-  const _MesRecettesTab();
+class MesRecettesTab extends ConsumerWidget {
+  const MesRecettesTab({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
