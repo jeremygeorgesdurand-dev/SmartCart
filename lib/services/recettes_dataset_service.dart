@@ -1,5 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 // Un ingrédient d'une recette : `texte` = ligne complète et lisible
 // ("200 g de lard fumé coupé en dés"), `nom` = forme courte pour la liste
@@ -57,14 +60,34 @@ class RecetteDataset {
 // d'API, pas de limite, fonctionne hors-ligne. Chargé une seule fois puis
 // gardé en mémoire.
 class RecettesDatasetService {
+  // Dataset publié sur le dépôt GitHub du projet : permet d'enrichir les
+  // recettes sans republier l'app (bouton "Mettre à jour" dans les réglages).
+  static const _urlMaj =
+      'https://raw.githubusercontent.com/jeremygeorgesdurand-dev/SmartCart/main/assets/recettes_fr.json';
+
   List<RecetteDataset>? _cache;
   String _attribution = 'Wikilivres — CC BY-SA';
 
   String get attribution => _attribution;
 
+  Future<File> _fichierCache() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/recettes_fr_maj.json');
+  }
+
   Future<List<RecetteDataset>> charger() async {
     if (_cache != null) return _cache!;
-    final brut = await rootBundle.loadString('assets/recettes_fr.json');
+    // Priorité à une version téléchargée plus récente si elle existe ;
+    // sinon on retombe sur l'asset embarqué (toujours disponible, hors-ligne).
+    String brut;
+    try {
+      final f = await _fichierCache();
+      brut = await f.exists()
+          ? await f.readAsString()
+          : await rootBundle.loadString('assets/recettes_fr.json');
+    } catch (_) {
+      brut = await rootBundle.loadString('assets/recettes_fr.json');
+    }
     final data = jsonDecode(brut) as Map<String, dynamic>;
     final src = data['source'] as String?;
     final lic = data['licence'] as String?;
@@ -74,6 +97,29 @@ class RecettesDatasetService {
         .map(RecetteDataset.fromJson)
         .toList();
     return _cache!;
+  }
+
+  // Télécharge la dernière version du dataset depuis GitHub et la met en
+  // cache local. Retourne le nombre de recettes. Lance en cas d'échec réseau
+  // ou de fichier invalide (l'asset embarqué reste alors utilisé).
+  Future<int> mettreAJour() async {
+    final resp = await http
+        .get(Uri.parse(_urlMaj))
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw Exception('Téléchargement impossible (code ${resp.statusCode})');
+    }
+    final texte = utf8.decode(resp.bodyBytes);
+    final data = jsonDecode(texte);
+    if (data is! Map<String, dynamic> ||
+        data['recettes'] is! List ||
+        (data['recettes'] as List).isEmpty) {
+      throw const FormatException('Fichier de recettes invalide');
+    }
+    final f = await _fichierCache();
+    await f.writeAsString(texte);
+    _cache = null; // force un rechargement au prochain charger()
+    return (data['recettes'] as List).length;
   }
 
   // Recherche par mots-clés (titre + ingrédients) et catégorie.

@@ -2,6 +2,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
+import '../providers/recettes_en_ligne_provider.dart';
+import '../utils/erreur_utils.dart';
+import '../utils/theme_utils.dart';
 
 // ================================================================
 // ÉCRAN SAUVEGARDE / RESTAURATION MANUELLE (fichier .json local)
@@ -15,6 +18,7 @@ class SauvegardeScreen extends ConsumerStatefulWidget {
 
 class _SauvegardeScreenState extends ConsumerState<SauvegardeScreen> {
   bool _enCours = false;
+  bool _majRecettes = false;
 
   Future<void> _exporter() async {
     setState(() => _enCours = true);
@@ -113,8 +117,42 @@ class _SauvegardeScreenState extends ConsumerState<SauvegardeScreen> {
             subtitle: const Text('Depuis un fichier .json exporté'),
             onTap: _enCours ? null : _restaurer,
           ),
+          const Divider(height: 32),
+          ListTile(
+            leading: const Icon(Icons.restaurant_menu_outlined),
+            title: const Text('Mettre à jour les recettes'),
+            subtitle: const Text(
+                'Télécharge la dernière version du catalogue de recettes'),
+            trailing: _majRecettes
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : null,
+            onTap: _majRecettes ? null : _mettreAJourRecettes,
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _mettreAJourRecettes() async {
+    setState(() => _majRecettes = true);
+    try {
+      final n = await ref.read(recettesDatasetServiceProvider).mettreAJour();
+      // Recharge les recettes affichées avec la nouvelle version.
+      ref.invalidate(toutesRecettesProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Recettes à jour ($n recettes)'),
+        backgroundColor: couleurSucces(context),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(messageErreurLisible(e, 'Mise à jour impossible')),
+      ));
+    } finally {
+      if (mounted) setState(() => _majRecettes = false);
+    }
   }
 }
