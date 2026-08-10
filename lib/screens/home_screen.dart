@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
@@ -38,7 +40,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final intent = await WidgetService.getWidgetIntent();
       final listeId = intent['liste_id'] ?? '';
       if (listeId.isNotEmpty) _ouvrirListe(listeId);
+      // En tâche de fond : va chercher un prix indicatif pour les articles
+      // qui n'en ont pas encore, dès le démarrage, pour que le Budget soit
+      // déjà rempli sans avoir à ouvrir chaque article un par un.
+      unawaited(_rechaufferPrix());
     });
+  }
+
+  // Pré-charge les prix indicatifs en ligne, en arrière-plan et sans bloquer
+  // l'UI. S'appuie sur le cache de prixIndicatifProvider (14 j si trouvé, 3 h
+  // sinon) : les articles déjà connus reviennent instantanément sans réseau ;
+  // on ne temporise qu'après un vrai appel réseau, pour ne pas marteler les
+  // API tout en restant économe. Les erreurs sont ignorées (best effort).
+  Future<void> _rechaufferPrix() async {
+    try {
+      final articles = await ref.read(articlesNotifierProvider.future);
+      final prix = await ref.read(prixArticlesNotifierProvider.future);
+      final avecPrixConfirme = prix.map((p) => p.articleId).toSet();
+      for (final a in articles) {
+        if (!mounted) return;
+        if (avecPrixConfirme.contains(a.id)) continue;
+        final debut = DateTime.now();
+        try {
+          await ref.read(prixIndicatifProvider(a).future);
+        } catch (_) {
+          // réseau/API indisponible : on tentera au prochain démarrage
+        }
+        final aReseau = DateTime.now().difference(debut).inMilliseconds > 250;
+        if (aReseau) {
+          await Future.delayed(const Duration(milliseconds: 400));
+        }
+      }
+    } catch (_) {
+      // catalogue/prix pas encore prêts : sans gravité
+    }
   }
 
   @override
