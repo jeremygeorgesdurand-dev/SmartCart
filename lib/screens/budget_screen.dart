@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../services/open_prices_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 import 'historique_prix_screen.dart';
@@ -305,36 +306,51 @@ class _ArticlePrixTile extends ConsumerWidget {
     // vocale) n'ont pas de code-barres : on tente de retrouver le produit
     // par son nom via Open Food Facts pour en récupérer un avant de
     // chercher ses prix.
+    // 1) Prix par magasin pour CE produit précis (si un code-barres est
+    //    connu ou retrouvable par nom) — c'est le plus précis quand ça existe.
     var barcode = article.barcode;
     if (barcode == null) {
       final suggestions =
           await ref.read(offServiceProvider).searchByName(article.nom);
       barcode = suggestions.where((a) => a.barcode != null).firstOrNull?.barcode;
     }
+    final resultats = barcode == null
+        ? <PrixTrouve>[]
+        : await ref
+            .read(openPricesServiceProvider)
+            .chercherParBarcode(barcode);
 
-    if (barcode == null) {
+    // 2) Repli robuste : aucune donnée pour ce produit précis → on estime à
+    //    partir de la MOYENNE de plusieurs produits similaires (même logique
+    //    que le prix indicatif automatique). Bien plus fiable qu'un seul
+    //    code-barres, ce qui évitait d'avoir à réappuyer plusieurs fois.
+    if (resultats.isEmpty) {
+      // refresh (et non read) : on force une nouvelle recherche à chaque
+      // appui plutôt que de renvoyer un éventuel résultat en cache.
+      final estime = await ref.refresh(prixParNomProvider(article.nom).future);
       if (!context.mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('"${article.nom}" introuvable sur Open Food Facts — '
-            'essaie de scanner le produit pour un résultat plus fiable'),
-      ));
+      Navigator.pop(context); // ferme le loader
+      if (estime != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Prix estimé : ${estime.prix.toStringAsFixed(2)} € '
+              '(${estime.magasin})'),
+          action: SnackBarAction(
+            label: 'Utiliser',
+            onPressed: () => _editerPrix(context, ref, prixSuggere: estime.prix),
+          ),
+          duration: const Duration(seconds: 6),
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Aucun prix trouvé en ligne pour ce produit '
+              '(base communautaire Open Prices)'),
+        ));
+      }
       return;
     }
-
-    final resultats =
-        await ref.read(openPricesServiceProvider).chercherParBarcode(barcode);
 
     if (!context.mounted) return;
     Navigator.pop(context); // ferme le loader
-
-    if (resultats.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Aucun prix trouvé en ligne pour ce produit '
-            '(base communautaire Open Prices)'),
-      ));
-      return;
-    }
 
     showModalBottomSheet(
       context: context,

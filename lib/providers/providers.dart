@@ -559,6 +559,12 @@ class PrixArticlesNotifier extends AsyncNotifier<List<PrixArticle>> {
 // dizaines). On interroge plusieurs produits correspondants et on fait la
 // moyenne de leur prix le moins cher, pour une estimation plus cohérente de
 // l'article le plus proche dans son ensemble.
+// Réutilisé par le bouton "Chercher en ligne" du Budget (via ref.refresh)
+// pour offrir la même robustesse que la recherche automatique : plusieurs
+// produits similaires interrogés puis moyenne, plutôt qu'un seul code-barres.
+final prixParNomProvider = FutureProvider.family<PrixTrouve?, String>(
+    (ref, nom) => _prixIndicatifParNom(ref, nom));
+
 Future<PrixTrouve?> _prixIndicatifParNom(Ref ref, String nom) async {
   final openPrices = ref.read(openPricesServiceProvider);
   final suggestions = await ref.read(offServiceProvider).searchByName(nom);
@@ -574,7 +580,7 @@ Future<PrixTrouve?> _prixIndicatifParNom(Ref ref, String nom) async {
       .where((a) => a.barcode != null)
       .map((a) => a.barcode!)
       .toSet()
-      .take(15)
+      .take(25)
       .toList();
   if (barcodes.isEmpty) return null;
 
