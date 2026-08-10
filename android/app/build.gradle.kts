@@ -57,6 +57,13 @@ android {
                 signingConfigs.getByName("release")
             else
                 signingConfigs.getByName("debug")
+            // Règles de conservation pour TensorFlow Lite (voir proguard-rules.pro) :
+            // sans elles, R8 échoue à minifier le build release à cause des
+            // classes natives du délégué GPU référencées par réflexion.
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

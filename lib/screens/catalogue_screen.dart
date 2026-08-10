@@ -10,6 +10,7 @@ import '../widgets/filtres_bar.dart';
 import '../widgets/vocal_button.dart';
 import '../widgets/animated_list_item.dart';
 import 'scanner_screen.dart';
+import 'scanner_aliment_screen.dart';
 import '../widgets/import_liste_dialog.dart' show ImportListeDialog, ExportDialog;
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
@@ -137,6 +138,13 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
             tooltip: 'Scanner un code-barres',
             onPressed: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const ScannerScreen())),
+          ),
+          // Reconnaissance d'un fruit/légume par photo (IA locale)
+          IconButton(
+            icon: const Icon(Icons.center_focus_strong_outlined),
+            tooltip: 'Reconnaître un aliment (photo)',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const ScannerAlimentScreen())),
           ),
           // Menu
           PopupMenuButton<String>(

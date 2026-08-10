@@ -16,6 +16,7 @@ import '../services/export_service.dart';
 import '../services/auth_service.dart';
 import '../services/fcm_service.dart';
 import '../services/recipe_import_service.dart';
+import '../services/reconnaissance_aliment_service.dart';
 import '../services/sync_service.dart';
 import '../services/widget_service.dart';
 
@@ -27,6 +28,12 @@ final openPricesServiceProvider =
     Provider<OpenPricesService>((_) => OpenPricesService());
 final recipeImportServiceProvider =
     Provider<RecipeImportService>((_) => RecipeImportService());
+final reconnaissanceAlimentServiceProvider =
+    Provider<ReconnaissanceAlimentService>((ref) {
+  final service = ReconnaissanceAlimentService();
+  ref.onDispose(service.dispose);
+  return service;
+});
 final backupServiceProvider =
     Provider<BackupService>((ref) => BackupService(ref.read(dbServiceProvider)));
 final partageServiceProvider = Provider<PartageService>((_) => PartageService());
