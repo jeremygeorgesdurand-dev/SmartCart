@@ -280,12 +280,12 @@ void main() {
 
     test(
         'liste collaborative : sauvegarde met à jour listes_partagees sans toucher '
-        'membres/proprietaire, et suppression = quitter (le doc reste pour les autres)', () async {
+        'membres/proprietaire ; un membre non-propriétaire quitte, le '
+        'propriétaire supprime pour tout le monde', () async {
       final origine = ListeCourses(id: 'listeC1', nom: 'Collab', magasin: 'Leclerc');
       await localDb.insertListe(origine);
       await serviceA.partagerListe(origine, []);
-      // Un second membre rejoint, pour vérifier qu'il n'est pas affecté par
-      // la suppression de userA plus bas.
+      // Un second membre rejoint.
       final codeDoc = await firestore.collection('listes_partagees').doc('listeC1').get();
       final code = codeDoc.data()!['code'] as String;
       await serviceB.rejoindreListeParCode(code);
@@ -302,11 +302,21 @@ void main() {
       expect(doc.data()!['membres'], ['uidA', 'uidB']); // inchangé par sauvegarderListe
       expect(doc.data()!['proprietaireId'], 'uidA'); // inchangé
 
-      await serviceA.supprimerListe('listeC1');
+      // Un membre NON-propriétaire (uidB) « supprime » = quitte : le document
+      // reste pour le propriétaire.
+      await serviceB.supprimerListe('listeC1');
+      final apresQuitte =
+          await firestore.collection('listes_partagees').doc('listeC1').get();
+      expect(apresQuitte.exists, isTrue);
+      expect(List<String>.from(apresQuitte.data()!['membres'] as List), ['uidA']);
 
-      final docApresSuppression = await firestore.collection('listes_partagees').doc('listeC1').get();
-      expect(docApresSuppression.exists, isTrue); // pas supprimé, juste quitté
-      expect(List<String>.from(docApresSuppression.data()!['membres'] as List), ['uidB']);
+      // Le PROPRIÉTAIRE (uidA) supprime : le document partagé disparaît pour
+      // tout le monde (correctif : un propriétaire seul ne pouvait pas
+      // vraiment supprimer sa liste, elle « revenait »).
+      await serviceA.supprimerListe('listeC1');
+      final apresSuppression =
+          await firestore.collection('listes_partagees').doc('listeC1').get();
+      expect(apresSuppression.exists, isFalse);
     });
   });
 

@@ -320,7 +320,27 @@ class SyncService {
                 await _localDb.deleteArticleListe(itemChange.doc.id);
               } else {
                 try {
-                  final item = ArticleListe.fromMap(itemChange.doc.data()!);
+                  final data = itemChange.doc.data()!;
+                  final item = ArticleListe.fromMap(data);
+                  // Le catalogue étant personnel, l'article référencé peut ne
+                  // pas exister chez ce membre : on le recrée à partir du nom
+                  // dénormalisé stocké dans le document partagé (sinon la
+                  // ligne serait là mais sans nom affichable). On ne crée que
+                  // s'il manque — ne jamais écraser un article local existant.
+                  final nomArticle = data['nomArticle'] as String?;
+                  if (nomArticle != null && nomArticle.isNotEmpty) {
+                    final catalogue = await _localDb.getArticles();
+                    final existe =
+                        catalogue.any((a) => a.id == item.articleId);
+                    if (!existe) {
+                      await _localDb.insertArticle(Article(
+                        id: item.articleId,
+                        nom: nomArticle,
+                        categorieId: data['categorieId'] as String?,
+                        rayonId: data['rayonId'] as String?,
+                      ));
+                    }
+                  }
                   await _localDb.insertArticleListe(item);
                 } catch (_) {
                   continue;
@@ -465,6 +485,31 @@ class SyncService {
     await _listesPartageesCol.doc(listeId).update({
       'membres': FieldValue.arrayRemove([_uid]),
     });
+  }
+
+  // Supprime ENTIÈREMENT une liste collaborative côté cloud (document,
+  // articles, code de partage) — réservé au propriétaire. Sans cela, un
+  // propriétaire seul « supprimait » sa liste mais quitterListePartagee la
+  // laissait orpheline (membres vides) dans Firestore, et surtout, tant que
+  // la suppression du membre n'était pas propagée, le listener temps réel
+  // pouvait la réinsérer localement — d'où l'impression qu'elle « revenait »
+  // et donc qu'on ne pouvait pas la supprimer.
+  Future<void> supprimerListePartageeCompletement(ListeCourses liste) async {
+    if (!_estConnecte) return;
+    final docRef = _listesPartageesCol.doc(liste.id);
+    // Couper l'écoute de la sous-collection pour ne pas réagir à nos propres
+    // suppressions pendant qu'on les fait.
+    await _subs.remove('liste_articles_${liste.id}')?.cancel();
+    final itemsSnap = await docRef.collection('articles').get();
+    final batch = _db.batch();
+    for (final d in itemsSnap.docs) {
+      batch.delete(d.reference);
+    }
+    if (liste.code != null && liste.code!.isNotEmpty) {
+      batch.delete(_codesPartageCol.doc(liste.code!));
+    }
+    batch.delete(docRef);
+    await batch.commit();
   }
 
   // Retire un AUTRE membre d'une liste collaborative. N'importe quel
@@ -621,9 +666,31 @@ class SyncService {
     if (!_estConnecte) return;
     final liste = await _localDb.getListe(id);
     if (liste?.partagee == true) {
-      // Suppression d'une liste collaborative = quitter (les autres
-      // membres la conservent).
-      await quitterListePartagee(id);
+      // On lit le document TANT QU'ON EST ENCORE MEMBRE (la règle de lecture
+      // l'exige) pour savoir si on en est le propriétaire.
+      String? proprietaireId;
+      try {
+        final doc = await _listesPartageesCol.doc(id).get();
+        if (doc.exists) {
+          proprietaireId =
+              (doc.data() as Map<String, dynamic>)['proprietaireId'] as String?;
+        }
+      } catch (_) {
+        // lecture impossible : on retombera sur un simple « quitter ».
+      }
+      if (proprietaireId == _uid && liste != null) {
+        // Propriétaire : suppression complète pour tout le monde. Si les
+        // règles Firestore refusent la suppression du document, on retombe
+        // au moins sur « quitter » pour que la liste disparaisse chez nous.
+        try {
+          await supprimerListePartageeCompletement(liste);
+        } catch (_) {
+          await quitterListePartagee(id);
+        }
+      } else {
+        // Membre non-propriétaire : on quitte, les autres la conservent.
+        await quitterListePartagee(id);
+      }
     } else {
       await _col('listes').doc(id).delete();
     }
@@ -632,13 +699,34 @@ class SyncService {
   Future<void> sauvegarderArticleListe(ArticleListe al) async {
     if (!_estConnecte) return;
     final liste = await _localDb.getListe(al.listeId);
-    final col = liste?.partagee == true
-        ? _listesPartageesCol.doc(al.listeId).collection('articles')
-        : _col('listes').doc(al.listeId).collection('articles');
-    final data = liste?.partagee == true
-        ? {...al.toMap(), 'lastModifiedBy': _uid}
-        : al.toMap();
-    await col.doc(al.id).set(data);
+    if (liste?.partagee == true) {
+      // Une ligne de liste ne référence qu'un `articleId` du catalogue, or le
+      // catalogue est PERSONNEL à chaque compte : sans le nom, un membre qui
+      // reçoit l'ajout d'un autre n'a aucun Article correspondant en base et
+      // la ligne reste invisible chez lui. On dénormalise donc le nom (et la
+      // catégorie/rayon quand ils existent) dans le document partagé pour que
+      // les autres puissent recréer un article local affichable. Voir la
+      // reconstruction dans le listener de listes_partagees.
+      final articles = await _localDb.getArticles();
+      final article = articles.where((a) => a.id == al.articleId).firstOrNull;
+      await _listesPartageesCol
+          .doc(al.listeId)
+          .collection('articles')
+          .doc(al.id)
+          .set({
+        ...al.toMap(),
+        'lastModifiedBy': _uid,
+        if (article != null) 'nomArticle': article.nom,
+        if (article?.categorieId != null) 'categorieId': article!.categorieId,
+        if (article?.rayonId != null) 'rayonId': article!.rayonId,
+      });
+    } else {
+      await _col('listes')
+          .doc(al.listeId)
+          .collection('articles')
+          .doc(al.id)
+          .set(al.toMap());
+    }
   }
 
   Future<void> supprimerArticleListe(String listeId, String id) async {
