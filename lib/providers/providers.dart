@@ -274,6 +274,19 @@ class ArticlesNotifier extends AsyncNotifier<List<Article>> {
   }
 }
 
+// Clé de tri alphabétique « naturelle » : sans accents ni casse, pour que
+// "Pâte" se range avec les P (et non tout à la fin à cause de â/é qui, en
+// code Unicode brut, viennent après z).
+String cleTriAlpha(String s) {
+  const a = 'àâäéèêëïîôöùûüçñ';
+  const b = 'aaaeeeeiioouuucn';
+  var out = s.trim().toLowerCase();
+  for (var i = 0; i < a.length; i++) {
+    out = out.replaceAll(a[i], b[i]);
+  }
+  return out;
+}
+
 final articlesFiltresProvider =
     Provider<AsyncValue<List<Article>>>((ref) {
   final articlesAsync = ref.watch(articlesNotifierProvider);
@@ -304,7 +317,7 @@ final articlesFiltresProvider =
             final bM = b.rayonId == filterRay ? 0 : 1;
             if (aM != bM) return aM.compareTo(bM);
           }
-          return a.nom.compareTo(b.nom);
+          return cleTriAlpha(a.nom).compareTo(cleTriAlpha(b.nom));
         });
       case SortMode.categorie:
         liste.sort((a, b) =>
@@ -628,7 +641,15 @@ final prixIndicatifProvider =
   if (cache != null) {
     final trouve = (cache['trouve'] as int) == 1;
     final date = DateTime.tryParse(cache['date'] as String? ?? '');
-    final delaiFraicheur = trouve ? const Duration(days: 14) : const Duration(hours: 3);
+    // Un résultat TROUVÉ reste valable 14 jours. Un « non trouvé » n'est gardé
+    // que 45 min : la base Open Prices est communautaire et souvent muette au
+    // premier essai (réseau froid, produit sans relevé), or l'utilisateur veut
+    // voir un prix apparaître tout seul. Un TTL court fait re-tenter la
+    // recherche au prochain passage / prochain démarrage sans qu'il ait à
+    // appuyer sur « Chercher en ligne », tout en évitant de spammer le réseau
+    // à chaque rebuild.
+    final delaiFraicheur =
+        trouve ? const Duration(days: 14) : const Duration(minutes: 45);
     final frais = date != null && DateTime.now().difference(date) < delaiFraicheur;
     if (frais) {
       if (!trouve) return null;

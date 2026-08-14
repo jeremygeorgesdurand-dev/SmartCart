@@ -48,8 +48,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   // Pré-charge les prix indicatifs en ligne, en arrière-plan et sans bloquer
-  // l'UI. S'appuie sur le cache de prixIndicatifProvider (14 j si trouvé, 3 h
-  // sinon) : les articles déjà connus reviennent instantanément sans réseau ;
+  // l'UI. S'appuie sur le cache de prixIndicatifProvider (14 j si trouvé,
+  // 45 min sinon) : les articles déjà connus reviennent instantanément ;
   // on ne temporise qu'après un vrai appel réseau, pour ne pas marteler les
   // API tout en restant économe. Les erreurs sont ignorées (best effort).
   Future<void> _rechaufferPrix() async {
