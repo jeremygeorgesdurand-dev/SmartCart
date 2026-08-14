@@ -77,6 +77,31 @@ class SmartCartWidget : AppWidgetProvider() {
             return bmp
         }
 
+        // Compte (total, cochés) des articles d'une liste directement en base,
+        // pour un en-tête toujours cohérent avec la liste défilante. Retourne
+        // null si la base n'existe pas / n'est pas lisible (on retombe alors
+        // sur les préférences poussées par Flutter).
+        private fun compterDepuisDB(context: Context, listeId: String): Pair<Int, Int>? {
+            if (listeId.isEmpty()) return null
+            return try {
+                val dbFile = context.getDatabasePath("smartcart.db")
+                if (!dbFile.exists()) return null
+                val db = android.database.sqlite.SQLiteDatabase.openDatabase(
+                    dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
+                val c = db.rawQuery(
+                    "SELECT COUNT(*), COALESCE(SUM(coche), 0) " +
+                        "FROM articles_liste WHERE listeId = ?",
+                    arrayOf(listeId))
+                val res = if (c.moveToFirst()) Pair(c.getInt(0), c.getInt(1)) else null
+                c.close()
+                db.close()
+                res
+            } catch (e: Exception) {
+                Log.e(TAG, "compterDepuisDB error: $e")
+                null
+            }
+        }
+
         fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int) {
             val prefs = context.getSharedPreferences(
                 "FlutterSharedPreferences", Context.MODE_PRIVATE)
@@ -94,8 +119,17 @@ class SmartCartWidget : AppWidgetProvider() {
 
             val listeNom = findString(prefs, "widget_liste_nom")
             val listeId = findString(prefs, "widget_liste_id")
-            val total = findInt(prefs, "widget_total")
-            val cochesCount = findInt(prefs, "widget_coches")
+            // Le compteur de l'en-tête est lu DIRECTEMENT dans la base, la même
+            // source que la liste défilante (SmartCartWidgetService) : les
+            // préférences widget_total/widget_coches poussées par Flutter
+            // pouvaient être en retard sur la base (suppression d'un article,
+            // ajout via QuickAdd…), d'où un en-tête « 0/5 » au-dessus de 4
+            // lignes bien réelles. En comptant ici, en-tête et liste ne peuvent
+            // plus diverger. On retombe sur les préférences seulement si la
+            // base n'est pas lisible.
+            val compte = listeId?.let { compterDepuisDB(context, it) }
+            val total = compte?.first ?: findInt(prefs, "widget_total")
+            val cochesCount = compte?.second ?: findInt(prefs, "widget_coches")
             val progression = if (total > 0) (cochesCount * 100 / total) else 0
 
             Log.d(TAG, "update: nom=$listeNom total=$total")
