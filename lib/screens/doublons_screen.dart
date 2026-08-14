@@ -52,9 +52,9 @@ class _GroupeCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Text(
-                '${articles.length} articles similaires',
+                '${articles.length} articles similaires — gardez-en un',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: Theme.of(context).colorScheme.outline,
                     ),
@@ -65,10 +65,39 @@ class _GroupeCard extends ConsumerWidget {
                 dense: true,
                 title: Text(a.nom),
                 subtitle: a.marque != null ? Text(a.marque!) : null,
-                trailing: IconButton(
-                  icon: Icon(Icons.delete_outline, color: couleurDanger(context)),
-                  tooltip: 'Supprimer cet article du catalogue',
-                  onPressed: () => _confirmerSuppression(context, ref, a),
+                // Un seul geste par choix : « Garder » supprime tous les autres
+                // du groupe d'un coup ; la corbeille supprime juste celui-ci.
+                // Pas de dialogue de confirmation — une action Annuler dans le
+                // message suffit et va beaucoup plus vite.
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (articles.length > 2)
+                      TextButton(
+                        onPressed: () => _garderSeulement(context, ref, a),
+                        child: const Text('Garder'),
+                      ),
+                    IconButton(
+                      icon: Icon(Icons.delete_outline,
+                          color: couleurDanger(context)),
+                      tooltip: 'Supprimer cet article',
+                      onPressed: () => _supprimer(context, ref, [a],
+                          '"${a.nom}" supprimé'),
+                    ),
+                  ],
+                ),
+              ),
+            if (articles.length == 2)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.merge_type, size: 18),
+                    label: Text('Garder « ${articles.first.nom} »'),
+                    onPressed: () =>
+                        _garderSeulement(context, ref, articles.first),
+                  ),
                 ),
               ),
           ],
@@ -77,29 +106,33 @@ class _GroupeCard extends ConsumerWidget {
     );
   }
 
-  void _confirmerSuppression(BuildContext context, WidgetRef ref, Article a) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Supprimer ?'),
-        content: Text(
-            'Supprimer "${a.nom}" du catalogue ? Il sera aussi retiré des listes où il apparaît.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Annuler')),
-          FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: couleurDanger(context),
-                foregroundColor: texteContrastant(couleurDanger(context))),
-            onPressed: () {
-              ref.read(articlesNotifierProvider.notifier).supprimer(a.id);
-              Navigator.pop(context);
-            },
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
-    );
+  void _garderSeulement(BuildContext context, WidgetRef ref, Article garde) {
+    final aSupprimer = articles.where((a) => a.id != garde.id).toList();
+    _supprimer(context, ref, aSupprimer,
+        '${aSupprimer.length} doublon(s) supprimé(s), « ${garde.nom} » conservé');
+  }
+
+  // Supprime la liste d'articles et propose de tout annuler via le SnackBar,
+  // en réinsérant les articles supprimés tels quels (mêmes id).
+  void _supprimer(BuildContext context, WidgetRef ref, List<Article> articles,
+      String message) {
+    final notifier = ref.read(articlesNotifierProvider.notifier);
+    for (final a in articles) {
+      notifier.supprimer(a.id);
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Annuler',
+          onPressed: () {
+            for (final a in articles) {
+              notifier.ajouter(a);
+            }
+          },
+        ),
+      ));
   }
 }

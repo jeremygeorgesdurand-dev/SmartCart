@@ -5,19 +5,13 @@ import '../models/models.dart';
 // proches (petite distance de Levenshtein) — typiquement des articles créés
 // séparément via le scan, la dictée vocale et la saisie manuelle.
 class DoublonsService {
-  static const _accents = {
-    'à': 'a', 'â': 'a', 'ä': 'a',
-    'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
-    'î': 'i', 'ï': 'i',
-    'ô': 'o', 'ö': 'o',
-    'ù': 'u', 'û': 'u', 'ü': 'u',
-    'ç': 'c',
-  };
-
   static String _normaliser(String s) {
     var t = s.toLowerCase().trim();
-    _accents.forEach((k, v) => t = t.replaceAll(k, v));
-    t = t.replaceAll(RegExp(r'[^a-z0-9 ]'), '');
+    // On GARDE les accents : les retirer faisait fusionner des mots
+    // réellement différents ("pâtes" et "paté" devenaient tous deux "pate").
+    // Une simple différence d'accent d'un même mot (café/cafe) reste
+    // rattrapée plus bas par la distance de Levenshtein ≤ 1.
+    t = t.replaceAll(RegExp(r'[^a-z0-9àâäéèêëïîôöùûüçñ ]'), '');
     t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (t.endsWith('s') && t.length > 3) t = t.substring(0, t.length - 1);
     return t;
