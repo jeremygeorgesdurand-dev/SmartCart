@@ -43,7 +43,14 @@ class _RecettesScreenState extends State<RecettesScreen>
   }
 
   bool _onScroll(ScrollNotification n) {
-    if (n is OverscrollNotification && !_relaisDeclenche) {
+    // On ne relaie que l'overscroll HORIZONTAL (celui du TabBarView aux bords
+    // gauche/droite). Sans ce filtre, arriver en bas d'une liste de recettes
+    // émettait un overscroll VERTICAL qui, sur le dernier sous-onglet,
+    // déclenchait à tort le passage à l'écran voisin (Budget) : défiler vers
+    // le bas « sautait » de page.
+    if (n is OverscrollNotification &&
+        n.metrics.axis == Axis.horizontal &&
+        !_relaisDeclenche) {
       if (n.overscroll < 0 && _tab.index == 0) {
         _relaisDeclenche = true;
         widget.onDeborderGauche?.call();

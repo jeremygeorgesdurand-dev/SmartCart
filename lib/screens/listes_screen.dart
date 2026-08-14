@@ -1705,6 +1705,45 @@ class _ArticleListeTile extends ConsumerWidget {
     );
   }
 
+  // Sous-titre = pastille de catégorie (couleur + nom) pour différencier les
+  // articles d'un coup d'œil, suivie de la marque si elle existe. Rien si
+  // l'article n'a ni catégorie ni marque.
+  Widget? _sousTitre(BuildContext context, WidgetRef ref) {
+    final categories = ref.watch(categoriesNotifierProvider).valueOrNull ?? [];
+    final cat = article.categorieId == null
+        ? null
+        : categories.where((c) => c.id == article.categorieId).firstOrNull;
+    if (cat == null && article.marque == null) return null;
+    return Row(
+      children: [
+        if (cat != null) ...[
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: Color(cat.couleur),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(cat.nom,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall),
+          ),
+        ],
+        if (cat != null && article.marque != null)
+          Text(' · ', style: Theme.of(context).textTheme.bodySmall),
+        if (article.marque != null)
+          Flexible(
+            child: Text(article.marque!,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Semantics(
@@ -1722,7 +1761,7 @@ class _ArticleListeTile extends ConsumerWidget {
             : const TextStyle(fontWeight: FontWeight.w500),
         child: Text(article.nom),
       ),
-      subtitle: article.marque != null ? Text(article.marque!) : null,
+      subtitle: _sousTitre(context, ref),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
