@@ -37,6 +37,48 @@ class RecipeImportService {
     dotAll: true,
   );
 
+  static final _reBalises = RegExp(r'<[^>]+>');
+  static final _reEntiteNum = RegExp(r'&#(x?)([0-9a-fA-F]+);');
+  static const _entitesNommees = {
+    'amp': '&', 'lt': '<', 'gt': '>', 'quot': '"', 'apos': "'",
+    'nbsp': ' ', 'eacute': 'é', 'egrave': 'è', 'ecirc': 'ê', 'euml': 'ë',
+    'agrave': 'à', 'acirc': 'â', 'ccedil': 'ç', 'ocirc': 'ô', 'ugrave': 'ù',
+    'ucirc': 'û', 'icirc': 'î', 'iuml': 'ï', 'ordf': 'ª', 'deg': '°',
+    'laquo': '«', 'raquo': '»', 'hellip': '…', 'rsquo': '’',
+    'lsquo': '‘', 'ldquo': '“', 'rdquo': '”',
+    'mdash': '—', 'ndash': '–', 'oelig': 'œ', 'frac12': '½', 'frac14': '¼',
+    'frac34': '¾',
+  };
+
+  // Le texte des sites arrive souvent avec des entités HTML (&lt; &quot;
+  // &#039; &#8217;…) et parfois des balises (<a href=…>). On décode les
+  // entités, on retire les balises, puis on re-décode au cas où des entités
+  // se cachaient à l'intérieur d'un attribut de balise, et on tasse les
+  // espaces. Résultat : un texte lisible, sans HTML.
+  static String nettoyerHtml(String input) {
+    var s = _decoderEntites(input);
+    s = s.replaceAll(_reBalises, ' ');
+    s = _decoderEntites(s);
+    return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  static String _decoderEntites(String input) {
+    if (!input.contains('&')) return input;
+    var s = input.replaceAllMapped(_reEntiteNum, (m) {
+      final code = int.tryParse(m.group(2)!, radix: m.group(1) == 'x' ? 16 : 10);
+      if (code == null) return m.group(0)!;
+      try {
+        return String.fromCharCode(code);
+      } catch (_) {
+        return m.group(0)!;
+      }
+    });
+    _entitesNommees.forEach((nom, val) {
+      s = s.replaceAll('&$nom;', val);
+    });
+    return s;
+  }
+
   Future<RecetteImportee?> importerDepuisUrl(String url) async {
     try {
       final uri = Uri.parse(url.trim());
@@ -86,13 +128,16 @@ class RecipeImportService {
         type == 'Recipe' || (type is List && type.contains('Recipe'));
     if (!estRecette) return null;
 
-    final nom = (map['name'] as String?)?.trim();
-    if (nom == null || nom.isEmpty) return null;
+    final nom = nettoyerHtml((map['name'] as String?) ?? '');
+    if (nom.isEmpty) return null;
 
     final ingredientsRaw =
         map['recipeIngredient'] ?? map['ingredients'] ?? [];
     final ingredients = ingredientsRaw is List
-        ? ingredientsRaw.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList()
+        ? ingredientsRaw
+            .map((e) => nettoyerHtml(e.toString()))
+            .where((e) => e.isNotEmpty)
+            .toList()
         : <String>[];
 
     return RecetteImportee(
@@ -111,8 +156,9 @@ class RecipeImportService {
   List<String> _extraireEtapes(dynamic instr) {
     final out = <String>[];
     void ajouter(String? s) {
-      final t = s?.trim();
-      if (t != null && t.isNotEmpty) out.add(t);
+      if (s == null) return;
+      final t = nettoyerHtml(s);
+      if (t.isNotEmpty) out.add(t);
     }
 
     void visiter(dynamic node) {
