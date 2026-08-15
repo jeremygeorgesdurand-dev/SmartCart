@@ -29,7 +29,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 11,
+      version: 12,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -182,6 +182,20 @@ class DatabaseService {
                 'ALTER TABLE recettes ADD COLUMN imageUrl TEXT');
           }
         }
+        if (oldV < 12) {
+          // Instantané de catégorie transporté avec un article dans une liste
+          // collaborative (nom + couleur), pour un regroupement identique chez
+          // tous les membres sans partager les catalogues.
+          final tables = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name = 'articles_liste'");
+          if (tables.isNotEmpty) {
+            await db.execute(
+                'ALTER TABLE articles_liste ADD COLUMN catNom TEXT');
+            await db.execute(
+                'ALTER TABLE articles_liste ADD COLUMN catCouleur INTEGER');
+          }
+        }
       },
     );
   }
@@ -292,6 +306,8 @@ class DatabaseService {
         unite TEXT,
         note TEXT,
         coche INTEGER DEFAULT 0,
+        catNom TEXT,
+        catCouleur INTEGER,
         FOREIGN KEY (listeId) REFERENCES listes(id) ON DELETE CASCADE,
         FOREIGN KEY (articleId) REFERENCES articles(id)
       )

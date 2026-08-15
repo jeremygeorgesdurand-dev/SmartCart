@@ -337,7 +337,7 @@ class SyncService {
                       // propres catégories/rayons du même nom ; sinon l'article
                       // reste « sans catégorie » chez moi (je n'invente pas une
                       // catégorie qui n'existe pas dans mon organisation).
-                      final nomCat = data['categorieNom'] as String?;
+                      final nomCat = data['catNom'] as String?;
                       final nomRayon = data['rayonNom'] as String?;
                       String? catId;
                       String? rayonId;
@@ -758,11 +758,14 @@ class SyncService {
       // question « chacun ses catégories ? » : oui, mais on les rapproche par
       // nom pour que l'article tombe dans la bonne rubrique chez tout le monde.
       String? nomCat;
+      int? couleurCat;
       String? nomRayon;
       if (article?.categorieId != null) {
         final cats = await _localDb.getCategories();
-        nomCat =
-            cats.where((c) => c.id == article!.categorieId).firstOrNull?.nom;
+        final cat =
+            cats.where((c) => c.id == article!.categorieId).firstOrNull;
+        nomCat = cat?.nom;
+        couleurCat = cat?.couleur;
       }
       if (article?.rayonId != null) {
         final rayons = await _localDb.getRayons();
@@ -775,9 +778,13 @@ class SyncService {
           .doc(al.id)
           .set({
         ...al.toMap(),
+        // Instantané de catégorie transporté avec l'article : nom + couleur,
+        // pour un regroupement identique chez tous les membres (l'al local du
+        // vendeur a catNom nul, on l'écrase ici avec sa catégorie réelle).
+        'catNom': nomCat,
+        'catCouleur': couleurCat,
         'lastModifiedBy': _uid,
         if (article != null) 'nomArticle': article.nom,
-        if (nomCat != null) 'categorieNom': nomCat,
         if (nomRayon != null) 'rayonNom': nomRayon,
       });
     } else {

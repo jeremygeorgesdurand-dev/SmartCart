@@ -1350,33 +1350,65 @@ class DetailListeScreen extends ConsumerWidget {
                       );
                     }
 
-                    // Grouper par catégorie ou rayon
+                    // Grouper par catégorie ou rayon. Pour une liste
+                    // COLLABORATIVE triée par catégorie, on regroupe d'après
+                    // l'instantané de catégorie transporté avec chaque article
+                    // (nom + couleur) plutôt que la catégorie locale : ainsi
+                    // tous les membres voient le même regroupement, dans le même
+                    // ordre (alphabétique), même sans avoir les mêmes catégories
+                    // — et sans qu'on touche à leur catalogue. On calcule au
+                    // passage le libellé/couleur/ordre de chaque groupe.
                     final Map<String,
                             List<({ArticleListe item, Article article})>>
                         groupes = {};
+                    final Map<String, ({String label, Color? couleur, int ordre})>
+                        meta = {};
                     for (final e in itemsEnrichis) {
-                      final cle = sortMode == SortMode.categorie
-                          ? (e.article.categorieId ?? '__aucun__')
-                          : (e.article.rayonId ?? '__aucun__');
+                      String cle;
+                      String label;
+                      Color? couleur;
+                      int ordre;
+                      if (sortMode == SortMode.categorie) {
+                        final catLocale = categories
+                            .where((c) => c.id == e.article.categorieId)
+                            .firstOrNull;
+                        final nom = liste.partagee
+                            ? (e.item.catNom ?? catLocale?.nom)
+                            : catLocale?.nom;
+                        final coul = liste.partagee
+                            ? (e.item.catCouleur ?? catLocale?.couleur)
+                            : catLocale?.couleur;
+                        cle = nom ?? '__aucun__';
+                        label = nom ?? 'Sans catégorie';
+                        couleur = coul != null ? Color(coul) : null;
+                        // Listes partagées : tri alphabétique du libellé (même
+                        // ordre pour tous). Listes perso : ordre personnalisé.
+                        ordre = liste.partagee ? 0 : (catLocale?.ordre ?? 99);
+                      } else {
+                        final ray = rayons
+                            .where((r) => r.id == e.article.rayonId)
+                            .firstOrNull;
+                        cle = e.article.rayonId ?? '__aucun__';
+                        label = ray?.nom ?? 'Sans rayon';
+                        couleur = null;
+                        ordre = ray?.ordre ?? 99;
+                      }
                       groupes.putIfAbsent(cle, () => []).add(e);
+                      meta[cle] = (label: label, couleur: couleur, ordre: ordre);
                     }
 
-                    // Trier les clés par ordre
+                    // Trier les clés par ordre, puis alphabétiquement.
                     final cles = groupes.keys.toList()
                       ..sort((a, b) {
                         if (a == '__aucun__') return 1;
                         if (b == '__aucun__') return -1;
-                        if (sortMode == SortMode.categorie) {
-                          final ca =
-                              categories.where((c) => c.id == a).firstOrNull;
-                          final cb =
-                              categories.where((c) => c.id == b).firstOrNull;
-                          return (ca?.ordre ?? 99).compareTo(cb?.ordre ?? 99);
-                        } else {
-                          final ra = rayons.where((r) => r.id == a).firstOrNull;
-                          final rb = rayons.where((r) => r.id == b).firstOrNull;
-                          return (ra?.ordre ?? 99).compareTo(rb?.ordre ?? 99);
-                        }
+                        final ma = meta[a]!;
+                        final mb = meta[b]!;
+                        final parOrdre = ma.ordre.compareTo(mb.ordre);
+                        if (parOrdre != 0) return parOrdre;
+                        return ma.label
+                            .toLowerCase()
+                            .compareTo(mb.label.toLowerCase());
                       });
 
                     return ListView.builder(
@@ -1385,24 +1417,8 @@ class DetailListeScreen extends ConsumerWidget {
                       itemBuilder: (_, i) {
                         final cle = cles[i];
                         final groupe = groupes[cle]!;
-                        String label;
-                        Color? couleur;
-                        if (cle == '__aucun__') {
-                          label = sortMode == SortMode.categorie
-                              ? 'Sans categorie'
-                              : 'Sans rayon';
-                        } else if (sortMode == SortMode.categorie) {
-                          final cat =
-                              categories.where((c) => c.id == cle).firstOrNull;
-                          label = cat?.nom ?? cle;
-                          couleur = cat != null ? Color(cat.couleur) : null;
-                        } else {
-                          label = rayons
-                                  .where((r) => r.id == cle)
-                                  .firstOrNull
-                                  ?.nom ??
-                              cle;
-                        }
+                        final label = meta[cle]!.label;
+                        final couleur = meta[cle]!.couleur;
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1710,29 +1726,36 @@ class _ArticleListeTile extends ConsumerWidget {
   // l'article n'a ni catégorie ni marque.
   Widget? _sousTitre(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesNotifierProvider).valueOrNull ?? [];
-    final cat = article.categorieId == null
+    final catLocale = article.categorieId == null
         ? null
         : categories.where((c) => c.id == article.categorieId).firstOrNull;
-    if (cat == null && article.marque == null) return null;
+    // Sur une liste partagée, on affiche la catégorie transportée avec
+    // l'article (celle de qui l'a ajouté) même si je ne l'ai pas dans mon
+    // catalogue ; sinon ma catégorie locale.
+    final catNom = articleListe.catNom ?? catLocale?.nom;
+    final catCoul = articleListe.catCouleur ?? catLocale?.couleur;
+    if (catNom == null && article.marque == null) return null;
     return Row(
       children: [
-        if (cat != null) ...[
+        if (catNom != null) ...[
           Container(
             width: 8,
             height: 8,
             decoration: BoxDecoration(
-              color: Color(cat.couleur),
+              color: catCoul != null
+                  ? Color(catCoul)
+                  : Theme.of(context).colorScheme.primary,
               shape: BoxShape.circle,
             ),
           ),
           const SizedBox(width: 6),
           Flexible(
-            child: Text(cat.nom,
+            child: Text(catNom,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall),
           ),
         ],
-        if (cat != null && article.marque != null)
+        if (catNom != null && article.marque != null)
           Text(' · ', style: Theme.of(context).textTheme.bodySmall),
         if (article.marque != null)
           Flexible(

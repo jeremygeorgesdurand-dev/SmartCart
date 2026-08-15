@@ -170,6 +170,13 @@ class ArticleListe {
   final String? unite;    // ex: kg, L, unité
   final String? note;
   final bool coche;       // coché en magasin
+  // Instantané de la catégorie de l'article AU MOMENT de l'ajout, transporté
+  // avec l'article dans une liste collaborative. Les catégories étant propres
+  // à chaque compte, c'est ce qui permet à tous les membres de voir le même
+  // regroupement (« Organisation par liste ») sans partager leur catalogue.
+  // Nul pour les listes personnelles (on y utilise la catégorie live locale).
+  final String? catNom;
+  final int? catCouleur;
 
   ArticleListe({
     required this.id,
@@ -179,6 +186,8 @@ class ArticleListe {
     this.unite,
     this.note,
     this.coche = false,
+    this.catNom,
+    this.catCouleur,
   });
 
   ArticleListe copyWith({
@@ -195,6 +204,8 @@ class ArticleListe {
         unite: unite ?? this.unite,
         note: note ?? this.note,
         coche: coche ?? this.coche,
+        catNom: catNom,
+        catCouleur: catCouleur,
       );
 
   Map<String, dynamic> toMap() => {
@@ -205,6 +216,8 @@ class ArticleListe {
         'unite': unite,
         'note': note,
         'coche': coche ? 1 : 0,
+        'catNom': catNom,
+        'catCouleur': catCouleur,
       };
 
   factory ArticleListe.fromMap(Map<String, dynamic> map) => ArticleListe(
@@ -215,6 +228,8 @@ class ArticleListe {
         unite: map['unite'],
         note: map['note'],
         coche: map['coche'] == 1,
+        catNom: map['catNom'] as String?,
+        catCouleur: (map['catCouleur'] as num?)?.toInt(),
       );
 }
 
