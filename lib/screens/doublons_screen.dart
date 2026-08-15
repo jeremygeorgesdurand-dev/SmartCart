@@ -44,6 +44,7 @@ class _GroupeCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final categories = ref.watch(categoriesNotifierProvider).valueOrNull ?? [];
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -64,7 +65,11 @@ class _GroupeCard extends ConsumerWidget {
               ListTile(
                 dense: true,
                 title: Text(a.nom),
-                subtitle: a.marque != null ? Text(a.marque!) : null,
+                // La catégorie (couleur + nom) et la marque distinguent des
+                // articles au nom proche mais bien différents (« Pâtes » en
+                // Épicerie vs « Paté » au Frigo) : de quoi décider lesquels
+                // sont vraiment des doublons avant d'en supprimer.
+                subtitle: _sousTitre(context, a, categories),
                 // Un seul geste par choix : « Garder » supprime tous les autres
                 // du groupe d'un coup ; la corbeille supprime juste celui-ci.
                 // Pas de dialogue de confirmation — une action Annuler dans le
@@ -103,6 +108,33 @@ class _GroupeCard extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  // Pastille de catégorie (couleur + nom) puis marque. null si l'article n'a
+  // ni catégorie ni marque.
+  Widget? _sousTitre(
+      BuildContext context, Article a, List<Categorie> categories) {
+    final cat = a.categorieId == null
+        ? null
+        : categories.where((c) => c.id == a.categorieId).firstOrNull;
+    if (cat == null && a.marque == null) return null;
+    return Row(
+      children: [
+        if (cat != null) ...[
+          Container(
+            width: 8,
+            height: 8,
+            decoration:
+                BoxDecoration(color: Color(cat.couleur), shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Flexible(child: Text(cat.nom, overflow: TextOverflow.ellipsis)),
+        ],
+        if (cat != null && a.marque != null) const Text(' · '),
+        if (a.marque != null)
+          Flexible(child: Text(a.marque!, overflow: TextOverflow.ellipsis)),
+      ],
     );
   }
 
