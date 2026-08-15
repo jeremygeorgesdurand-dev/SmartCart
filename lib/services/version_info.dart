@@ -1,9 +1,34 @@
 class VersionInfo {
-  static const String version = '1.1.0';
-  static const String buildNumber = '26';
-  static const String dateMiseAJour = '28 juillet 2026';
+  // À INCRÉMENTER À CHAQUE CHANGEMENT : patch (1.2.0 → 1.2.1) pour un
+  // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
+  // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
+  // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
+  static const String version = '1.2.0';
+  static const String buildNumber = '27';
+  static const String dateMiseAJour = '15 août 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.2.0',
+      date: '15 août 2026',
+      changements: [
+        'Nouvel onglet Recettes : dataset français local (Wikilivres), '
+            'recherche, filtres, suggestions « d\'après mon frigo »',
+        'Import d\'une recette depuis une URL (ingrédients, étapes, photo)',
+        'Reconnaissance d\'un fruit/légume par photo (IA locale, hors-ligne)',
+        'Prix depuis une photo du ticket de caisse (lecture locale, hors-ligne)',
+        'Import de recette : entités HTML et balises enfin décodées',
+        'Catalogue trié en ignorant les accents (« Pâte » avec les P)',
+        'Doublons : moins de faux positifs, catégories affichées, '
+            'suppression en un geste',
+        'Widget : compteur d\'en-tête cohérent avec la liste',
+        'Prix indicatifs qui apparaissent d\'eux-mêmes plus souvent',
+        'Listes collaboratives : articles des autres visibles, '
+            'suppression possible par le propriétaire',
+        'Catégories affichées sur chaque article des listes',
+        'Numéro de version affiché et incrémenté à chaque mise à jour',
+      ],
+    ),
     Release(
       version: '1.1.0',
       date: '28 juillet 2026',
