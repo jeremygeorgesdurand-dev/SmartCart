@@ -333,11 +333,35 @@ class SyncService {
                     final existe =
                         catalogue.any((a) => a.id == item.articleId);
                     if (!existe) {
+                      // Rapproche la catégorie/le rayon reçus (par NOM) de mes
+                      // propres catégories/rayons du même nom ; sinon l'article
+                      // reste « sans catégorie » chez moi (je n'invente pas une
+                      // catégorie qui n'existe pas dans mon organisation).
+                      final nomCat = data['categorieNom'] as String?;
+                      final nomRayon = data['rayonNom'] as String?;
+                      String? catId;
+                      String? rayonId;
+                      if (nomCat != null) {
+                        final cats = await _localDb.getCategories();
+                        catId = cats
+                            .where((c) =>
+                                c.nom.toLowerCase() == nomCat.toLowerCase())
+                            .firstOrNull
+                            ?.id;
+                      }
+                      if (nomRayon != null) {
+                        final rayons = await _localDb.getRayons();
+                        rayonId = rayons
+                            .where((r) =>
+                                r.nom.toLowerCase() == nomRayon.toLowerCase())
+                            .firstOrNull
+                            ?.id;
+                      }
                       await _localDb.insertArticle(Article(
                         id: item.articleId,
                         nom: nomArticle,
-                        categorieId: data['categorieId'] as String?,
-                        rayonId: data['rayonId'] as String?,
+                        categorieId: catId,
+                        rayonId: rayonId,
                       ));
                     }
                   }
@@ -510,6 +534,24 @@ class SyncService {
     }
     batch.delete(docRef);
     await batch.commit();
+  }
+
+  // Ré-pousse vers Firestore tous les articles des listes collaboratives
+  // locales. Indispensable pour le « + » du widget d'écran d'accueil : il
+  // écrit l'article DIRECTEMENT en base SQLite (code natif, QuickAddActivity)
+  // sans passer par la synchro, donc un article ajouté depuis le widget à une
+  // liste partagée n'arrivait jamais chez les autres membres. On réconcilie au
+  // retour de l'app au premier plan. `set` est idempotent (les écritures en
+  // attente sont ignorées par le listener, pas de boucle d'écho).
+  Future<void> reconcilierListesPartagees() async {
+    if (!_estConnecte) return;
+    final listes = await _localDb.getListes(inclureArchivees: true);
+    for (final liste in listes.where((l) => l.partagee)) {
+      final items = await _localDb.getArticlesListe(liste.id);
+      for (final item in items) {
+        await sauvegarderArticleListe(item);
+      }
+    }
   }
 
   // Retire un AUTRE membre d'une liste collaborative. N'importe quel
@@ -709,6 +751,24 @@ class SyncService {
       // reconstruction dans le listener de listes_partagees.
       final articles = await _localDb.getArticles();
       final article = articles.where((a) => a.id == al.articleId).firstOrNull;
+      // Les catégories/rayons sont PROPRES à chaque compte : un id de
+      // catégorie n'a aucun sens chez l'autre membre. On envoie donc le NOM
+      // de la catégorie/du rayon ; à la réception, chacun le fait correspondre
+      // à sa propre catégorie du même nom (voir le listener). Réponse à la
+      // question « chacun ses catégories ? » : oui, mais on les rapproche par
+      // nom pour que l'article tombe dans la bonne rubrique chez tout le monde.
+      String? nomCat;
+      String? nomRayon;
+      if (article?.categorieId != null) {
+        final cats = await _localDb.getCategories();
+        nomCat =
+            cats.where((c) => c.id == article!.categorieId).firstOrNull?.nom;
+      }
+      if (article?.rayonId != null) {
+        final rayons = await _localDb.getRayons();
+        nomRayon =
+            rayons.where((r) => r.id == article!.rayonId).firstOrNull?.nom;
+      }
       await _listesPartageesCol
           .doc(al.listeId)
           .collection('articles')
@@ -717,8 +777,8 @@ class SyncService {
         ...al.toMap(),
         'lastModifiedBy': _uid,
         if (article != null) 'nomArticle': article.nom,
-        if (article?.categorieId != null) 'categorieId': article!.categorieId,
-        if (article?.rayonId != null) 'rayonId': article!.rayonId,
+        if (nomCat != null) 'categorieNom': nomCat,
+        if (nomRayon != null) 'rayonNom': nomRayon,
       });
     } else {
       await _col('listes')

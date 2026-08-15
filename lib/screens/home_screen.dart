@@ -99,6 +99,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ref.invalidate(articlesNotifierProvider);
       ref.invalidate(listesNotifierProvider);
       ref.invalidate(articlesListeProvider);
+      // Un article ajouté à une liste COLLABORATIVE depuis le widget n'est
+      // écrit qu'en local (code natif) : on le ré-pousse vers Firestore au
+      // retour au premier plan pour qu'il parvienne aux autres membres.
+      unawaited(_syncSilencieuxResume());
+    }
+  }
+
+  Future<void> _syncSilencieuxResume() async {
+    try {
+      await ref.read(syncServiceProvider).reconcilierListesPartagees();
+    } catch (_) {
+      // hors-ligne / non connecté : sans gravité, se refera au prochain retour.
     }
   }
 
