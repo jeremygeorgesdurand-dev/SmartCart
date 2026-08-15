@@ -59,6 +59,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
+
+        <!-- Télécharge le modèle de reconnaissance de texte (OCR) de ML Kit
+             dès l'installation, pour que la lecture de ticket de caisse
+             fonctionne hors-ligne sans attendre un téléchargement au premier
+             usage. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr" />
     </application>
 
     <queries>

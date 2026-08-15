@@ -6,6 +6,7 @@ import '../services/open_prices_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 import 'historique_prix_screen.dart';
+import 'scanner_ticket_screen.dart';
 
 // ================================================================
 // ÉCRAN BUDGET — prix estimés des articles + suivi des dépenses
@@ -20,7 +21,19 @@ class BudgetScreen extends ConsumerWidget {
     final listesAsync = ref.watch(listesNotifierProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Budget courses')),
+      appBar: AppBar(
+        title: const Text('Budget courses'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.receipt_long_outlined),
+            tooltip: 'Prix depuis un ticket de caisse',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ScannerTicketScreen()),
+            ),
+          ),
+        ],
+      ),
       body: articlesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) =>

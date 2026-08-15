@@ -17,6 +17,7 @@ import '../services/auth_service.dart';
 import '../services/fcm_service.dart';
 import '../services/recipe_import_service.dart';
 import '../services/reconnaissance_aliment_service.dart';
+import '../services/ticket_ocr_service.dart';
 import '../services/sync_service.dart';
 import '../services/widget_service.dart';
 
@@ -31,6 +32,11 @@ final recipeImportServiceProvider =
 final reconnaissanceAlimentServiceProvider =
     Provider<ReconnaissanceAlimentService>((ref) {
   final service = ReconnaissanceAlimentService();
+  ref.onDispose(service.dispose);
+  return service;
+});
+final ticketOcrServiceProvider = Provider<TicketOcrService>((ref) {
+  final service = TicketOcrService();
   ref.onDispose(service.dispose);
   return service;
 });
@@ -117,6 +123,10 @@ final realtimeSyncProvider = Provider<void>((ref) {
         ref.invalidate(listesNotifierProvider);
         ref.invalidate(articlesListeProvider);
         ref.invalidate(prixArticlesNotifierProvider);
+        // Un changement venu d'un autre membre (liste collaborative) doit
+        // aussi rafraîchir le widget d'écran d'accueil s'il affiche cette
+        // liste, sinon l'ajout d'un collaborateur restait invisible dessus.
+        unawaited(_rafraichirWidgetConfigure(ref));
       });
       // Republier le profil (nom/photo affichés aux autres membres d'une
       // liste collaborative) à chaque démarrage authentifié, pas seulement
