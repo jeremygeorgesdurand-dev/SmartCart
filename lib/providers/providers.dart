@@ -516,6 +516,11 @@ class ArticlesListeNotifier
       unite: unite,
       note: al.note,
       coche: al.coche,
+      // Conserver l'instantané de catégorie (ex. catégorie imposée par le
+      // propriétaire d'une liste collaborative) : sans ça, changer l'unité le
+      // ferait perdre puis ré-écraserait la catégorie à la synchro.
+      catNom: al.catNom,
+      catCouleur: al.catCouleur,
     );
     await ref.read(dbServiceProvider).updateArticleListe(updated);
     await _syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(updated));

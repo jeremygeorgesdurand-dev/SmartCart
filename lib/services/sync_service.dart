@@ -300,6 +300,12 @@ class SyncService {
           await _subs.remove('liste_articles_$listeId')?.cancel();
           continue;
         }
+        // Suis-je le PROPRIÉTAIRE de cette liste ? Si oui, c'est MOI qui fais
+        // autorité sur les catégories : chaque article ajouté par un membre
+        // est re-tamponné avec MA catégorie (voir _imposerCategorieProprietaire).
+        final estProprio =
+            (change.doc.data() as Map<String, dynamic>)['proprietaireId'] ==
+                _uid;
         try {
           final liste =
               ListeCourses.fromMap(change.doc.data() as Map<String, dynamic>)
@@ -321,7 +327,29 @@ class SyncService {
               } else {
                 try {
                   final data = itemChange.doc.data()!;
-                  final item = ArticleListe.fromMap(data);
+                  var item = ArticleListe.fromMap(data);
+                  // Autorité du propriétaire : j'impose ma catégorie à l'article
+                  // si je l'ai à mon catalogue (sinon on garde celle de qui l'a
+                  // ajouté). Le re-tampon met à jour Firestore pour les autres
+                  // membres, ET on l'applique à ma copie locale (je ne reverrais
+                  // jamais ma propre écriture Firestore autrement).
+                  if (estProprio) {
+                    final corr = await _imposerCategorieProprietaire(
+                        listeId, itemChange.doc.id, data);
+                    if (corr != null) {
+                      item = ArticleListe(
+                        id: item.id,
+                        listeId: item.listeId,
+                        articleId: item.articleId,
+                        quantite: item.quantite,
+                        unite: item.unite,
+                        note: item.note,
+                        coche: item.coche,
+                        catNom: corr.nom,
+                        catCouleur: corr.couleur,
+                      );
+                    }
+                  }
                   // Le catalogue étant personnel, l'article référencé peut ne
                   // pas exister chez ce membre : on le recrée à partir du nom
                   // dénormalisé stocké dans le document partagé (sinon la
@@ -534,6 +562,54 @@ class SyncService {
     }
     batch.delete(docRef);
     await batch.commit();
+  }
+
+  // Le PROPRIÉTAIRE d'une liste impose ses catégories : si l'article (rapproché
+  // par nom) existe à SON catalogue, on écrase la catégorie transportée par la
+  // sienne dans le document partagé, pour que tous les membres voient la même.
+  // Si le propriétaire n'a pas l'article, on ne touche à rien → la catégorie de
+  // la personne qui l'a ajouté est conservée.
+  // Retourne la catégorie du propriétaire à appliquer (et met à jour Firestore
+  // si besoin), ou null si le propriétaire n'a pas cet article. Le retour sert
+  // aussi à corriger la copie LOCALE du propriétaire : sa propre écriture
+  // Firestore est ignorée par son listener (hasPendingWrites), il ne la
+  // reverrait donc jamais autrement.
+  Future<({String nom, int couleur})?> _imposerCategorieProprietaire(
+      String listeId, String docId, Map<String, dynamic> data) async {
+    final nomArticle = data['nomArticle'] as String?;
+    if (nomArticle == null || nomArticle.isEmpty) return null;
+    final catalogue = await _localDb.getArticles();
+    final art = catalogue
+        .where((a) => _normNom(a.nom) == _normNom(nomArticle))
+        .firstOrNull;
+    if (art?.categorieId == null) return null; // pas cet article / sans catégorie
+    final cats = await _localDb.getCategories();
+    final cat = cats.where((c) => c.id == art!.categorieId).firstOrNull;
+    if (cat == null) return null;
+    final catNomActuel = data['catNom'] as String?;
+    final catCoulActuel = (data['catCouleur'] as num?)?.toInt();
+    if (catNomActuel != cat.nom || catCoulActuel != cat.couleur) {
+      await _listesPartageesCol
+          .doc(listeId)
+          .collection('articles')
+          .doc(docId)
+          .update({
+        'catNom': cat.nom,
+        'catCouleur': cat.couleur,
+        'lastModifiedBy': _uid,
+      });
+    }
+    return (nom: cat.nom, couleur: cat.couleur);
+  }
+
+  static String _normNom(String s) {
+    const a = 'àâäéèêëïîôöùûüçñ';
+    const b = 'aaaeeeeiioouuucn';
+    var out = s.trim().toLowerCase();
+    for (var i = 0; i < a.length; i++) {
+      out = out.replaceAll(a[i], b[i]);
+    }
+    return out;
   }
 
   // Ré-pousse vers Firestore tous les articles des listes collaboratives
@@ -757,10 +833,15 @@ class SyncService {
       // à sa propre catégorie du même nom (voir le listener). Réponse à la
       // question « chacun ses catégories ? » : oui, mais on les rapproche par
       // nom pour que l'article tombe dans la bonne rubrique chez tout le monde.
-      String? nomCat;
-      int? couleurCat;
+      // Priorité à l'instantané DÉJÀ porté par la ligne (typiquement la
+      // catégorie que le propriétaire a imposée et qu'on a reçue) : sans ça, la
+      // réconciliation au retour de l'app ré-écraserait la catégorie du
+      // propriétaire par la mienne. Ce n'est qu'à défaut (nouvel ajout, catNom
+      // encore nul) qu'on prend la catégorie locale de l'article.
+      String? nomCat = al.catNom;
+      int? couleurCat = al.catCouleur;
       String? nomRayon;
-      if (article?.categorieId != null) {
+      if (nomCat == null && article?.categorieId != null) {
         final cats = await _localDb.getCategories();
         final cat =
             cats.where((c) => c.id == article!.categorieId).firstOrNull;
