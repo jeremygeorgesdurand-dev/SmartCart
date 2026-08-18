@@ -2413,6 +2413,19 @@ class RecapCoursesScreen extends ConsumerWidget {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  // Vide la liste des articles ACHETÉS (cochés) et garde les non trouvés
+  // (décochés) pour la prochaine fois, sans archiver ni supprimer la liste :
+  // elle reste dans "Mes listes", prête à resservir — plus besoin d'en recréer
+  // une. Si tout a été trouvé, la liste se vide entièrement mais reste créée.
+  Future<void> _viderEtFermer(BuildContext context, WidgetRef ref) async {
+    final notifier = ref.read(articlesListeProvider(liste.id).notifier);
+    final items = ref.read(articlesListeProvider(liste.id)).valueOrNull ?? [];
+    for (final i in items.where((i) => i.coche)) {
+      await notifier.supprimer(i.id);
+    }
+    if (context.mounted) _retourAccueil(context);
+  }
+
   Future<void> _archiverEtFermer(BuildContext context, WidgetRef ref) async {
     // N'attend que l'écriture locale (quasi instantanée) avant de revenir à
     // l'accueil : .modifier() attend aussi la synchro cloud, qui peut
@@ -2449,51 +2462,81 @@ class RecapCoursesScreen extends ConsumerWidget {
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 24),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      Text('$nbAchetes/$totalArticles articles achetés',
-                          style: Theme.of(context).textTheme.titleMedium),
-                      if (afficherPrix) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          '${total.toStringAsFixed(2)} €',
-                          style:
-                              Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).colorScheme.primary,
-                                  ),
-                        ),
-                        Text('dépensés',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.outline)),
-                      ],
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    Text('$nbAchetes/$totalArticles articles achetés',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer)),
+                    if (afficherPrix) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        '${total.toStringAsFixed(2)} €',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  Theme.of(context).colorScheme.onPrimaryContainer,
+                            ),
+                      ),
+                      Text('dépensés',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer
+                                  .withValues(alpha: 0.7))),
                     ],
-                  ),
+                  ],
                 ),
               ),
               if (nonTrouves.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Non trouvés (${nonTrouves.length})',
-                      style: Theme.of(context).textTheme.titleSmall),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.search_off,
+                          size: 18, color: couleurAvertissement(context)),
+                      const SizedBox(width: 6),
+                      Text('Non trouvés (${nonTrouves.length})',
+                          style: Theme.of(context).textTheme.titleSmall),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 8),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(nonTrouves.join(', ')),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: couleurAvertissement(context).withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color:
+                            couleurAvertissement(context).withValues(alpha: 0.3)),
                   ),
+                  child: Text(nonTrouves.join(', ')),
                 ),
               ],
               const Spacer(),
               Text(
-                'Archiver retire cette liste de "Mes listes" (elle reste '
-                'visible dans "Listes archivées" et dans l\'historique des '
-                'statistiques).',
+                nonTrouves.isNotEmpty
+                    ? 'Vider retire les articles achetés et garde les '
+                        '${nonTrouves.length} non trouvé(s) : la liste reste '
+                        'dans "Mes listes", prête à resservir.'
+                    : 'Vider retire tous les articles mais garde la liste '
+                        'créée dans "Mes listes" : plus besoin d\'en recréer '
+                        'une la prochaine fois.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context)
                     .textTheme
@@ -2501,14 +2544,22 @@ class RecapCoursesScreen extends ConsumerWidget {
                     ?.copyWith(color: Theme.of(context).colorScheme.outline),
               ),
               const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => _archiverEtFermer(context, ref),
-                child: const Text('Archiver cette liste'),
+              FilledButton.icon(
+                onPressed: () => _viderEtFermer(context, ref),
+                icon: const Icon(Icons.cleaning_services_outlined),
+                label: Text(nonTrouves.isNotEmpty
+                    ? 'Vider et garder les non trouvés'
+                    : 'Vider (garder la liste)'),
               ),
               const SizedBox(height: 8),
               OutlinedButton(
+                onPressed: () => _archiverEtFermer(context, ref),
+                child: const Text('Plutôt archiver la liste'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
                 onPressed: () => _retourAccueil(context),
-                child: const Text('Fermer sans archiver'),
+                child: const Text('Fermer sans rien changer'),
               ),
             ],
           ),
