@@ -94,12 +94,116 @@ class _SauvegardeScreenState extends ConsumerState<SauvegardeScreen> {
     }
   }
 
+  Future<void> _partagerCatalogue() async {
+    setState(() => _enCours = true);
+    try {
+      await ref.read(backupServiceProvider).partagerCatalogue();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Échec du partage : $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _enCours = false);
+    }
+  }
+
+  Future<void> _importerCatalogue() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      withData: true,
+    );
+    final bytes = result?.files.single.bytes;
+    if (bytes == null || !mounted) return;
+
+    final confirme = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Importer ce catalogue ?'),
+        content: const Text(
+            'Les articles, catégories et rayons du fichier seront ajoutés/mis '
+            'à jour dans ton catalogue. Rien ne sera supprimé de ce qui existe '
+            'déjà.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Importer'),
+          ),
+        ],
+      ),
+    );
+    if (confirme != true || !mounted) return;
+
+    setState(() => _enCours = true);
+    try {
+      final contenu = String.fromCharCodes(bytes);
+      // restaurer() fusionne catégories/rayons/articles (et ignore les listes/
+      // prix, absents d'un fichier catalogue) : exactement ce qu'il faut ici.
+      final res = await ref.read(backupServiceProvider).restaurer(contenu);
+
+      ref.invalidate(categoriesNotifierProvider);
+      ref.invalidate(rayonsNotifierProvider);
+      ref.invalidate(articlesNotifierProvider);
+
+      // Persiste le catalogue fusionné sur le compte cloud (et donc sur les
+      // autres appareils), best-effort : sans connexion, l'import local reste
+      // acquis et repartira à la prochaine synchro.
+      try {
+        await ref.read(syncServiceProvider).uploadTout();
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Catalogue importé : ${res.articles} article(s), '
+              '${res.categories} catégorie(s), ${res.rayons} rayon(s)'),
+          backgroundColor: couleurSucces(context),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Échec de l\'import : $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _enCours = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Sauvegarde')),
       body: ListView(
         children: [
+          const _EnteteSection(titre: 'Partager mon catalogue'),
+          ListTile(
+            leading: const Icon(Icons.ios_share_outlined),
+            title: const Text('Partager le catalogue'),
+            subtitle:
+                const Text('Articles + catégories (sans les listes ni prix)'),
+            trailing: _enCours
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : null,
+            onTap: _enCours ? null : _partagerCatalogue,
+          ),
+          ListTile(
+            leading: const Icon(Icons.library_add_outlined),
+            title: const Text('Importer un catalogue'),
+            subtitle:
+                const Text('Fusionne un catalogue reçu dans le tien'),
+            onTap: _enCours ? null : _importerCatalogue,
+          ),
+          const Divider(height: 32),
+          const _EnteteSection(titre: 'Sauvegarde complète'),
           ListTile(
             leading: const Icon(Icons.upload_outlined),
             title: const Text('Exporter une sauvegarde'),
@@ -154,5 +258,26 @@ class _SauvegardeScreenState extends ConsumerState<SauvegardeScreen> {
     } finally {
       if (mounted) setState(() => _majRecettes = false);
     }
+  }
+}
+
+// Petit en-tête de section (libellé discret au-dessus d'un groupe de réglages).
+class _EnteteSection extends StatelessWidget {
+  final String titre;
+  const _EnteteSection({required this.titre});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Text(
+        titre.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+      ),
+    );
   }
 }

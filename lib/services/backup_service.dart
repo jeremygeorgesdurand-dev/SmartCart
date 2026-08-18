@@ -74,6 +74,39 @@ class BackupService {
         subject: 'Sauvegarde SmartCart du ${date.day}/${date.month}/${date.year}');
   }
 
+  /// Construit le JSON d'un partage de CATALOGUE : uniquement les catégories,
+  /// rayons et articles (pas les listes ni les prix). C'est ce qu'on partage
+  /// avec une autre personne pour lui transmettre son organisation d'articles,
+  /// sans lui envoyer ses listes de courses ni ses prix.
+  Future<String> exporterCatalogueVersJson() async {
+    final categories = await _db.getCategories();
+    final rayons = await _db.getRayons();
+    final articles = await _db.getArticles();
+    return const JsonEncoder.withIndent('  ').convert({
+      'version': _version,
+      'type': 'catalogue',
+      'exportedAt': DateTime.now().toIso8601String(),
+      'categories': categories.map((c) => c.toMap()).toList(),
+      'rayons': rayons.map((r) => r.toMap()).toList(),
+      'articles': articles.map((a) => a.toMap()).toList(),
+    });
+  }
+
+  /// Génère le fichier de partage du catalogue et ouvre le menu de partage
+  /// natif (l'autre personne l'ouvre et l'importe pour fusionner dans le sien).
+  Future<void> partagerCatalogue() async {
+    final json = await exporterCatalogueVersJson();
+    final dir = await getTemporaryDirectory();
+    final date = DateTime.now();
+    final nomFichier = 'smartcart_catalogue_'
+        '${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}'
+        '.json';
+    final file = File('${dir.path}/$nomFichier');
+    await file.writeAsString(json);
+    await Share.shareXFiles([XFile(file.path)],
+        subject: 'Catalogue SmartCart (articles + catégories)');
+  }
+
   /// Restaure une sauvegarde depuis son contenu JSON (texte brut). Les
   /// entités existantes (même id) sont remplacées ; rien n'est supprimé.
   /// Lance une [FormatException] si le fichier n'est pas une sauvegarde
