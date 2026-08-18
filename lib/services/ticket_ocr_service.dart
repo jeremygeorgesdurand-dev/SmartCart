@@ -1,7 +1,7 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 // Une ligne d'article détectée sur un ticket de caisse : un nom de produit
-// et son prix. `prix` en euros.
+// et son prix unitaire (€).
 class LigneTicket {
   final String nom;
   final double prix;
@@ -23,37 +23,58 @@ class ResultatTicket {
 // hors-ligne, via la reconnaissance de texte de ML Kit (gratuite, embarquée).
 // Aucune image ni donnée n'est envoyée sur un serveur.
 //
-// Le format d'un ticket varie d'une enseigne à l'autre : on applique donc des
-// heuristiques prudentes plutôt qu'un parsing rigide, et l'écran laisse
-// toujours l'utilisateur vérifier/corriger chaque ligne avant d'enregistrer.
+// Le parsing est calé sur le format des tickets d'hypermarché français
+// (Carrefour, Leclerc, Intermarché… — structure très répandue) :
+//
+//   TVA%   NOM DU PRODUIT    QTE x P.U.   MONTANT
+//   5.5%   6XOEUFS DJP SOL CR   1 x 1.54     1.54
+//   5.5%   KIWI VERT PIECE     10 x 0.75     7.50
+//
+// On récupère le NOM et le PRIX UNITAIRE (P.U.), plus utile que le montant
+// total de la ligne (ex. kiwi à 0,75 € l'unité plutôt que 7,50 € les dix).
+// L'écran laisse toujours l'utilisateur vérifier/corriger avant d'enregistrer.
 class TicketOcrService {
   final TextRecognizer _recognizer =
       TextRecognizer(script: TextRecognitionScript.latin);
 
-  // Enseignes françaises courantes : on cherche l'une d'elles dans les
-  // premières lignes (l'en-tête du ticket) pour pré-remplir le magasin.
   static const _enseignes = [
     'Carrefour', 'Leclerc', 'E.Leclerc', 'Lidl', 'Aldi', 'Auchan',
     'Intermarché', 'Intermarche', 'Super U', 'Hyper U', 'Système U',
     'Systeme U', 'Casino', 'Monoprix', 'Franprix', 'Netto', 'Cora',
-    'Grand Frais', 'Biocoop', 'Lidl', 'Picard', 'Naturalia', 'Match',
+    'Grand Frais', 'Biocoop', 'Picard', 'Naturalia', 'Match',
   ];
 
-  // Mots-clés qui identifient une ligne à IGNORER (totaux, paiement, TVA,
-  // en-têtes) même si elle contient un montant.
-  static final _reIgnorer = RegExp(
-    r'\b(TOTAL|SOUS.?TOTAL|A PAYER|NET A PAYER|CB|CARTE|ESP[EÈ]CES?|'
-    r'RENDU|MONNAIE|TVA|DONT TVA|H\.?T|TTC|REMISE|NB|NBRE|ARTICLES?|'
-    r'CAISSE|TICKET|MERCI|SIRET|TEL|EUROS?|CHANGE|CHEQUE|CHÈQUE|'
-    r'FIDELIT|CUMUL|SOLDE|POINTS?)\b',
+  // Une fois ces mentions rencontrées, on ARRÊTE de lire des articles : ce qui
+  // suit (totaux, moyen de paiement, détail des avantages fidélité) contient
+  // des lignes « nom + prix » qui ne sont PAS des achats et fausseraient tout.
+  static final _reFinArticles = RegExp(
+    r'total\s+(à|a)\s+payer|avantages?\s+fid|détails?\s+de\s+vos|'
+    r'total\s+avant|montant\s+d(û|u)',
     caseSensitive: false,
   );
 
-  // Un prix en fin de ligne : "2,50", "12.99", éventuellement suivi d'un
-  // symbole € et/ou d'une lettre de taux de TVA (A/B/C…) comme sur beaucoup
-  // de tickets français.
-  static final _rePrix =
-      RegExp(r'(\d{1,3})[.,](\d{2})\s*€?\s*[A-Z]?\s*$');
+  // Lignes à ignorer (remises, sous-totaux, en-têtes, TVA, détail au poids).
+  static final _reIgnorer = RegExp(
+    r'^\s*(remise|total|sous.?total|tva\b|dont\s+tva|net\s+|'
+    r'pay(é|e)|carte|esp(è|e)ce|rendu|monnaie|nb\b|nbre|articles?\b|'
+    r'\d+[.,]\d+\s*kg\s*[xX]|ticket|merci|siret|t(é|e)l\b|caisse)',
+    caseSensitive: false,
+  );
+
+  // Format principal : … QTE x P.U. MONTANT (en fin de ligne).
+  static final _reArticle = RegExp(
+    r'^(?:\d{1,2}(?:[.,]\d)?\s*%\s+)?' // TVA optionnelle en tête (5.5%, 10%…)
+    r'(.+?)\s+' // nom (non gourmand)
+    r'(\d{1,3})\s*[xX]\s*' // quantité
+    r'(\d{1,4}[.,]\d{2})\s+' // prix unitaire
+    r'(\d{1,4}[.,]\d{2})\s*€?\s*$', // montant total
+  );
+
+  // Repli : … NOM … PRIX (un seul montant en fin de ligne), pour les tickets
+  // qui n'affichent pas la décomposition « QTE x P.U. ».
+  static final _reSimple = RegExp(
+    r'^(?:\d{1,2}(?:[.,]\d)?\s*%\s+)?(.+?)\s+(\d{1,4}[.,]\d{2})\s*€?\s*[A-Z]?\s*$',
+  );
 
   Future<ResultatTicket> analyser(String cheminImage) async {
     final input = InputImage.fromFilePath(cheminImage);
@@ -64,23 +85,29 @@ class TicketOcrService {
         lignesTexte.add(line.text);
       }
     }
+    return parserLignes(lignesTexte);
+  }
 
+  // Parsing pur (sans OCR) : isolé pour être testable avec de vraies lignes de
+  // ticket, indépendamment de ML Kit.
+  ResultatTicket parserLignes(List<String> lignesTexte) {
     final enseigne = _detecterEnseigne(lignesTexte);
     final lignes = <LigneTicket>[];
     for (final brut in lignesTexte) {
+      // Dès la zone des totaux / fidélité, on s'arrête : plus aucun achat.
+      if (_reFinArticles.hasMatch(brut)) break;
       final ligne = _parserLigne(brut);
       if (ligne != null) lignes.add(ligne);
     }
-
     return ResultatTicket(
       enseigne: enseigne,
       lignes: lignes,
-      texteBrut: texte.text,
+      texteBrut: lignesTexte.join('\n'),
     );
   }
 
   String? _detecterEnseigne(List<String> lignes) {
-    final entete = lignes.take(12).join(' ').toLowerCase();
+    final entete = lignes.take(15).join(' ').toLowerCase();
     for (final e in _enseignes) {
       if (entete.contains(e.toLowerCase())) return e;
     }
@@ -89,31 +116,36 @@ class TicketOcrService {
 
   LigneTicket? _parserLigne(String brut) {
     final ligne = brut.trim();
-    if (ligne.isEmpty) return null;
-    if (_reIgnorer.hasMatch(ligne)) return null;
+    if (ligne.isEmpty || _reIgnorer.hasMatch(ligne)) return null;
 
-    final m = _rePrix.firstMatch(ligne);
-    if (m == null) return null;
-    final prix = double.tryParse('${m.group(1)}.${m.group(2)}');
-    if (prix == null || prix <= 0 || prix > 999) return null;
+    // 1) Format « QTE x P.U. MONTANT » → on prend le prix UNITAIRE.
+    final m = _reArticle.firstMatch(ligne);
+    if (m != null) {
+      final prix = double.tryParse(m.group(3)!.replaceAll(',', '.'));
+      return _construire(m.group(1)!, prix);
+    }
 
-    // Le nom = ce qui précède le prix, débarrassé des marqueurs de quantité
-    // ("2 x", "1,000 kg x"), des codes et des symboles résiduels.
-    var nom = ligne.substring(0, m.start).trim();
-    nom = nom.replaceAll(RegExp(r'\d+[.,]?\d*\s*(kg|g|l|cl|ml)?\s*[xX*]\s*'), '');
-    nom = nom.replaceAll(RegExp(r'[€*]'), '');
-    nom = nom.replaceAll(RegExp(r'\s+'), ' ').trim();
-    // Retirer un éventuel code article/EAN isolé en début de ligne.
-    nom = nom.replaceFirst(RegExp(r'^\d{3,}\s+'), '').trim();
+    // 2) Repli : un seul prix en fin de ligne.
+    final s = _reSimple.firstMatch(ligne);
+    if (s != null) {
+      final prix = double.tryParse(s.group(2)!.replaceAll(',', '.'));
+      return _construire(s.group(1)!, prix);
+    }
 
-    // Trop court ou sans vraie lettre → probablement pas un produit.
+    return null;
+  }
+
+  LigneTicket? _construire(String nomBrut, double? prix) {
+    if (prix == null || prix <= 0 || prix > 9999) return null;
+    var nom = nomBrut
+        .replaceAll(RegExp(r'[€*]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    // Nom trop court ou sans vraie lettre → probablement pas un produit.
     if (nom.replaceAll(RegExp(r'[^A-Za-zÀ-ÿ]'), '').length < 2) return null;
-
-    // Jolie casse : "PATES COMPLETES" → "Pates completes".
-    final nomPropre = nom.length <= 1
-        ? nom
-        : nom[0].toUpperCase() + nom.substring(1).toLowerCase();
-
+    // Jolie casse : "KIWI VERT PIECE" → "Kiwi vert piece".
+    final nomPropre =
+        nom.length <= 1 ? nom : nom[0].toUpperCase() + nom.substring(1).toLowerCase();
     return LigneTicket(nom: nomPropre, prix: prix);
   }
 

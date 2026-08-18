@@ -74,6 +74,22 @@ class _ExplorerRecettesTabState extends ConsumerState<ExplorerRecettesTab> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             children: [
+              // Filtre « avec photo » : beaucoup de recettes du dataset n'ont
+              // pas d'image, l'activer ne garde que les plus appétissantes.
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                child: FilterChip(
+                  avatar: Icon(Icons.photo_outlined,
+                      size: 18,
+                      color: filtres.avecPhoto
+                          ? Theme.of(context).colorScheme.onSecondaryContainer
+                          : Theme.of(context).colorScheme.outline),
+                  label: const Text('Avec photo'),
+                  selected: filtres.avecPhoto,
+                  onSelected: (_) => notifier
+                      .update((f) => f.copyWith(avecPhoto: !f.avecPhoto)),
+                ),
+              ),
               for (final (label, val) in _categories)
                 Padding(
                   padding:

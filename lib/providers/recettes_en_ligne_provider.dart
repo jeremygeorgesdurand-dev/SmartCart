@@ -14,14 +14,18 @@ final toutesRecettesProvider =
 class FiltresRecettes {
   final String requete;
   final String? categorie; // Plat, Dessert, Boisson, Accompagnement, Entrée
+  final bool avecPhoto; // n'afficher que les recettes qui ont une image
 
-  const FiltresRecettes({this.requete = '', this.categorie});
+  const FiltresRecettes(
+      {this.requete = '', this.categorie, this.avecPhoto = false});
 
-  FiltresRecettes copyWith({String? requete, Object? categorie = _absent}) =>
+  FiltresRecettes copyWith(
+          {String? requete, Object? categorie = _absent, bool? avecPhoto}) =>
       FiltresRecettes(
         requete: requete ?? this.requete,
         categorie:
             categorie == _absent ? this.categorie : categorie as String?,
+        avecPhoto: avecPhoto ?? this.avecPhoto,
       );
 
   static const _absent = Object();
@@ -36,8 +40,12 @@ final rechercheRecettesProvider =
   final filtres = ref.watch(filtresRecettesProvider);
   final service = ref.read(recettesDatasetServiceProvider);
   final toutes = await ref.watch(toutesRecettesProvider.future);
-  return service.rechercher(toutes,
+  final resultats = service.rechercher(toutes,
       requete: filtres.requete, categorie: filtres.categorie);
+  if (!filtres.avecPhoto) return resultats;
+  return resultats
+      .where((r) => r.image != null && r.image!.isNotEmpty)
+      .toList();
 });
 
 // Détail d'une recette (déjà en mémoire, retrouvée par id).
