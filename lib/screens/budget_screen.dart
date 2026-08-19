@@ -7,6 +7,7 @@ import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 import 'historique_prix_screen.dart';
 import 'scanner_ticket_screen.dart';
+import 'stats_screen.dart';
 
 // ================================================================
 // ÉCRAN BUDGET — prix estimés des articles + suivi des dépenses
@@ -128,6 +129,20 @@ class BudgetScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+
+              // ── Statistiques (fusionnées ici depuis l'ancien onglet Stats) ──
+              const SizedBox(height: 28),
+              Row(
+                children: [
+                  Icon(Icons.insights_outlined,
+                      size: 20, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text('Statistiques',
+                      style: Theme.of(context).textTheme.titleLarge),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const StatsContenu(masquerBudget: true),
             ],
           );
         },

@@ -13,9 +13,32 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:smartcart/models/models.dart';
 import 'package:smartcart/providers/providers.dart';
+import 'package:smartcart/providers/suggestions_provider.dart';
 import 'package:smartcart/screens/budget_screen.dart';
 import 'package:smartcart/services/database_service.dart';
+import 'package:smartcart/services/stats_service.dart';
+import 'package:smartcart/services/suggestions_service.dart';
 import 'package:smartcart/services/sync_service.dart';
+
+// L'écran Budget intègre désormais une section « Statistiques ». Ces tests
+// portent sur la comparaison de prix ; on neutralise donc stats et suggestions
+// (données vides) pour qu'elles n'ajoutent pas d'éléments parasites (ex. un
+// article "Lait" listé aussi comme "jamais utilisé", qui ferait matcher deux
+// fois le même texte).
+List<Override> _statsVides() => [
+      statsProvider.overrideWith((ref) async => const StatsData(
+            totalArticles: 0,
+            totalListes: 0,
+            totalListesArchivees: 0,
+            tauxCompletionMoyen: 0,
+            topArticles: [],
+            topCategories: [],
+            topRayons: [],
+            articlesSansListe: [],
+            articlesAchetesCeMois: 0,
+          )),
+      suggestionsProvider.overrideWith((ref) async => const <SuggestionReassort>[]),
+    ];
 
 // Plus long que dans les autres fichiers de test : ExpansionTile anime son
 // ouverture/fermeture (~200ms), il faut laisser le temps à l'animation de
@@ -71,6 +94,7 @@ void main() {
           overrides: [
             dbServiceProvider.overrideWithValue(localDb),
             syncServiceProvider.overrideWithValue(sync),
+            ..._statsVides(),
           ],
           child: const MaterialApp(home: BudgetScreen()),
         ),
@@ -121,6 +145,7 @@ void main() {
           overrides: [
             dbServiceProvider.overrideWithValue(localDb),
             syncServiceProvider.overrideWithValue(sync),
+            ..._statsVides(),
           ],
           child: const MaterialApp(home: BudgetScreen()),
         ),
@@ -156,6 +181,7 @@ void main() {
           overrides: [
             dbServiceProvider.overrideWithValue(localDb),
             syncServiceProvider.overrideWithValue(sync),
+            ..._statsVides(),
           ],
           child: const MaterialApp(home: BudgetScreen()),
         ),

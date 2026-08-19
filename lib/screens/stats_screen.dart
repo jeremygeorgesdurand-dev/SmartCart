@@ -11,148 +11,143 @@ import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 import 'listes_screen.dart';
 
-class StatsScreen extends ConsumerWidget {
-  const StatsScreen({super.key});
+// Contenu des statistiques SANS Scaffold ni défilement propre : un Column que
+// l'on peut poser aussi bien dans l'écran Budget (où les stats ont été
+// fusionnées) que dans un écran dédié. Ne défile pas lui-même — c'est le
+// conteneur parent qui défile (évite l'imbrication de listes défilantes).
+class StatsContenu extends ConsumerWidget {
+  // masquerBudget : dans l'écran Budget, on n'affiche pas les cartes de budget
+  // (déjà présentes plus haut) pour éviter la redondance ; on garde le reste.
+  final bool masquerBudget;
+  const StatsContenu({super.key, this.masquerBudget = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(statsProvider);
     final suggestionsAsync = ref.watch(suggestionsProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Statistiques'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Actualiser',
-            onPressed: () {
-              ref.invalidate(statsProvider);
-              ref.invalidate(suggestionsProvider);
-              ref.invalidate(listesNotifierProvider);
-            },
-          ),
-        ],
+    return statsAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(child: CircularProgressIndicator()),
       ),
-      body: statsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48),
-              const SizedBox(height: 12),
-              Text(messageErreurLisible(e, 'Erreur')),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => ref.invalidate(statsProvider),
-                child: const Text('Réessayer'),
-              ),
-            ],
-          ),
+      error: (e, _) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            const Icon(Icons.error_outline, size: 48),
+            const SizedBox(height: 12),
+            Text(messageErreurLisible(e, 'Erreur')),
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: () => ref.invalidate(statsProvider),
+              child: const Text('Réessayer'),
+            ),
+          ],
         ),
-        data: (stats) => RefreshIndicator(
-          onRefresh: () => ref.refresh(statsProvider.future).then((_) {
-            ref.invalidate(suggestionsProvider);
-            ref.invalidate(listesNotifierProvider);
-          }),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // ── À racheter bientôt ────────────────────────
-              if (suggestionsAsync.valueOrNull?.isNotEmpty ?? false) ...[
-                _TitreSection(
-                  titre: 'À racheter bientôt',
-                  icone: Icons.autorenew,
-                  badge: '${suggestionsAsync.value!.length}',
-                  badgeColor: couleurAvertissement(context),
-                ),
-                const SizedBox(height: 8),
-                _CarteSuggestions(suggestions: suggestionsAsync.value!),
-                const SizedBox(height: 20),
-              ],
+      ),
+      data: (stats) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── À racheter bientôt ────────────────────────
+          if (suggestionsAsync.valueOrNull?.isNotEmpty ?? false) ...[
+            _TitreSection(
+              titre: 'À racheter bientôt',
+              icone: Icons.autorenew,
+              badge: '${suggestionsAsync.value!.length}',
+              badgeColor: couleurAvertissement(context),
+            ),
+            const SizedBox(height: 8),
+            _CarteSuggestions(suggestions: suggestionsAsync.value!),
+            const SizedBox(height: 20),
+          ],
 
-              // ── Vue d'ensemble ──────────────────────────
-              const _TitreSection(titre: 'Vue d\'ensemble', icone: Icons.dashboard),
-              const SizedBox(height: 8),
-              _CardsVueEnsemble(stats: stats),
-              const SizedBox(height: 20),
+          // ── Vue d'ensemble ──────────────────────────
+          const _TitreSection(titre: 'Vue d\'ensemble', icone: Icons.dashboard),
+          const SizedBox(height: 8),
+          _CardsVueEnsemble(stats: stats),
+          const SizedBox(height: 20),
 
-              // ── Budget ────────────────────────────────────
-              const _TitreSection(titre: 'Budget', icone: Icons.euro),
-              const SizedBox(height: 8),
-              const _CarteBudget(),
-              const SizedBox(height: 12),
-              const _CarteEvolutionBudget(),
-              const SizedBox(height: 20),
+          // ── Budget (masqué dans l'écran Budget, redondant) ──────
+          if (!masquerBudget) ...[
+            const _TitreSection(titre: 'Budget', icone: Icons.euro),
+            const SizedBox(height: 8),
+            const _CarteBudget(),
+            const SizedBox(height: 12),
+            const _CarteEvolutionBudget(),
+            const SizedBox(height: 20),
+          ] else ...[
+            // On garde le graphique d'évolution (absent de l'écran Budget).
+            const _TitreSection(titre: 'Évolution des dépenses', icone: Icons.show_chart),
+            const SizedBox(height: 8),
+            const _CarteEvolutionBudget(),
+            const SizedBox(height: 20),
+          ],
 
-              // ── Activité courses ─────────────────────────
-              const _TitreSection(titre: 'Activité des courses', icone: Icons.shopping_cart),
-              const SizedBox(height: 8),
-              _CarteActivite(stats: stats),
-              const SizedBox(height: 20),
+          // ── Activité courses ─────────────────────────
+          const _TitreSection(titre: 'Activité des courses', icone: Icons.shopping_cart),
+          const SizedBox(height: 8),
+          _CarteActivite(stats: stats),
+          const SizedBox(height: 20),
 
-              // ── Top articles ─────────────────────────────
-              if (stats.topArticles.isNotEmpty) ...[
-                _TitreSection(
-                  titre: 'Articles les plus achetés',
-                  icone: Icons.star,
-                  badge: 'Top ${stats.topArticles.length}',
-                ),
-                const SizedBox(height: 8),
-                _CarteTopArticles(items: stats.topArticles),
-                const SizedBox(height: 20),
-              ],
+          // ── Top articles ─────────────────────────────
+          if (stats.topArticles.isNotEmpty) ...[
+            _TitreSection(
+              titre: 'Articles les plus achetés',
+              icone: Icons.star,
+              badge: 'Top ${stats.topArticles.length}',
+            ),
+            const SizedBox(height: 8),
+            _CarteTopArticles(items: stats.topArticles),
+            const SizedBox(height: 20),
+          ],
 
-              // ── Catégories ────────────────────────────────
-              if (stats.topCategories.isNotEmpty) ...[
-                const _TitreSection(titre: 'Par catégorie maison', icone: Icons.home),
-                const SizedBox(height: 8),
-                _CarteBarres(
-                  items: stats.topCategories
-                      .map((e) => _BarItem(
-                            label: e.categorie.nom,
-                            value: e.count.toDouble(),
-                            color: Color(e.categorie.couleur),
-                          ))
-                      .toList(),
-                ),
-                const SizedBox(height: 20),
-              ],
+          // ── Catégories ────────────────────────────────
+          if (stats.topCategories.isNotEmpty) ...[
+            const _TitreSection(titre: 'Par catégorie maison', icone: Icons.home),
+            const SizedBox(height: 8),
+            _CarteBarres(
+              items: stats.topCategories
+                  .map((e) => _BarItem(
+                        label: e.categorie.nom,
+                        value: e.count.toDouble(),
+                        color: Color(e.categorie.couleur),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 20),
+          ],
 
-              // ── Rayons ────────────────────────────────────
-              if (stats.topRayons.isNotEmpty) ...[
-                const _TitreSection(titre: 'Par rayon magasin', icone: Icons.store),
-                const SizedBox(height: 8),
-                _CarteBarres(
-                  items: stats.topRayons
-                      .map((e) => _BarItem(
-                            label: e.rayon.nom,
-                            value: e.count.toDouble(),
-                            color: Color(e.rayon.couleur),
-                          ))
-                      .toList(),
-                ),
-                const SizedBox(height: 20),
-              ],
+          // ── Rayons ────────────────────────────────────
+          if (stats.topRayons.isNotEmpty) ...[
+            const _TitreSection(titre: 'Par rayon magasin', icone: Icons.store),
+            const SizedBox(height: 8),
+            _CarteBarres(
+              items: stats.topRayons
+                  .map((e) => _BarItem(
+                        label: e.rayon.nom,
+                        value: e.count.toDouble(),
+                        color: Color(e.rayon.couleur),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 20),
+          ],
 
-              // ── Articles jamais utilisés ──────────────────
-              if (stats.articlesSansListe.isNotEmpty) ...[
-                _TitreSection(
-                  titre: 'Jamais ajoutés à une liste',
-                  icone: Icons.inventory_2_outlined,
-                  badge: '${stats.articlesSansListe.length}',
-                  badgeColor: couleurAvertissement(context),
-                ),
-                const SizedBox(height: 8),
-                _CarteArticlesInutilises(articles: stats.articlesSansListe),
-                const SizedBox(height: 20),
-              ],
-
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
+          // ── Articles jamais utilisés ──────────────────
+          if (stats.articlesSansListe.isNotEmpty) ...[
+            _TitreSection(
+              titre: 'Jamais ajoutés à une liste',
+              icone: Icons.inventory_2_outlined,
+              badge: '${stats.articlesSansListe.length}',
+              badgeColor: couleurAvertissement(context),
+            ),
+            const SizedBox(height: 8),
+            _CarteArticlesInutilises(articles: stats.articlesSansListe),
+            const SizedBox(height: 20),
+          ],
+        ],
       ),
     );
   }

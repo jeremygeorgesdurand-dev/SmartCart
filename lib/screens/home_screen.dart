@@ -10,7 +10,6 @@ import 'catalogue_screen.dart';
 import 'listes_screen.dart';
 import 'parametres_screen.dart';
 import 'recettes_screen.dart';
-import 'stats_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -130,7 +129,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // de vie de l'app (voir realtimeSyncProvider).
     ref.watch(realtimeSyncProvider);
 
-    final afficherStats = ref.watch(afficherStatsProvider);
     final afficherBudget = ref.watch(afficherBudgetProvider);
     final afficherRecettes = ref.watch(afficherRecettesProvider);
     final fondActif = ref.watch(fondActiveProvider);
@@ -190,15 +188,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
           page: const BudgetScreen(),
         ),
-      if (afficherStats)
-        (
-          dest: const NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart),
-            label: 'Stats',
-          ),
-          page: const StatsScreen(),
-        ),
+      // Les statistiques ne sont plus un onglet : elles ont été fusionnées
+      // dans l'écran Budget (une section « Statistiques » en bas).
       (
         dest: const NavigationDestination(
           icon: Icon(Icons.settings_outlined),

@@ -3,11 +3,21 @@ class VersionInfo {
   // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
   // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
   // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
-  static const String version = '1.6.1';
-  static const String buildNumber = '33';
+  static const String version = '1.7.0';
+  static const String buildNumber = '34';
   static const String dateMiseAJour = '19 août 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.7.0',
+      date: '19 août 2026',
+      changements: [
+        'Barre du bas simplifiée : les statistiques ne sont plus un onglet '
+            'séparé, elles rejoignent l\'écran Budget (une section en bas)',
+        'Moins de redondance : le budget n\'apparaît plus en double entre '
+            'Budget et Stats',
+      ],
+    ),
     Release(
       version: '1.6.1',
       date: '19 août 2026',

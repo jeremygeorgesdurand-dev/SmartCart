@@ -11,7 +11,6 @@ class FonctionnalitesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final afficherStats = ref.watch(afficherStatsProvider);
     final afficherBudget = ref.watch(afficherBudgetProvider);
     final afficherPrix = ref.watch(afficherPrixProvider);
     final afficherRecettes = ref.watch(afficherRecettesProvider);
@@ -21,19 +20,9 @@ class FonctionnalitesScreen extends ConsumerWidget {
       body: ListView(
         children: [
           SwitchListTile(
-            title: const Text('Afficher les statistiques'),
-            subtitle: const Text('Onglet Stats dans la navigation'),
-            value: afficherStats,
-            onChanged: (v) async {
-              ref.read(afficherStatsProvider.notifier).state = v;
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool('afficher_stats', v);
-            },
-          ),
-          const Divider(height: 1),
-          SwitchListTile(
             title: const Text('Afficher le budget'),
-            subtitle: const Text('Onglet Budget dans la navigation'),
+            subtitle: const Text(
+                'Onglet Budget (avec les statistiques) dans la navigation'),
             value: afficherBudget,
             onChanged: (v) async {
               ref.read(afficherBudgetProvider.notifier).state = v;
