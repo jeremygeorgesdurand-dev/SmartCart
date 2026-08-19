@@ -3,11 +3,20 @@ class VersionInfo {
   // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
   // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
   // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
-  static const String version = '1.6.0';
-  static const String buildNumber = '32';
-  static const String dateMiseAJour = '18 août 2026';
+  static const String version = '1.6.1';
+  static const String buildNumber = '33';
+  static const String dateMiseAJour = '19 août 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.6.1',
+      date: '19 août 2026',
+      changements: [
+        'Lecture de ticket : reconnaît enfin les tickets en colonnes '
+            '(le nom et le prix étaient lus séparément) — « Aucun prix '
+            'détecté » corrigé',
+      ],
+    ),
     Release(
       version: '1.6.0',
       date: '18 août 2026',

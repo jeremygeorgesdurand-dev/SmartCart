@@ -46,6 +46,31 @@ void main() {
     expect(res.lignes.any((l) => l.nom.toLowerCase().contains('pomme')), isFalse);
   });
 
+  test('reconstruit une ligne à partir de colonnes séparées (comme le fait l\'OCR)', () {
+    // Sur un vrai ticket, ML Kit renvoie chaque colonne séparément : TVA, nom,
+    // « 1 x 1.54 », montant — tous à la MÊME hauteur (top≈100) mais à des x
+    // différents. On doit les recoller dans le bon ordre.
+    final lignes = service.regrouperEnLignes(const [
+      FragmentTicket(text: '1.54', top: 100, bottom: 120, left: 900),
+      FragmentTicket(text: '6XOEUFS DJP SOL CR', top: 101, bottom: 121, left: 150),
+      FragmentTicket(text: '5.5%', top: 100, bottom: 120, left: 40),
+      FragmentTicket(text: '1 x 1.54', top: 100, bottom: 120, left: 600),
+      // Ligne suivante (autre bande verticale).
+      FragmentTicket(text: 'KIWI VERT PIECE', top: 140, bottom: 160, left: 150),
+      FragmentTicket(text: '10 x 0.75', top: 140, bottom: 160, left: 600),
+      FragmentTicket(text: '7.50', top: 140, bottom: 160, left: 900),
+    ]);
+
+    expect(lignes[0], '5.5% 6XOEUFS DJP SOL CR 1 x 1.54 1.54');
+    expect(lignes[1], 'KIWI VERT PIECE 10 x 0.75 7.50');
+
+    // Et le parsing complet derrière donne les bons prix unitaires.
+    final res = service.parserLignes(lignes);
+    final parNom = {for (final l in res.lignes) l.nom: l.prix};
+    expect(parNom['Kiwi vert piece'], 0.75);
+    expect(parNom['Oeufs djp sol cr'], 1.54);
+  });
+
   test('ignore les lignes de détail au poids', () {
     final res = service.parserLignes([
       '5.5% POMME GOLDEN FQC 1 x 4.15 4.15',

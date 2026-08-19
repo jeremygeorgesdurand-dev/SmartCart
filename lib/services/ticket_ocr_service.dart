@@ -1,5 +1,19 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+// Un fragment de texte OCR avec sa position à l'écran (repère pour reconstituer
+// les lignes d'un ticket en colonnes).
+class FragmentTicket {
+  final String text;
+  final double top;
+  final double bottom;
+  final double left;
+  const FragmentTicket(
+      {required this.text,
+      required this.top,
+      required this.bottom,
+      required this.left});
+}
+
 // Une ligne d'article détectée sur un ticket de caisse : un nom de produit
 // et son prix unitaire (€).
 class LigneTicket {
@@ -79,13 +93,60 @@ class TicketOcrService {
   Future<ResultatTicket> analyser(String cheminImage) async {
     final input = InputImage.fromFilePath(cheminImage);
     final texte = await _recognizer.processImage(input);
-    final lignesTexte = <String>[];
+    return parserLignes(_reconstruireLignes(texte));
+  }
+
+  // Sur un ticket, les colonnes (TVA · nom · qté×P.U. · montant) sont très
+  // écartées horizontalement : ML Kit les rend souvent comme des fragments
+  // SÉPARÉS et non comme une ligne complète. On les REGROUPE ici par bande
+  // horizontale (même hauteur à l'écran), puis on les lit de gauche à droite
+  // pour reconstituer la vraie ligne « 5.5% NOM 1 x 1.54 1.54 ».
+  List<String> _reconstruireLignes(RecognizedText texte) {
+    final frags = <FragmentTicket>[];
     for (final block in texte.blocks) {
       for (final line in block.lines) {
-        lignesTexte.add(line.text);
+        final b = line.boundingBox;
+        frags.add(FragmentTicket(
+          text: line.text,
+          top: b.top.toDouble(),
+          bottom: b.bottom.toDouble(),
+          left: b.left.toDouble(),
+        ));
       }
     }
-    return parserLignes(lignesTexte);
+    return regrouperEnLignes(frags);
+  }
+
+  // Regroupe des fragments de texte (avec leur position) en lignes logiques,
+  // par bande horizontale puis lecture de gauche à droite. Public pour être
+  // testable indépendamment de ML Kit.
+  List<String> regrouperEnLignes(List<FragmentTicket> frags) {
+    if (frags.isEmpty) return const [];
+    final tries = [...frags]..sort((a, b) => a.top.compareTo(b.top));
+    final rangees = <List<FragmentTicket>>[];
+    for (final f in tries) {
+      final centre = (f.top + f.bottom) / 2;
+      // Un fragment rejoint une rangée si son centre vertical tombe dans sa
+      // bande (tolérance = 30 % de la hauteur de la rangée).
+      List<FragmentTicket>? cible;
+      for (final r in rangees) {
+        var rTop = double.infinity, rBottom = double.negativeInfinity;
+        for (final e in r) {
+          if (e.top < rTop) rTop = e.top;
+          if (e.bottom > rBottom) rBottom = e.bottom;
+        }
+        final tol = (rBottom - rTop) * 0.3;
+        if (centre >= rTop - tol && centre <= rBottom + tol) {
+          cible = r;
+          break;
+        }
+      }
+      (cible ?? (rangees..add(<FragmentTicket>[])).last).add(f);
+    }
+    return rangees.map((r) {
+      r.sort((a, b) => a.left.compareTo(b.left));
+      return r.map((e) => e.text).join(' ');
+    }).toList();
   }
 
   // Parsing pur (sans OCR) : isolé pour être testable avec de vraies lignes de
@@ -139,6 +200,9 @@ class TicketOcrService {
     if (prix == null || prix <= 0 || prix > 9999) return null;
     var nom = nomBrut
         .replaceAll(RegExp(r'[€*]'), '')
+        // Préfixe multipack collé au nom : "6XOEUFS" → "OEUFS" (uniquement si
+        // suivi d'une lettre, pour ne pas toucher "4X100G" ni "4X1.25L").
+        .replaceFirst(RegExp(r'^\d+\s*[xX](?=[A-Za-zÀ-ÿ])'), '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
     // Nom trop court ou sans vraie lettre → probablement pas un produit.
