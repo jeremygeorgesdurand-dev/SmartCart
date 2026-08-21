@@ -48,6 +48,7 @@ class _ScannerTicketScreenState extends ConsumerState<ScannerTicketScreen> {
   List<_LigneEditable> _lignes = [];
   bool _analyse = false;
   bool _analyseFaite = false;
+  bool _enregistrement = false;
   String? _erreur;
 
   @override
@@ -103,7 +104,13 @@ class _ScannerTicketScreenState extends ConsumerState<ScannerTicketScreen> {
     final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
     final magasin = _enseigneCtrl.text.trim();
 
+    // Garde-fou : un appui multiple (réseau/latence) créait plusieurs fois les
+    // mêmes articles. On bloque toute réentrée tant que l'enregistrement court.
+    if (_enregistrement) return;
+    setState(() => _enregistrement = true);
+
     var enregistres = 0;
+    var crees = 0;
     for (final ligne in _lignes) {
       if (!ligne.inclure) continue;
       final nom = ligne.nom.text.trim();
@@ -115,23 +122,33 @@ class _ScannerTicketScreenState extends ConsumerState<ScannerTicketScreen> {
       final cle = cleTriAlpha(nom);
       var article =
           catalogue.where((a) => cleTriAlpha(a.nom) == cle).firstOrNull;
-      article ??= Article(id: 'art_${const Uuid().v4()}', nom: nom);
-      if (!catalogue.any((a) => a.id == article!.id)) {
+      if (article == null) {
+        article = Article(id: 'art_${const Uuid().v4()}', nom: nom);
         await articlesNotifier.ajouter(article);
+        crees++;
       }
+      // Article déjà présent → on ne le duplique pas, on met juste à jour son
+      // prix pour cette enseigne.
       await prixNotifier.definir(article.id, prix, magasin: magasin);
       enregistres++;
     }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(enregistres == 0
-          ? 'Aucun prix enregistré'
-          : '$enregistres prix enregistré(s)'
-              '${magasin.isNotEmpty ? " ($magasin)" : ""}'),
-      backgroundColor: enregistres == 0 ? null : couleurSucces(context),
-    ));
-    if (enregistres > 0) Navigator.pop(context);
+    if (enregistres > 0) {
+      // On rend le message à l'écran Budget (qui l'affiche après la fermeture) :
+      // une SnackBar posée ici disparaîtrait avec l'écran au moment du pop.
+      Navigator.pop<String>(
+        context,
+        '$enregistres prix enregistré(s)'
+        '${magasin.isNotEmpty ? " ($magasin)" : ""}'
+        '${crees > 0 ? " · $crees nouvel(s) article(s)" : ""}',
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aucun prix à enregistrer')),
+      );
+      setState(() => _enregistrement = false);
+    }
   }
 
   @override
@@ -141,9 +158,16 @@ class _ScannerTicketScreenState extends ConsumerState<ScannerTicketScreen> {
       appBar: AppBar(title: const Text('Prix depuis un ticket')),
       floatingActionButton: aDesLignes
           ? FloatingActionButton.extended(
-              onPressed: _enregistrer,
-              icon: const Icon(Icons.save),
-              label: const Text('Enregistrer les prix'),
+              onPressed: _enregistrement ? null : _enregistrer,
+              icon: _enregistrement
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.save),
+              label: Text(
+                  _enregistrement ? 'Enregistrement…' : 'Enregistrer les prix'),
             )
           : null,
       body: ListView(
@@ -237,6 +261,42 @@ class _ScannerTicketScreenState extends ConsumerState<ScannerTicketScreen> {
     );
   }
 
+  // Petite ligne d'état sous le nom : « Déjà au catalogue » (le prix sera mis
+  // à jour) ou « Nouvel article » (il sera créé).
+  Widget _indicateurMatch(String nom) {
+    final t = nom.trim();
+    if (t.isEmpty) return const SizedBox.shrink();
+    final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
+    final cle = cleTriAlpha(t);
+    final existant =
+        catalogue.where((a) => cleTriAlpha(a.nom) == cle).firstOrNull;
+    final estExistant = existant != null;
+    final couleur = estExistant
+        ? couleurSucces(context)
+        : Theme.of(context).colorScheme.outline;
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(estExistant ? Icons.link : Icons.add_circle_outline,
+              size: 12, color: couleur),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              estExistant ? 'Déjà au catalogue' : 'Nouvel article',
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(color: couleur),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLigne(_LigneEditable ligne) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -250,13 +310,26 @@ class _ScannerTicketScreenState extends ConsumerState<ScannerTicketScreen> {
             ),
             Expanded(
               flex: 3,
-              child: TextField(
-                controller: ligne.nom,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                  hintText: 'Article',
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: ligne.nom,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      hintText: 'Article',
+                    ),
+                  ),
+                  // Indique en direct si le nom correspond à un article déjà au
+                  // catalogue (prix mis à jour) ou s'il en créera un nouveau —
+                  // l'utilisateur peut corriger le nom pour retomber sur le sien.
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: ligne.nom,
+                    builder: (context, value, _) => _indicateurMatch(value.text),
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 8),

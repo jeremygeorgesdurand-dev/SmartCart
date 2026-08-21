@@ -100,6 +100,10 @@ void main() {
         ),
       );
       await _laisserRetomber(tester);
+      // La liste des prix est repliée par défaut : on la déplie d'abord.
+      await tester.ensureVisible(find.text('Prix des articles'));
+      await tester.tap(find.text('Prix des articles'));
+      await _laisserRetomber(tester);
 
       await tester.ensureVisible(find.text('Lait'));
       await tester.tap(find.text('Lait'));
@@ -151,6 +155,10 @@ void main() {
         ),
       );
       await _laisserRetomber(tester);
+      // La liste des prix est repliée par défaut : on la déplie d'abord.
+      await tester.ensureVisible(find.text('Prix des articles'));
+      await tester.tap(find.text('Prix des articles'));
+      await _laisserRetomber(tester);
 
       expect(find.text('2 magasins comparés'), findsOneWidget);
 
@@ -186,6 +194,10 @@ void main() {
           child: const MaterialApp(home: BudgetScreen()),
         ),
       );
+      await _laisserRetomber(tester);
+      // La liste des prix est repliée par défaut : on la déplie d'abord.
+      await tester.ensureVisible(find.text('Prix des articles'));
+      await tester.tap(find.text('Prix des articles'));
       await _laisserRetomber(tester);
 
       await tester.ensureVisible(find.text('Lait'));

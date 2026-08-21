@@ -198,13 +198,31 @@ class TicketOcrService {
 
   LigneTicket? _construire(String nomBrut, double? prix) {
     if (prix == null || prix <= 0 || prix > 9999) return null;
-    var nom = nomBrut
-        .replaceAll(RegExp(r'[€*]'), '')
-        // Préfixe multipack collé au nom : "6XOEUFS" → "OEUFS" (uniquement si
-        // suivi d'une lettre, pour ne pas toucher "4X100G" ni "4X1.25L").
-        .replaceFirst(RegExp(r'^\d+\s*[xX](?=[A-Za-zÀ-ÿ])'), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    var nom = nomBrut.replaceAll(RegExp(r'[€*]'), '').trim();
+    // Retire les préfixes de conditionnement/poids collés en tête de nom, qui
+    // empêchent de retrouver l'article au catalogue ("240G 6 BLANC POULE" →
+    // "BLANC POULE", "6X120ML CONE VANI" → "CONE VANI", "6XOEUFS" → "OEUFS").
+    // On applique jusqu'à ce qu'il n'y ait plus de préfixe numérique.
+    for (var i = 0; i < 3; i++) {
+      final avant = nom;
+      nom = nom
+          // "3X20CL", "4X1.25L", "6X120ML"
+          .replaceFirst(
+              RegExp(r'^\d+\s*[xX]\s*\d+([.,]\d+)?\s*(kg|g|ml|cl|l)?\b',
+                  caseSensitive: false),
+              '')
+          // "240G", "1KG", "37CL", "1L"
+          .replaceFirst(
+              RegExp(r'^\d+([.,]\d+)?\s*(kg|g|ml|cl|l)\b', caseSensitive: false),
+              '')
+          // "6XOEUFS" (multipack collé à une lettre)
+          .replaceFirst(RegExp(r'^\d+\s*[xX](?=[A-Za-zÀ-ÿ])'), '')
+          // compte isolé en tête : "6 BLANC POULE" → "BLANC POULE"
+          .replaceFirst(RegExp(r'^\d+\s+(?=[A-Za-zÀ-ÿ])'), '')
+          .trim();
+      if (nom == avant) break;
+    }
+    nom = nom.replaceAll(RegExp(r'\s+'), ' ').trim();
     // Nom trop court ou sans vraie lettre → probablement pas un produit.
     if (nom.replaceAll(RegExp(r'[^A-Za-zÀ-ÿ]'), '').length < 2) return null;
     // Jolie casse : "KIWI VERT PIECE" → "Kiwi vert piece".

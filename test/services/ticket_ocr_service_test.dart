@@ -26,7 +26,8 @@ void main() {
     // Le prix retenu est le PRIX UNITAIRE (kiwi : 0,75 € et non 7,50 €).
     expect(parNom['Kiwi vert piece'], 0.75);
     expect(parNom['Nuggets plet maxi'], 7.51);
-    expect(parNom['200g emmental rape'], 1.65);
+    // Le poids en tête est retiré : "200G EMMENTAL RAPE" → "Emmental rape".
+    expect(parNom['Emmental rape'], 1.65);
     expect(parNom['Sand.plt roti/crud'], 1.77);
     // Les lignes « Remise » et l'en-tête ne créent pas d'articles.
     expect(res.lignes.any((l) => l.nom.toLowerCase().contains('remise')), isFalse);
@@ -69,6 +70,16 @@ void main() {
     final parNom = {for (final l in res.lignes) l.nom: l.prix};
     expect(parNom['Kiwi vert piece'], 0.75);
     expect(parNom['Oeufs djp sol cr'], 1.54);
+  });
+
+  test('retire poids + compte en tête du nom (pour retrouver l\'article)', () {
+    final res = service.parserLignes([
+      '5.5% 240G 6 BLANC POULE 1 x 2.15 2.15',
+      '5.5% 6X120ML CONE VANI 1 x 2.35 2.35',
+    ]);
+    final noms = res.lignes.map((l) => l.nom).toList();
+    expect(noms, contains('Blanc poule'));
+    expect(noms, contains('Cone vani'));
   });
 
   test('ignore les lignes de détail au poids', () {

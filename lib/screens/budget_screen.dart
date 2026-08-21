@@ -28,10 +28,18 @@ class BudgetScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.receipt_long_outlined),
             tooltip: 'Prix depuis un ticket de caisse',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ScannerTicketScreen()),
-            ),
+            onPressed: () async {
+              final msg = await Navigator.push<String>(
+                context,
+                MaterialPageRoute(builder: (_) => const ScannerTicketScreen()),
+              );
+              if (msg != null && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(msg),
+                  backgroundColor: couleurSucces(context),
+                ));
+              }
+            },
           ),
         ],
       ),
@@ -113,15 +121,17 @@ class BudgetScreen extends ConsumerWidget {
                 },
               ),
               const SizedBox(height: 24),
-              Text('Prix des articles',
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 4),
-              Text('Renseigne un prix estimé pour suivre ton budget',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline)),
-              const SizedBox(height: 8),
+              // Repliable : le catalogue peut compter des dizaines d'articles ;
+              // on les regroupe sous un en-tête dépliable plutôt que de tout
+              // dérouler (l'écran devenait interminable).
               Card(
-                child: Column(
+                clipBehavior: Clip.antiAlias,
+                child: ExpansionTile(
+                  leading: const Icon(Icons.sell_outlined),
+                  title: const Text('Prix des articles'),
+                  subtitle: Text('${tries.length} article(s) — '
+                      'appuie pour déplier'),
+                  childrenPadding: const EdgeInsets.only(bottom: 8),
                   children: [
                     for (final a in tries)
                       _ArticlePrixTile(
