@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../services/doublons_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 
@@ -117,11 +118,9 @@ class _ScannerTicketScreenState extends ConsumerState<ScannerTicketScreen> {
       final prix = double.tryParse(ligne.prix.text.replaceAll(',', '.'));
       if (nom.isEmpty || prix == null || prix <= 0) continue;
 
-      // On rattache le prix à un article existant si le nom correspond (aux
-      // accents/casse près), sinon on crée un nouvel article au catalogue.
-      final cle = cleTriAlpha(nom);
-      var article =
-          catalogue.where((a) => cleTriAlpha(a.nom) == cle).firstOrNull;
+      // On rattache le prix à un article existant (nom identique OU proche),
+      // sinon on crée un nouvel article au catalogue.
+      var article = _trouverArticle(catalogue, nom);
       if (article == null) {
         article = Article(id: 'art_${const Uuid().v4()}', nom: nom);
         await articlesNotifier.ajouter(article);
@@ -267,13 +266,19 @@ class _ScannerTicketScreenState extends ConsumerState<ScannerTicketScreen> {
     final t = nom.trim();
     if (t.isEmpty) return const SizedBox.shrink();
     final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
-    final cle = cleTriAlpha(t);
-    final existant =
-        catalogue.where((a) => cleTriAlpha(a.nom) == cle).firstOrNull;
-    final estExistant = existant != null;
+    final match = _trouverArticle(catalogue, t);
+    final estExistant = match != null;
+    final exact = match != null && cleTriAlpha(match.nom) == cleTriAlpha(t);
     final couleur = estExistant
         ? couleurSucces(context)
         : Theme.of(context).colorScheme.outline;
+    // Sur un rapprochement approché (ex. "blanc de poule" → "Blanc de poulet"),
+    // on montre le nom retenu pour que l'utilisateur puisse corriger si besoin.
+    final texte = !estExistant
+        ? 'Nouvel article'
+        : exact
+            ? 'Déjà au catalogue'
+            : '≈ ${match.nom}';
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Row(
@@ -284,7 +289,7 @@ class _ScannerTicketScreenState extends ConsumerState<ScannerTicketScreen> {
           const SizedBox(width: 4),
           Flexible(
             child: Text(
-              estExistant ? 'Déjà au catalogue' : 'Nouvel article',
+              texte,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context)
                   .textTheme
@@ -295,6 +300,16 @@ class _ScannerTicketScreenState extends ConsumerState<ScannerTicketScreen> {
         ],
       ),
     );
+  }
+
+  // Rattache un nom (OCR) à un article existant : d'abord égalité stricte (aux
+  // accents/casse près), sinon rapprochement approché (abréviations, fautes)
+  // pour éviter les doublons du type "blanc de poule" / "Blanc de poulet".
+  Article? _trouverArticle(List<Article> catalogue, String nom) {
+    final cle = cleTriAlpha(nom);
+    final exact =
+        catalogue.where((a) => cleTriAlpha(a.nom) == cle).firstOrNull;
+    return exact ?? DoublonsService.trouverProche(catalogue, nom);
   }
 
   Widget _buildLigne(_LigneEditable ligne) {

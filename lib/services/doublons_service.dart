@@ -36,6 +36,28 @@ class DoublonsService {
     return prev[lb];
   }
 
+  // Retrouve l'article du catalogue dont le nom est le plus proche de [nom]
+  // (accents, casse, pluriel simple ignorés, plus une petite tolérance de
+  // frappe), ou null. Sert à rattacher un nom abrégé/OCR ("blanc de poule")
+  // à l'article existant ("blanc de poulet") sans créer de doublon.
+  static Article? trouverProche(List<Article> catalogue, String nom) {
+    final cible = _normaliser(nom);
+    if (cible.length < 4) return null; // trop court → trop de faux positifs
+    Article? meilleur;
+    var meilleureDist = 3; // distance max acceptée (exclusif) → tolérance ≤ 2
+    for (final a in catalogue) {
+      final n = _normaliser(a.nom);
+      if (n == cible) return a; // égal une fois normalisé
+      if ((n.length - cible.length).abs() > 3) continue; // longueurs trop différentes
+      final d = _levenshtein(n, cible);
+      if (d < meilleureDist) {
+        meilleureDist = d;
+        meilleur = a;
+      }
+    }
+    return meilleur;
+  }
+
   static List<List<Article>> detecter(List<Article> articles) {
     final restants = [...articles];
     final groupes = <List<Article>>[];

@@ -82,12 +82,14 @@ void main() {
     expect(noms, contains('Cone vani'));
   });
 
-  test('ignore les lignes de détail au poids', () {
+  test('article au poids : garde le prix au kilo (stable), pas le montant', () {
     final res = service.parserLignes([
       '5.5% POMME GOLDEN FQC 1 x 4.15 4.15',
       '1.736kg x 2.39€/kg',
     ]);
     expect(res.lignes.length, 1);
-    expect(res.lignes.first.prix, 4.15);
+    // 2,39 €/kg est réutilisable ; 4,15 € ne valait que pour 1,736 kg.
+    expect(res.lignes.first.prix, 2.39);
+    expect(res.lignes.first.nom, 'Pomme golden fqc');
   });
 }

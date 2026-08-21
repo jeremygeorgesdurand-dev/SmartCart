@@ -84,6 +84,12 @@ class TicketOcrService {
     r'(\d{1,4}[.,]\d{2})\s*€?\s*$', // montant total
   );
 
+  // Détail au poids : "1.736kg x 2.39€/kg" → on capture le prix au kilo (2.39).
+  static final _rePoidsDetail = RegExp(
+    r'\d+[.,]?\d*\s*(?:kg|g|l|cl|ml)\s*[xX]\s*(\d+[.,]\d{2})\s*€?\s*/?\s*(?:kg|g|l|cl|ml)',
+    caseSensitive: false,
+  );
+
   // Repli : … NOM … PRIX (un seul montant en fin de ligne), pour les tickets
   // qui n'affichent pas la décomposition « QTE x P.U. ».
   static final _reSimple = RegExp(
@@ -157,6 +163,21 @@ class TicketOcrService {
     for (final brut in lignesTexte) {
       // Dès la zone des totaux / fidélité, on s'arrête : plus aucun achat.
       if (_reFinArticles.hasMatch(brut)) break;
+
+      // Ligne de détail au poids ("1.736kg x 2.39€/kg") : le montant de la
+      // ligne produit dépend du poids, donc n'est pas un prix réutilisable. On
+      // remplace le prix de l'article précédent par son PRIX AU KILO/LITRE,
+      // stable et comparable d'un ticket à l'autre.
+      final poids = _rePoidsDetail.firstMatch(brut);
+      if (poids != null && lignes.isNotEmpty) {
+        final auKilo = double.tryParse(poids.group(1)!.replaceAll(',', '.'));
+        if (auKilo != null && auKilo > 0 && auKilo < 9999) {
+          final prec = lignes.removeLast();
+          lignes.add(LigneTicket(nom: prec.nom, prix: auKilo));
+        }
+        continue;
+      }
+
       final ligne = _parserLigne(brut);
       if (ligne != null) lignes.add(ligne);
     }
