@@ -75,7 +75,7 @@ class ParametresScreen extends ConsumerWidget {
                 _MenuTile(
                   icone: Icons.view_list_outlined,
                   titre: 'Onglets affichés',
-                  sousTitre: 'Statistiques, budget, prix',
+                  sousTitre: 'Budget, recettes, prix',
                   onTap: () => Navigator.push(context,
                       MaterialPageRoute(builder: (_) => const FonctionnalitesScreen())),
                 ),
