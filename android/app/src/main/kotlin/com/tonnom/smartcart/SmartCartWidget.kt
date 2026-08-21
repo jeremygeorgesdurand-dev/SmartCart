@@ -102,6 +102,36 @@ class SmartCartWidget : AppWidgetProvider() {
             }
         }
 
+        // Total estimé de la liste : somme du meilleur prix connu de chaque
+        // article (prix confirmé le moins cher, ou à défaut prix indicatif en
+        // cache), comme l'affiche l'app. 0 si aucun prix. Jamais de réseau ici.
+        private fun totalDepuisDB(context: Context, listeId: String): Double {
+            if (listeId.isEmpty()) return 0.0
+            return try {
+                val dbFile = context.getDatabasePath("smartcart.db")
+                if (!dbFile.exists()) return 0.0
+                val db = android.database.sqlite.SQLiteDatabase.openDatabase(
+                    dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
+                val c = db.rawQuery(
+                    "SELECT COALESCE(" +
+                        "(SELECT MIN(prix) FROM prix_articles WHERE articleId = a.id), " +
+                        "(SELECT prix FROM prix_cache_web WHERE articleId = a.id AND trouve = 1)) " +
+                        "FROM articles_liste al JOIN articles a ON a.id = al.articleId " +
+                        "WHERE al.listeId = ?",
+                    arrayOf(listeId))
+                var somme = 0.0
+                while (c.moveToNext()) {
+                    if (!c.isNull(0)) somme += c.getDouble(0)
+                }
+                c.close()
+                db.close()
+                somme
+            } catch (e: Exception) {
+                Log.e(TAG, "totalDepuisDB error: $e")
+                0.0
+            }
+        }
+
         fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int) {
             val prefs = context.getSharedPreferences(
                 "FlutterSharedPreferences", Context.MODE_PRIVATE)
@@ -136,8 +166,16 @@ class SmartCartWidget : AppWidgetProvider() {
 
             // ── Header ──────────────────────────────────────────
             views.setTextViewText(R.id.widget_liste_nom, listeNom ?: "SmartCart")
+            // Compteur + total estimé de la liste ("2/7 · 12,50 €") quand des
+            // prix sont connus.
+            val totalPrix = listeId?.let { totalDepuisDB(context, it) } ?: 0.0
             views.setTextViewText(R.id.widget_compteur,
-                if (listeNom != null) "$cochesCount/$total" else "")
+                if (listeNom != null) {
+                    val base = "$cochesCount/$total"
+                    if (totalPrix > 0)
+                        base + " · " + String.format(java.util.Locale.FRANCE, "%.2f €", totalPrix)
+                    else base
+                } else "")
             views.setProgressBar(R.id.widget_progress, 100, progression, false)
 
             // Adapte le contenu à la taille réelle choisie par l'utilisateur
