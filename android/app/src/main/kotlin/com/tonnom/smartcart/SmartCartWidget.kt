@@ -201,6 +201,17 @@ class SmartCartWidget : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             views.setOnClickPendingIntent(R.id.widget_header, piOpen)
 
+            // Tap 🛒 = ouvrir directement le MODE COURSES de la liste (via
+            // action="mode_courses", que HomeScreen route vers ModeCoursesScreen).
+            val iCourses = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                if (listeId != null) putExtra("open_liste_id", listeId)
+                putExtra("action", "mode_courses")
+            }
+            views.setOnClickPendingIntent(R.id.widget_btn_courses,
+                PendingIntent.getActivity(context, 3, iCourses,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+
             // Tap + = petite boîte de dialogue native pour ajouter un
             // article directement, sans jamais ouvrir l'app (QuickAddActivity
             // est une Activity au thème transparent/dialogue, pas le moteur

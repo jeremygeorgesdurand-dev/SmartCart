@@ -34,11 +34,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // (tap sur le nom/l'en-tête) via un extra d'intent : sans ce pont, on
     // atterrissait juste sur le dernier écran affiché, pas sur la liste
     // choisie.
-    WidgetService.ecouterIntents((_, listeId, __) => _ouvrirListe(listeId));
+    WidgetService.ecouterIntents(
+        (action, listeId, __) => _ouvrirDepuisWidget(action, listeId));
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final intent = await WidgetService.getWidgetIntent();
       final listeId = intent['liste_id'] ?? '';
-      if (listeId.isNotEmpty) _ouvrirListe(listeId);
+      if (listeId.isNotEmpty) {
+        _ouvrirDepuisWidget(intent['action'] ?? '', listeId);
+      }
       // En tâche de fond : va chercher un prix indicatif pour les articles
       // qui n'en ont pas encore, dès le démarrage, pour que le Budget soit
       // déjà rempli sans avoir à ouvrir chaque article un par un.
@@ -113,14 +116,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
   }
 
-  Future<void> _ouvrirListe(String listeId) async {
+  // Route l'ouverture depuis le widget : le bouton « Mode courses » envoie
+  // action="mode_courses" et ouvre directement le mode courses ; sinon on
+  // ouvre le détail de la liste (tap sur l'en-tête).
+  Future<void> _ouvrirDepuisWidget(String action, String listeId) async {
     if (listeId.isEmpty) return;
     final listes = await ref.read(listesNotifierProvider.future);
     final liste = listes.where((l) => l.id == listeId).firstOrNull;
-    if (liste != null && mounted) {
-      Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => DetailListeScreen(liste: liste)));
-    }
+    if (liste == null || !mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => action == 'mode_courses'
+          ? ModeCoursesScreen(liste: liste)
+          : DetailListeScreen(liste: liste),
+    ));
   }
 
   @override
