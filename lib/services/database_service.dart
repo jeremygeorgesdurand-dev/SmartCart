@@ -29,7 +29,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 13,
+      version: 14,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -207,6 +207,21 @@ class DatabaseService {
                 'ALTER TABLE articles_liste ADD COLUMN modifiePar TEXT');
           }
         }
+        if (oldV < 14) {
+          // Instantané du rayon magasin transporté avec l'article (comme la
+          // catégorie), pour l'imposer aux membres d'une liste collaborative.
+          final tables = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name = 'articles_liste'");
+          if (tables.isNotEmpty) {
+            await db.execute(
+                'ALTER TABLE articles_liste ADD COLUMN rayonNom TEXT');
+            await db.execute(
+                'ALTER TABLE articles_liste ADD COLUMN rayonCouleur INTEGER');
+            await db.execute(
+                'ALTER TABLE articles_liste ADD COLUMN rayonOrdre INTEGER');
+          }
+        }
       },
     );
   }
@@ -319,6 +334,9 @@ class DatabaseService {
         coche INTEGER DEFAULT 0,
         catNom TEXT,
         catCouleur INTEGER,
+        rayonNom TEXT,
+        rayonCouleur INTEGER,
+        rayonOrdre INTEGER,
         modifiePar TEXT,
         FOREIGN KEY (listeId) REFERENCES listes(id) ON DELETE CASCADE,
         FOREIGN KEY (articleId) REFERENCES articles(id)

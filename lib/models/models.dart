@@ -177,6 +177,12 @@ class ArticleListe {
   // Nul pour les listes personnelles (on y utilise la catégorie live locale).
   final String? catNom;
   final int? catCouleur;
+  // Instantané du RAYON magasin (nom + couleur + ordre), même principe que la
+  // catégorie : permet d'imposer le rayon du propriétaire à tous les membres
+  // d'une liste collaborative, ordre de courses compris.
+  final String? rayonNom;
+  final int? rayonCouleur;
+  final int? rayonOrdre;
   // uid du dernier membre ayant ajouté/modifié/coché cette ligne (liste
   // collaborative). Sert à afficher « qui a fait quoi ». Nul en local perso.
   final String? modifiePar;
@@ -191,6 +197,9 @@ class ArticleListe {
     this.coche = false,
     this.catNom,
     this.catCouleur,
+    this.rayonNom,
+    this.rayonCouleur,
+    this.rayonOrdre,
     this.modifiePar,
   });
 
@@ -211,6 +220,9 @@ class ArticleListe {
         coche: coche ?? this.coche,
         catNom: catNom,
         catCouleur: catCouleur,
+        rayonNom: rayonNom,
+        rayonCouleur: rayonCouleur,
+        rayonOrdre: rayonOrdre,
         modifiePar: modifiePar ?? this.modifiePar,
       );
 
@@ -224,6 +236,9 @@ class ArticleListe {
         'coche': coche ? 1 : 0,
         'catNom': catNom,
         'catCouleur': catCouleur,
+        'rayonNom': rayonNom,
+        'rayonCouleur': rayonCouleur,
+        'rayonOrdre': rayonOrdre,
         'modifiePar': modifiePar,
       };
 
@@ -237,6 +252,9 @@ class ArticleListe {
         coche: map['coche'] == 1,
         catNom: map['catNom'] as String?,
         catCouleur: (map['catCouleur'] as num?)?.toInt(),
+        rayonNom: map['rayonNom'] as String?,
+        rayonCouleur: (map['rayonCouleur'] as num?)?.toInt(),
+        rayonOrdre: (map['rayonOrdre'] as num?)?.toInt(),
         // Local : 'modifiePar'. Depuis Firestore (liste partagée) : la Cloud
         // Function/écriture pose 'lastModifiedBy'.
         modifiePar:

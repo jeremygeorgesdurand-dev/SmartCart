@@ -345,8 +345,13 @@ class SyncService {
                         unite: item.unite,
                         note: item.note,
                         coche: item.coche,
-                        catNom: corr.nom,
-                        catCouleur: corr.couleur,
+                        // On n'écrase que ce que le propriétaire impose
+                        // réellement ; sinon on garde la valeur reçue.
+                        catNom: corr.catNom ?? item.catNom,
+                        catCouleur: corr.catCouleur ?? item.catCouleur,
+                        rayonNom: corr.rayonNom ?? item.rayonNom,
+                        rayonCouleur: corr.rayonCouleur ?? item.rayonCouleur,
+                        rayonOrdre: corr.rayonOrdre ?? item.rayonOrdre,
                         modifiePar: item.modifiePar,
                       );
                     }
@@ -575,7 +580,14 @@ class SyncService {
   // aussi à corriger la copie LOCALE du propriétaire : sa propre écriture
   // Firestore est ignorée par son listener (hasPendingWrites), il ne la
   // reverrait donc jamais autrement.
-  Future<({String nom, int couleur})?> _imposerCategorieProprietaire(
+  Future<
+      ({
+        String? catNom,
+        int? catCouleur,
+        String? rayonNom,
+        int? rayonCouleur,
+        int? rayonOrdre
+      })?> _imposerCategorieProprietaire(
       String listeId, String docId, Map<String, dynamic> data) async {
     final nomArticle = data['nomArticle'] as String?;
     if (nomArticle == null || nomArticle.isEmpty) return null;
@@ -583,24 +595,61 @@ class SyncService {
     final art = catalogue
         .where((a) => _normNom(a.nom) == _normNom(nomArticle))
         .firstOrNull;
-    if (art?.categorieId == null) return null; // pas cet article / sans catégorie
-    final cats = await _localDb.getCategories();
-    final cat = cats.where((c) => c.id == art!.categorieId).firstOrNull;
-    if (cat == null) return null;
-    final catNomActuel = data['catNom'] as String?;
-    final catCoulActuel = (data['catCouleur'] as num?)?.toInt();
-    if (catNomActuel != cat.nom || catCoulActuel != cat.couleur) {
+    if (art == null) return null; // le propriétaire n'a pas cet article
+
+    // Catégorie du propriétaire (si assignée).
+    String? cNom;
+    int? cCoul;
+    if (art.categorieId != null) {
+      final cats = await _localDb.getCategories();
+      final c = cats.where((x) => x.id == art.categorieId).firstOrNull;
+      cNom = c?.nom;
+      cCoul = c?.couleur;
+    }
+    // Rayon magasin du propriétaire (si assigné).
+    String? rNom;
+    int? rCoul;
+    int? rOrdre;
+    if (art.rayonId != null) {
+      final rayons = await _localDb.getRayons();
+      final r = rayons.where((x) => x.id == art.rayonId).firstOrNull;
+      rNom = r?.nom;
+      rCoul = r?.couleur;
+      rOrdre = r?.ordre;
+    }
+    if (cNom == null && rNom == null) return null; // rien à imposer
+
+    // Ne met à jour Firestore que ce qui change réellement.
+    final maj = <String, dynamic>{};
+    if (cNom != null &&
+        (data['catNom'] != cNom ||
+            (data['catCouleur'] as num?)?.toInt() != cCoul)) {
+      maj['catNom'] = cNom;
+      maj['catCouleur'] = cCoul;
+    }
+    if (rNom != null &&
+        (data['rayonNom'] != rNom ||
+            (data['rayonCouleur'] as num?)?.toInt() != rCoul ||
+            (data['rayonOrdre'] as num?)?.toInt() != rOrdre)) {
+      maj['rayonNom'] = rNom;
+      maj['rayonCouleur'] = rCoul;
+      maj['rayonOrdre'] = rOrdre;
+    }
+    if (maj.isNotEmpty) {
+      maj['lastModifiedBy'] = _uid;
       await _listesPartageesCol
           .doc(listeId)
           .collection('articles')
           .doc(docId)
-          .update({
-        'catNom': cat.nom,
-        'catCouleur': cat.couleur,
-        'lastModifiedBy': _uid,
-      });
+          .update(maj);
     }
-    return (nom: cat.nom, couleur: cat.couleur);
+    return (
+      catNom: cNom,
+      catCouleur: cCoul,
+      rayonNom: rNom,
+      rayonCouleur: rCoul,
+      rayonOrdre: rOrdre
+    );
   }
 
   static String _normNom(String s) {
@@ -841,7 +890,6 @@ class SyncService {
       // encore nul) qu'on prend la catégorie locale de l'article.
       String? nomCat = al.catNom;
       int? couleurCat = al.catCouleur;
-      String? nomRayon;
       if (nomCat == null && article?.categorieId != null) {
         final cats = await _localDb.getCategories();
         final cat =
@@ -849,10 +897,16 @@ class SyncService {
         nomCat = cat?.nom;
         couleurCat = cat?.couleur;
       }
-      if (article?.rayonId != null) {
+      // Même logique pour le rayon magasin (nom + couleur + ordre).
+      String? nomRayon = al.rayonNom;
+      int? couleurRayon = al.rayonCouleur;
+      int? ordreRayon = al.rayonOrdre;
+      if (nomRayon == null && article?.rayonId != null) {
         final rayons = await _localDb.getRayons();
-        nomRayon =
-            rayons.where((r) => r.id == article!.rayonId).firstOrNull?.nom;
+        final r = rayons.where((x) => x.id == article!.rayonId).firstOrNull;
+        nomRayon = r?.nom;
+        couleurRayon = r?.couleur;
+        ordreRayon = r?.ordre;
       }
       await _listesPartageesCol
           .doc(al.listeId)
@@ -860,14 +914,16 @@ class SyncService {
           .doc(al.id)
           .set({
         ...al.toMap(),
-        // Instantané de catégorie transporté avec l'article : nom + couleur,
-        // pour un regroupement identique chez tous les membres (l'al local du
-        // vendeur a catNom nul, on l'écrase ici avec sa catégorie réelle).
+        // Instantané de catégorie ET de rayon transporté avec l'article, pour
+        // un regroupement identique chez tous les membres (l'al local du
+        // vendeur a ces champs nuls, on les écrase ici avec ses vraies valeurs).
         'catNom': nomCat,
         'catCouleur': couleurCat,
+        'rayonNom': nomRayon,
+        'rayonCouleur': couleurRayon,
+        'rayonOrdre': ordreRayon,
         'lastModifiedBy': _uid,
         if (article != null) 'nomArticle': article.nom,
-        if (nomRayon != null) 'rayonNom': nomRayon,
       });
     } else {
       await _col('listes')

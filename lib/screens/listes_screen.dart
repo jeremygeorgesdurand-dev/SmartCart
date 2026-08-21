@@ -1385,13 +1385,25 @@ class DetailListeScreen extends ConsumerWidget {
                         // ordre pour tous). Listes perso : ordre personnalisé.
                         ordre = liste.partagee ? 0 : (catLocale?.ordre ?? 99);
                       } else {
-                        final ray = rayons
+                        // Comme pour la catégorie : sur une liste partagée, on
+                        // regroupe d'après le rayon transporté (celui imposé
+                        // par le propriétaire), avec son ordre de courses.
+                        final rayLocal = rayons
                             .where((r) => r.id == e.article.rayonId)
                             .firstOrNull;
-                        cle = e.article.rayonId ?? '__aucun__';
-                        label = ray?.nom ?? 'Sans rayon';
-                        couleur = null;
-                        ordre = ray?.ordre ?? 99;
+                        final nom = liste.partagee
+                            ? (e.item.rayonNom ?? rayLocal?.nom)
+                            : rayLocal?.nom;
+                        final coul = liste.partagee
+                            ? (e.item.rayonCouleur ?? rayLocal?.couleur)
+                            : rayLocal?.couleur;
+                        final ord = liste.partagee
+                            ? (e.item.rayonOrdre ?? rayLocal?.ordre)
+                            : rayLocal?.ordre;
+                        cle = nom ?? '__aucun__';
+                        label = nom ?? 'Sans rayon';
+                        couleur = coul != null ? Color(coul) : null;
+                        ordre = ord ?? 99;
                       }
                       groupes.putIfAbsent(cle, () => []).add(e);
                       meta[cle] = (label: label, couleur: couleur, ordre: ordre);
@@ -2147,11 +2159,27 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
                 }
               }
 
-              // Grouper non-cochés par rayon (trié par ordre)
+              // Grouper non-cochés par rayon (trié par ordre de courses).
+              // Sur une liste PARTAGÉE, on utilise le rayon TRANSPORTÉ (imposé
+              // par le propriétaire) plutôt que le rayon local, pour que tout
+              // le monde suive le même ordre de rayons, même sans les mêmes.
+              final partagee = liste.partagee;
               final Map<String, List<(ArticleListe, Article)>> parRayon = {};
+              final Map<String, String> nomParCle = {};
+              final Map<String, int> ordreParCle = {};
               for (final entry in nonCoches) {
-                final key = entry.$2.rayonId ?? '__sans_rayon__';
+                final rLocal =
+                    rayons.where((r) => r.id == entry.$2.rayonId).firstOrNull;
+                final nom = partagee
+                    ? (entry.$1.rayonNom ?? rLocal?.nom)
+                    : rLocal?.nom;
+                final ordre = partagee
+                    ? (entry.$1.rayonOrdre ?? rLocal?.ordre ?? 99)
+                    : (rLocal?.ordre ?? 99);
+                final key = nom ?? '__sans_rayon__';
                 parRayon.putIfAbsent(key, () => []).add(entry);
+                nomParCle[key] = nom ?? 'Sans rayon';
+                ordreParCle[key] = ordre;
               }
               // Tri alphabétique à l'intérieur de chaque rayon
               for (final key in parRayon.keys) {
@@ -2162,9 +2190,7 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
                 ..sort((a, b) {
                   if (a == '__sans_rayon__') return 1;
                   if (b == '__sans_rayon__') return -1;
-                  final ra = rayons.where((r) => r.id == a).firstOrNull;
-                  final rb = rayons.where((r) => r.id == b).firstOrNull;
-                  return (ra?.ordre ?? 99).compareTo(rb?.ordre ?? 99);
+                  return (ordreParCle[a] ?? 99).compareTo(ordreParCle[b] ?? 99);
                 });
 
               // Basé sur nonCoches+coches (déjà filtrés par la présence de
@@ -2197,9 +2223,6 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
 
               // Non-cochés groupés par rayon
               for (final cle in clesRayon) {
-                final rayon = cle == '__sans_rayon__'
-                    ? null
-                    : rayons.where((r) => r.id == cle).firstOrNull;
                 // parRayon vient déjà uniquement de nonCoches (qui inclut
                 // les articles tout juste cochés, encore en délai) : filtrer
                 // à nouveau sur `!coche` ici exclurait à tort ces derniers,
@@ -2208,7 +2231,7 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
                 if (articlesRayon.isEmpty) continue;
 
                 widgets.add(_RayonHeader(
-                  nom: rayon?.nom ?? 'Sans rayon',
+                  nom: nomParCle[cle] ?? 'Sans rayon',
                   nbRestants: articlesRayon.length,
                 ));
 
