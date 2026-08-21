@@ -1767,6 +1767,41 @@ class _ArticleListeTile extends ConsumerWidget {
     );
   }
 
+  // Petit avatar de la personne ayant fait la dernière action sur la ligne
+  // (liste collaborative). Rien si la liste est personnelle ou si l'auteur
+  // n'est pas résolu (membresListeProvider renvoie une map vide hors collab).
+  Widget _avatarModifiePar(BuildContext context, WidgetRef ref) {
+    final uid = articleListe.modifiePar;
+    if (uid == null) return const SizedBox.shrink();
+    final membres = ref.watch(membresListeProvider(listeId)).valueOrNull;
+    final profil = membres?[uid];
+    if (profil == null) return const SizedBox.shrink();
+    final nom = (profil.nom?.trim().isNotEmpty ?? false)
+        ? profil.nom!.trim()
+        : 'Membre';
+    final initiale = nom.substring(0, 1).toUpperCase();
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Tooltip(
+        message: articleListe.coche
+            ? 'Coché par $nom'
+            : 'Ajouté/modifié par $nom',
+        child: CircleAvatar(
+          radius: 11,
+          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+          foregroundImage: (profil.photo != null && profil.photo!.isNotEmpty)
+              ? NetworkImage(profil.photo!)
+              : null,
+          child: Text(initiale,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer)),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Semantics(
@@ -1788,6 +1823,7 @@ class _ArticleListeTile extends ConsumerWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _avatarModifiePar(context, ref),
           PrixArticleBadge(article: article),
           if (articleListe.quantite > 1 || articleListe.unite != null) ...[
             const SizedBox(width: 8),

@@ -98,6 +98,22 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return ref.read(authServiceProvider).userStream;
 });
 
+// Profils des membres d'une liste collaborative, indexés par uid (nom + photo),
+// pour afficher « qui a coché/ajouté » chaque article. Renvoie une map vide
+// pour une liste personnelle (le document collaboratif n'existe pas).
+final membresListeProvider = FutureProvider.family<
+    Map<String, ({String? nom, String? photo})>, String>((ref, listeId) async {
+  try {
+    final membres = await ref.read(syncServiceProvider).getMembresListe(listeId);
+    return {
+      for (final m in membres)
+        m.uid: (nom: m.displayName, photo: m.photoURL),
+    };
+  } catch (_) {
+    return const {};
+  }
+});
+
 // ─── SYNC TEMPS RÉEL ─────────────────────────────────────────────
 // Démarre/arrête l'écoute Firestore selon l'état de connexion, et
 // invalide les providers concernés quand un changement arrive d'un
@@ -452,19 +468,31 @@ class ArticlesListeNotifier
   Future<List<ArticleListe>> build(String listeId) =>
       ref.read(dbServiceProvider).getArticlesListe(listeId);
 
+  // uid du compte courant : sert à marquer « qui a modifié » la ligne dans une
+  // liste collaborative (ignoré à l'affichage pour les listes personnelles).
+  // Protégé : accéder à FirebaseAuth sans Firebase initialisé (tests) lève.
+  String? get _moi {
+    try {
+      return ref.read(authServiceProvider).currentUser?.uid;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> ajouter(ArticleListe al) async {
-    await ref.read(dbServiceProvider).insertArticleListe(al);
+    final marque = al.copyWith(modifiePar: _moi);
+    await ref.read(dbServiceProvider).insertArticleListe(marque);
     ref.invalidateSelf();
     _syncWidget();
     // La synchro cloud tourne en fond sans bloquer l'affichage : sur un
     // réseau lent, attendre ce round-trip avant de rafraîchir l'écran
     // donnait l'impression d'un ajout d'article très lent alors que
     // l'écriture locale (ce qui compte pour l'UI) est instantanée.
-    unawaited(_syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(al)));
+    unawaited(_syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(marque)));
   }
 
   Future<void> cocher(ArticleListe al, bool valeur) async {
-    final updated = al.copyWith(coche: valeur);
+    final updated = al.copyWith(coche: valeur, modifiePar: _moi);
     await ref.read(dbServiceProvider).updateArticleListe(updated);
     ref.invalidateSelf();
     // Sync widget si c'est la liste configurée
@@ -490,7 +518,7 @@ class ArticlesListeNotifier
   }
 
   Future<void> modifierQuantite(ArticleListe al, int quantite) async {
-    final updated = al.copyWith(quantite: quantite);
+    final updated = al.copyWith(quantite: quantite, modifiePar: _moi);
     await ref.read(dbServiceProvider).updateArticleListe(updated);
     await _syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(updated));
     ref.invalidateSelf();
@@ -514,6 +542,7 @@ class ArticlesListeNotifier
       // ferait perdre puis ré-écraserait la catégorie à la synchro.
       catNom: al.catNom,
       catCouleur: al.catCouleur,
+      modifiePar: _moi,
     );
     await ref.read(dbServiceProvider).updateArticleListe(updated);
     await _syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(updated));

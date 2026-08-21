@@ -347,6 +347,7 @@ class SyncService {
                         coche: item.coche,
                         catNom: corr.nom,
                         catCouleur: corr.couleur,
+                        modifiePar: item.modifiePar,
                       );
                     }
                   }

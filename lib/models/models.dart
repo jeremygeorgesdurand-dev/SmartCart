@@ -177,6 +177,9 @@ class ArticleListe {
   // Nul pour les listes personnelles (on y utilise la catégorie live locale).
   final String? catNom;
   final int? catCouleur;
+  // uid du dernier membre ayant ajouté/modifié/coché cette ligne (liste
+  // collaborative). Sert à afficher « qui a fait quoi ». Nul en local perso.
+  final String? modifiePar;
 
   ArticleListe({
     required this.id,
@@ -188,6 +191,7 @@ class ArticleListe {
     this.coche = false,
     this.catNom,
     this.catCouleur,
+    this.modifiePar,
   });
 
   ArticleListe copyWith({
@@ -195,6 +199,7 @@ class ArticleListe {
     String? unite,
     String? note,
     bool? coche,
+    String? modifiePar,
   }) =>
       ArticleListe(
         id: id,
@@ -206,6 +211,7 @@ class ArticleListe {
         coche: coche ?? this.coche,
         catNom: catNom,
         catCouleur: catCouleur,
+        modifiePar: modifiePar ?? this.modifiePar,
       );
 
   Map<String, dynamic> toMap() => {
@@ -218,6 +224,7 @@ class ArticleListe {
         'coche': coche ? 1 : 0,
         'catNom': catNom,
         'catCouleur': catCouleur,
+        'modifiePar': modifiePar,
       };
 
   factory ArticleListe.fromMap(Map<String, dynamic> map) => ArticleListe(
@@ -230,6 +237,10 @@ class ArticleListe {
         coche: map['coche'] == 1,
         catNom: map['catNom'] as String?,
         catCouleur: (map['catCouleur'] as num?)?.toInt(),
+        // Local : 'modifiePar'. Depuis Firestore (liste partagée) : la Cloud
+        // Function/écriture pose 'lastModifiedBy'.
+        modifiePar:
+            (map['modifiePar'] ?? map['lastModifiedBy']) as String?,
       );
 }
 

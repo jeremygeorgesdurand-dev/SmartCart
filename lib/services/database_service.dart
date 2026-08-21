@@ -29,7 +29,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 12,
+      version: 13,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -196,6 +196,17 @@ class DatabaseService {
                 'ALTER TABLE articles_liste ADD COLUMN catCouleur INTEGER');
           }
         }
+        if (oldV < 13) {
+          // « Qui a coché/ajouté » : uid du dernier membre à avoir modifié la
+          // ligne, pour les listes collaboratives.
+          final tables = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name = 'articles_liste'");
+          if (tables.isNotEmpty) {
+            await db.execute(
+                'ALTER TABLE articles_liste ADD COLUMN modifiePar TEXT');
+          }
+        }
       },
     );
   }
@@ -308,6 +319,7 @@ class DatabaseService {
         coche INTEGER DEFAULT 0,
         catNom TEXT,
         catCouleur INTEGER,
+        modifiePar TEXT,
         FOREIGN KEY (listeId) REFERENCES listes(id) ON DELETE CASCADE,
         FOREIGN KEY (articleId) REFERENCES articles(id)
       )
