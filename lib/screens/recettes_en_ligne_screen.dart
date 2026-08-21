@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/recettes_en_ligne_provider.dart';
 import '../services/recettes_dataset_service.dart';
 import '../utils/erreur_utils.dart';
+import 'frigo_screen.dart';
 import 'recette_en_ligne_detail_screen.dart';
 
 // ================================================================
@@ -66,6 +67,19 @@ class _ExplorerRecettesTabState extends ConsumerState<ExplorerRecettesTab> {
               notifier.update((f) => f.copyWith(requete: v));
               setState(() {});
             },
+          ),
+        ),
+        // Accès au « frigo » (suggestions à partir de ce qu'on a) : ce n'est
+        // plus un onglet séparé, mais un bouton ici (allégement de la barre).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: OutlinedButton.icon(
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const FrigoScreen())),
+            icon: const Icon(Icons.kitchen_outlined, size: 20),
+            label: const Text('Cuisiner avec mon frigo'),
+            style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(40)),
           ),
         ),
         SizedBox(

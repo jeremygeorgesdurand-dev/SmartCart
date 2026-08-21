@@ -16,6 +16,21 @@ class FrigoTab extends ConsumerStatefulWidget {
   ConsumerState<FrigoTab> createState() => _FrigoTabState();
 }
 
+// Écran dédié « Cuisiner avec mon frigo » : le contenu du frigo n'est plus un
+// sous-onglet des Recettes (allégement), on y accède par un bouton depuis
+// Explorer.
+class FrigoScreen extends StatelessWidget {
+  const FrigoScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Cuisiner avec mon frigo')),
+      body: const FrigoTab(),
+    );
+  }
+}
+
 class _FrigoTabState extends ConsumerState<FrigoTab> {
   final _ctrl = TextEditingController();
 

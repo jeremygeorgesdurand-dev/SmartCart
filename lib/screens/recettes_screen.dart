@@ -5,7 +5,6 @@ import '../providers/providers.dart';
 import '../services/vocal_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
-import 'frigo_screen.dart';
 import 'recettes_en_ligne_screen.dart';
 
 // ================================================================
@@ -30,7 +29,7 @@ class RecettesScreen extends StatefulWidget {
 
 class _RecettesScreenState extends State<RecettesScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(length: 3, vsync: this)
+  late final TabController _tab = TabController(length: 2, vsync: this)
     ..addListener(() => setState(() {}));
   // Évite de déclencher plusieurs fois le passage de relais pendant un même
   // geste (l'overscroll émet en continu tant que le doigt pousse le bord).
@@ -73,12 +72,11 @@ class _RecettesScreenState extends State<RecettesScreen>
           controller: _tab,
           tabs: const [
             Tab(text: 'Explorer'),
-            Tab(text: 'Mon frigo'),
             Tab(text: 'Mes recettes'),
           ],
         ),
       ),
-      floatingActionButton: _tab.index == 2
+      floatingActionButton: _tab.index == 1
           ? FloatingActionButton.extended(
               onPressed: () => Navigator.push(
                 context,
@@ -94,7 +92,6 @@ class _RecettesScreenState extends State<RecettesScreen>
           controller: _tab,
           children: const [
             ExplorerRecettesTab(),
-            FrigoTab(),
             MesRecettesTab(),
           ],
         ),

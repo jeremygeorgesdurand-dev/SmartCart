@@ -3,11 +3,20 @@ class VersionInfo {
   // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
   // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
   // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
-  static const String version = '1.10.0';
-  static const String buildNumber = '37';
+  static const String version = '1.11.0';
+  static const String buildNumber = '38';
   static const String dateMiseAJour = '21 août 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.11.0',
+      date: '21 août 2026',
+      changements: [
+        'Recettes simplifiées : « Mon frigo » n\'est plus un onglet séparé, '
+            'on y accède par le bouton « Cuisiner avec mon frigo » depuis '
+            'Explorer (2 sous-onglets au lieu de 3)',
+      ],
+    ),
     Release(
       version: '1.10.0',
       date: '21 août 2026',
