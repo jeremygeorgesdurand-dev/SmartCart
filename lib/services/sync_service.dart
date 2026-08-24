@@ -4,7 +4,6 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
-import 'backup_service.dart';
 import 'database_service.dart';
 
 class SyncService {
@@ -435,6 +434,7 @@ class SyncService {
           for (final sub in ['categories', 'rayons', 'articles']) {
             await _subs.remove('cat_suivi_${catId}_$sub')?.cancel();
           }
+          await _localDb.supprimerCatalogueSuivi(catId);
           continue;
         }
         // Un écouteur par sous-collection : tout changement re-fusionne.
@@ -445,21 +445,26 @@ class SyncService {
                 .collection(sub)
                 .snapshots()
                 .listen((_) async {
-              await _fusionnerCatalogueSuivi(catId);
+              await _stockerCatalogueSuivi(catId);
               onChangement();
             });
           });
         }
-        await _fusionnerCatalogueSuivi(catId);
+        await _stockerCatalogueSuivi(catId);
         onChangement();
       }
     });
   }
 
-  // Récupère les 3 sous-collections d'un catalogue suivi et les fusionne (par
-  // nom, sans doublon) dans le catalogue local.
-  Future<void> _fusionnerCatalogueSuivi(String catId) async {
+  // Récupère les 3 sous-collections d'un catalogue suivi et les stocke À PART
+  // (catalogue séparé, marqué `source` = catId), remplaçant la version locale
+  // précédente. N'affecte pas mon propre catalogue.
+  Future<void> _stockerCatalogueSuivi(String catId) async {
     final doc = _cataloguesPartagesCol.doc(catId);
+    final infos = await doc.get();
+    final nom = infos.exists
+        ? ((infos.data() as Map)['nom'] as String? ?? 'Catalogue partagé')
+        : 'Catalogue partagé';
     final cats = (await doc.collection('categories').get())
         .docs
         .map((d) => Categorie.fromMap(d.data()))
@@ -472,8 +477,13 @@ class SyncService {
         .docs
         .map((d) => Article.fromMap(d.data()))
         .toList();
-    await BackupService(_localDb).fusionnerCatalogue(
-        categories: cats, rayons: rayons, articles: articles);
+    await _localDb.remplacerCatalogueSuivi(
+      catId,
+      articles: articles,
+      categories: cats,
+      rayons: rayons,
+      nom: nom,
+    );
   }
 
   void _ecouterCollection<T>(
@@ -590,6 +600,7 @@ class SyncService {
         'proprietaireId': uid,
         'membres': [uid],
         'code': code,
+        'nom': _auth.currentUser?.displayName ?? 'Catalogue partagé',
       });
       await _codesCatalogueCol.doc(code).set({'catalogueId': uid});
     }
@@ -633,7 +644,7 @@ class SyncService {
     await _cataloguesPartagesCol.doc(catId).update({
       'membres': FieldValue.arrayUnion([_uid]),
     });
-    await _fusionnerCatalogueSuivi(catId);
+    await _stockerCatalogueSuivi(catId);
     return true;
   }
 
@@ -642,6 +653,7 @@ class SyncService {
     await _cataloguesPartagesCol.doc(catId).update({
       'membres': FieldValue.arrayRemove([_uid]),
     });
+    await _localDb.supprimerCatalogueSuivi(catId);
   }
 
   // Mon code de partage de catalogue (null si je ne partage pas).

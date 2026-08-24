@@ -29,7 +29,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 14,
+      version: 15,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -222,6 +222,27 @@ class DatabaseService {
                 'ALTER TABLE articles_liste ADD COLUMN rayonOrdre INTEGER');
           }
         }
+        if (oldV < 15) {
+          // Catalogues SUIVIS (partage temps réel, catalogue séparé) : les
+          // articles/catégories/rayons reçus sont stockés dans les mêmes tables
+          // mais marqués `source` = id du catalogue suivi. Les lecteurs par
+          // défaut ne renvoient que MON catalogue (source IS NULL), donc ces
+          // entrées ne polluent ni les listes ni le budget.
+          for (final t in ['articles', 'categories', 'rayons']) {
+            final exists = await db.rawQuery(
+              "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+              [t]);
+            if (exists.isNotEmpty) {
+              await db.execute('ALTER TABLE $t ADD COLUMN source TEXT');
+            }
+          }
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS catalogues_suivis (
+              id TEXT PRIMARY KEY,
+              nom TEXT
+            )
+          ''');
+        }
       },
     );
   }
@@ -237,7 +258,8 @@ class DatabaseService {
         barcode TEXT,
         marque TEXT,
         imageUrl TEXT,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        source TEXT
       )
     ''');
 
@@ -247,7 +269,8 @@ class DatabaseService {
         id TEXT PRIMARY KEY,
         nom TEXT NOT NULL,
         couleur INTEGER NOT NULL,
-        ordre INTEGER NOT NULL
+        ordre INTEGER NOT NULL,
+        source TEXT
       )
     ''');
 
@@ -258,7 +281,16 @@ class DatabaseService {
         nom TEXT NOT NULL,
         ordre INTEGER NOT NULL,
         magasin TEXT,
-        couleur INTEGER DEFAULT 6296528
+        couleur INTEGER DEFAULT 6296528,
+        source TEXT
+      )
+    ''');
+
+    // Catalogues suivis (partage temps réel, catalogue séparé) : id + nom.
+    await db.execute('''
+      CREATE TABLE catalogues_suivis (
+        id TEXT PRIMARY KEY,
+        nom TEXT
       )
     ''');
 
@@ -386,9 +418,14 @@ class DatabaseService {
   }
 
   // ─── ARTICLES ────────────────────────────────────────────
+  // MON catalogue uniquement (source IS NULL). Les catalogues SUIVIS sont
+  // stockés dans les mêmes tables avec source = id du catalogue, et lus par
+  // getArticlesParSource — jamais renvoyés ici, donc ils ne polluent pas les
+  // listes, le budget, etc.
   Future<List<Article>> getArticles() async {
     final d = await db;
-    final rows = await d.query('articles', orderBy: 'nom ASC');
+    final rows =
+        await d.query('articles', where: 'source IS NULL', orderBy: 'nom ASC');
     return rows.map(Article.fromMap).toList();
   }
 
@@ -396,10 +433,79 @@ class DatabaseService {
     final d = await db;
     final rows = await d.query(
       'articles',
-      where: 'nom LIKE ?',
+      where: 'nom LIKE ? AND source IS NULL',
       whereArgs: ['%$query%'],
     );
     return rows.map(Article.fromMap).toList();
+  }
+
+  // ─── CATALOGUES SUIVIS (catalogue séparé, partage temps réel) ────
+  Future<List<Article>> getArticlesParSource(String source) async {
+    final d = await db;
+    final rows = await d.query('articles',
+        where: 'source = ?', whereArgs: [source], orderBy: 'nom ASC');
+    return rows.map(Article.fromMap).toList();
+  }
+
+  Future<List<Categorie>> getCategoriesParSource(String source) async {
+    final d = await db;
+    final rows = await d.query('categories',
+        where: 'source = ?', whereArgs: [source], orderBy: 'ordre ASC');
+    return rows.map(Categorie.fromMap).toList();
+  }
+
+  Future<List<Rayon>> getRayonsParSource(String source) async {
+    final d = await db;
+    final rows = await d.query('rayons',
+        where: 'source = ?', whereArgs: [source], orderBy: 'ordre ASC');
+    return rows.map(Rayon.fromMap).toList();
+  }
+
+  // Remplace le contenu local d'un catalogue suivi par celui reçu.
+  Future<void> remplacerCatalogueSuivi(
+    String source, {
+    required List<Article> articles,
+    required List<Categorie> categories,
+    required List<Rayon> rayons,
+    required String nom,
+  }) async {
+    final d = await db;
+    await d.transaction((txn) async {
+      await txn.delete('articles', where: 'source = ?', whereArgs: [source]);
+      await txn.delete('categories', where: 'source = ?', whereArgs: [source]);
+      await txn.delete('rayons', where: 'source = ?', whereArgs: [source]);
+      for (final a in articles) {
+        await txn.insert('articles', {...a.toMap(), 'source': source},
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      for (final c in categories) {
+        await txn.insert('categories', {...c.toMap(), 'source': source},
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      for (final r in rayons) {
+        await txn.insert('rayons', {...r.toMap(), 'source': source},
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      await txn.insert('catalogues_suivis', {'id': source, 'nom': nom},
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    });
+  }
+
+  Future<void> supprimerCatalogueSuivi(String source) async {
+    final d = await db;
+    await d.delete('articles', where: 'source = ?', whereArgs: [source]);
+    await d.delete('categories', where: 'source = ?', whereArgs: [source]);
+    await d.delete('rayons', where: 'source = ?', whereArgs: [source]);
+    await d.delete('catalogues_suivis', where: 'id = ?', whereArgs: [source]);
+  }
+
+  Future<List<({String id, String nom})>> getCataloguesSuivis() async {
+    final d = await db;
+    final rows = await d.query('catalogues_suivis', orderBy: 'nom ASC');
+    return rows
+        .map((r) =>
+            (id: r['id'] as String, nom: (r['nom'] as String?) ?? 'Catalogue'))
+        .toList();
   }
 
   Future<void> insertArticle(Article article) async {
@@ -429,7 +535,8 @@ class DatabaseService {
   // ─── CATÉGORIES ──────────────────────────────────────────
   Future<List<Categorie>> getCategories() async {
     final d = await db;
-    final rows = await d.query('categories', orderBy: 'ordre ASC');
+    final rows = await d.query('categories',
+        where: 'source IS NULL', orderBy: 'ordre ASC');
     return rows.map(Categorie.fromMap).toList();
   }
 
@@ -455,7 +562,9 @@ class DatabaseService {
     final d = await db;
     final rows = await d.query(
       'rayons',
-      where: magasin != null ? 'magasin = ? OR magasin IS NULL' : null,
+      where: magasin != null
+          ? '(magasin = ? OR magasin IS NULL) AND source IS NULL'
+          : 'source IS NULL',
       whereArgs: magasin != null ? [magasin] : null,
       orderBy: 'ordre ASC',
     );

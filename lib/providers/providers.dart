@@ -98,6 +98,31 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return ref.read(authServiceProvider).userStream;
 });
 
+// ── CATALOGUES SUIVIS (catalogue séparé, partage temps réel) ────────
+// Catalogue actuellement affiché dans l'écran Catalogue : null = le mien,
+// sinon l'id d'un catalogue suivi.
+final catalogueSelectionneProvider = StateProvider<String?>((_) => null);
+
+// Liste des catalogues suivis (id + nom) pour le sélecteur.
+final cataloguesSuivisProvider =
+    FutureProvider<List<({String id, String nom})>>((ref) async {
+  // Se rafraîchit quand le catalogue change (temps réel).
+  ref.watch(articlesNotifierProvider);
+  return ref.read(dbServiceProvider).getCataloguesSuivis();
+});
+
+// Contenu d'un catalogue suivi : articles + catégories (pour l'affichage séparé).
+final contenuCatalogueSuiviProvider = FutureProvider.family<
+    ({List<Article> articles, List<Categorie> categories}), String>(
+    (ref, catId) async {
+  ref.watch(articlesNotifierProvider);
+  final db = ref.read(dbServiceProvider);
+  return (
+    articles: await db.getArticlesParSource(catId),
+    categories: await db.getCategoriesParSource(catId),
+  );
+});
+
 // Profils des membres d'une liste collaborative, indexés par uid (nom + photo),
 // pour afficher « qui a coché/ajouté » chaque article. Renvoie une map vide
 // pour une liste personnelle (le document collaboratif n'existe pas).

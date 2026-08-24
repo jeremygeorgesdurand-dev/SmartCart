@@ -10,6 +10,7 @@ import '../widgets/filtres_bar.dart';
 import '../widgets/vocal_button.dart';
 import '../widgets/animated_list_item.dart';
 import 'scanner_screen.dart';
+import 'catalogue_suivi_screen.dart';
 import '../widgets/import_liste_dialog.dart' show ImportListeDialog, ExportDialog;
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
@@ -82,6 +83,40 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     }
   }
 
+  // Titre du Catalogue : simple texte, ou un sélecteur « Mon catalogue ▾ » si
+  // l'utilisateur suit des catalogues partagés (il peut alors basculer sur
+  // l'un d'eux, affiché à part en lecture seule).
+  Widget _titreAvecSelecteur(BuildContext context) {
+    final suivis = ref.watch(cataloguesSuivisProvider).valueOrNull ?? [];
+    if (suivis.isEmpty) return const Text('Catalogue');
+    return PopupMenuButton<String?>(
+      onSelected: (id) {
+        if (id == null) return; // « Mon catalogue » : on y est déjà.
+        final nom = suivis.firstWhere((s) => s.id == id).nom;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  CatalogueSuiviScreen(catalogueId: id, nom: nom)),
+        );
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem<String?>(
+            value: null, child: Text('Mon catalogue')),
+        const PopupMenuDivider(),
+        for (final s in suivis)
+          PopupMenuItem<String?>(value: s.id, child: Text(s.nom)),
+      ],
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Mon catalogue'),
+          Icon(Icons.arrow_drop_down),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final articlesAsync = ref.watch(articlesFiltresProvider);
@@ -111,7 +146,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                 onChanged: (v) =>
                     ref.read(searchQueryProvider.notifier).state = v,
               )
-            : const Text('Catalogue'),
+            : _titreAvecSelecteur(context),
         actions: [
           // Recherche
           IconButton(
