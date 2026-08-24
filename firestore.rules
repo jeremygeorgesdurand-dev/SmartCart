@@ -104,6 +104,64 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // ── Catalogue partagé en temps réel (sens unique) ──────────
+    // Le doc a pour id l'uid du propriétaire. Un membre peut LIRE le
+    // catalogue et ses sous-collections ; seul le propriétaire ÉCRIT le
+    // contenu. Rejoindre/quitter = s'ajouter/se retirer soi-même de `membres`.
+    match /catalogues_partages/{catalogueId} {
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.membres;
+
+      allow create: if request.auth != null
+        && request.resource.data.proprietaireId == request.auth.uid
+        && request.resource.data.membres == [request.auth.uid];
+
+      allow update: if request.auth != null && (
+        // Le propriétaire peut modifier son doc.
+        request.auth.uid == resource.data.proprietaireId
+        // Rejoindre : un non-membre s'ajoute lui-même, rien d'autre ne change.
+        || (
+          request.resource.data.membres ==
+              resource.data.membres.concat([request.auth.uid])
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['membres'])
+        )
+        // Quitter : un membre se retire lui-même.
+        || (
+          request.auth.uid in resource.data.membres
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['membres'])
+          && request.resource.data.membres ==
+              resource.data.membres.removeAll([request.auth.uid])
+        )
+      );
+
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.proprietaireId;
+
+      match /{sous}/{docId} {
+        allow read: if request.auth != null
+          && request.auth.uid in get(
+              /databases/$(database)/documents/catalogues_partages/$(catalogueId)
+            ).data.membres;
+        allow write: if request.auth != null
+          && request.auth.uid == get(
+              /databases/$(database)/documents/catalogues_partages/$(catalogueId)
+            ).data.proprietaireId;
+      }
+    }
+
+    // ── Codes de partage de catalogue : pointeur public (code → uid) ──
+    match /codes_catalogue/{code} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['catalogueId'])
+        && request.resource.data.catalogueId == request.auth.uid;
+      allow delete: if request.auth != null
+        && resource.data.catalogueId == request.auth.uid;
+      allow update: if false;
+    }
+
     // Tout le reste est refusé par défaut.
   }
 }

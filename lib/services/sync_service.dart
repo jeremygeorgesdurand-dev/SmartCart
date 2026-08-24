@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
+import 'backup_service.dart';
 import 'database_service.dart';
 
 class SyncService {
@@ -41,6 +42,13 @@ class SyncService {
       _db.collection('listes_partagees');
   CollectionReference get _codesPartageCol =>
       _db.collection('codes_partage');
+  // Catalogues partagés en temps réel (sens unique) : le doc {catalogueId} vaut
+  // l'uid du propriétaire ; ses sous-collections categories/rayons/articles
+  // sont poussées par lui et lues (fusionnées) par les membres.
+  CollectionReference get _cataloguesPartagesCol =>
+      _db.collection('catalogues_partages');
+  CollectionReference get _codesCatalogueCol =>
+      _db.collection('codes_catalogue');
 
   // ── UPLOAD COMPLET (local → Firestore) ─────────────────────────
   Future<void> uploadTout() async {
@@ -411,6 +419,61 @@ class SyncService {
       }
       onChangement();
     });
+
+    // Catalogues partagés que je SUIS (membre non-propriétaire) : fusion en
+    // temps réel dans mon catalogue local.
+    _subs['catalogues_partages'] = _cataloguesPartagesCol
+        .where('membres', arrayContains: _uid)
+        .snapshots()
+        .listen((snap) async {
+      for (final change in snap.docChanges) {
+        final catId = change.doc.id;
+        final data = change.doc.data() as Map<String, dynamic>?;
+        // Le mien (j'en suis la source) : rien à fusionner.
+        if (data?['proprietaireId'] == _uid) continue;
+        if (change.type == DocumentChangeType.removed) {
+          for (final sub in ['categories', 'rayons', 'articles']) {
+            await _subs.remove('cat_suivi_${catId}_$sub')?.cancel();
+          }
+          continue;
+        }
+        // Un écouteur par sous-collection : tout changement re-fusionne.
+        for (final sub in ['categories', 'rayons', 'articles']) {
+          _subs.putIfAbsent('cat_suivi_${catId}_$sub', () {
+            return _cataloguesPartagesCol
+                .doc(catId)
+                .collection(sub)
+                .snapshots()
+                .listen((_) async {
+              await _fusionnerCatalogueSuivi(catId);
+              onChangement();
+            });
+          });
+        }
+        await _fusionnerCatalogueSuivi(catId);
+        onChangement();
+      }
+    });
+  }
+
+  // Récupère les 3 sous-collections d'un catalogue suivi et les fusionne (par
+  // nom, sans doublon) dans le catalogue local.
+  Future<void> _fusionnerCatalogueSuivi(String catId) async {
+    final doc = _cataloguesPartagesCol.doc(catId);
+    final cats = (await doc.collection('categories').get())
+        .docs
+        .map((d) => Categorie.fromMap(d.data()))
+        .toList();
+    final rayons = (await doc.collection('rayons').get())
+        .docs
+        .map((d) => Rayon.fromMap(d.data()))
+        .toList();
+    final articles = (await doc.collection('articles').get())
+        .docs
+        .map((d) => Article.fromMap(d.data()))
+        .toList();
+    await BackupService(_localDb).fusionnerCatalogue(
+        categories: cats, rayons: rayons, articles: articles);
   }
 
   void _ecouterCollection<T>(
@@ -504,6 +567,102 @@ class SyncService {
     await _codesPartageCol.doc(code).set({'listeId': liste.id});
 
     return code;
+  }
+
+  // ── CATALOGUE PARTAGÉ EN TEMPS RÉEL (sens unique) ───────────────
+  // Le propriétaire partage son catalogue ; les membres le reçoivent et le
+  // fusionnent en direct (par nom). Un seul catalogue partagé par compte
+  // (doc d'id = uid du propriétaire).
+
+  // Partage mon catalogue et retourne le code à transmettre (idempotent).
+  Future<String> partagerMonCatalogue() async {
+    final uid = _uid;
+    final docRef = _cataloguesPartagesCol.doc(uid);
+    final snap = await docRef.get();
+    String code;
+    if (snap.exists && (snap.data() as Map)['code'] != null) {
+      code = (snap.data() as Map)['code'] as String;
+    } else {
+      do {
+        code = _genererCode();
+      } while ((await _codesCatalogueCol.doc(code).get()).exists);
+      await docRef.set({
+        'proprietaireId': uid,
+        'membres': [uid],
+        'code': code,
+      });
+      await _codesCatalogueCol.doc(code).set({'catalogueId': uid});
+    }
+    await republierMonCatalogue();
+    return code;
+  }
+
+  // (Re)pousse l'intégralité de mon catalogue vers le doc partagé. Appelé au
+  // partage, et à rappeler pour propager mes changements aux membres.
+  Future<void> republierMonCatalogue() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final docRef = _cataloguesPartagesCol.doc(uid);
+    if (!(await docRef.get()).exists) return; // pas de catalogue partagé
+    final cats = await _localDb.getCategories();
+    final rayons = await _localDb.getRayons();
+    final articles = await _localDb.getArticles();
+    // Écrit par paquets (limite de 500 opérations par batch Firestore).
+    final ops = <(DocumentReference, Map<String, dynamic>)>[
+      for (final c in cats) (docRef.collection('categories').doc(c.id), c.toMap()),
+      for (final r in rayons) (docRef.collection('rayons').doc(r.id), r.toMap()),
+      for (final a in articles) (docRef.collection('articles').doc(a.id), a.toMap()),
+    ];
+    for (var i = 0; i < ops.length; i += 400) {
+      final batch = _db.batch();
+      for (final (ref, map) in ops.skip(i).take(400)) {
+        batch.set(ref, map);
+      }
+      await batch.commit();
+    }
+  }
+
+  // Suit le catalogue d'un autre compte via son code. Fusionne immédiatement,
+  // puis l'écoute temps réel prend le relais. Retourne false si code invalide.
+  Future<bool> suivreCatalogue(String code) async {
+    final codeDoc =
+        await _codesCatalogueCol.doc(code.trim().toUpperCase()).get();
+    if (!codeDoc.exists) return false;
+    final catId = (codeDoc.data() as Map<String, dynamic>)['catalogueId'] as String;
+    if (catId == _uid) return false; // ne pas se suivre soi-même
+    await _cataloguesPartagesCol.doc(catId).update({
+      'membres': FieldValue.arrayUnion([_uid]),
+    });
+    await _fusionnerCatalogueSuivi(catId);
+    return true;
+  }
+
+  // Arrête de suivre un catalogue (se retire des membres).
+  Future<void> arreterDeSuivreCatalogue(String catId) async {
+    await _cataloguesPartagesCol.doc(catId).update({
+      'membres': FieldValue.arrayRemove([_uid]),
+    });
+  }
+
+  // Mon code de partage de catalogue (null si je ne partage pas).
+  Future<String?> monCodeCatalogue() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return null;
+    final snap = await _cataloguesPartagesCol.doc(uid).get();
+    return snap.exists ? (snap.data() as Map)['code'] as String? : null;
+  }
+
+  // Les ids des catalogues que je SUIS (membre, non propriétaire).
+  Future<List<String>> cataloguesSuivis() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return [];
+    final snap = await _cataloguesPartagesCol
+        .where('membres', arrayContains: uid)
+        .get();
+    return snap.docs
+        .where((d) => (d.data() as Map)['proprietaireId'] != uid)
+        .map((d) => d.id)
+        .toList();
   }
 
   // Rejoint une liste collaborative via son code. Retourne la liste et ses

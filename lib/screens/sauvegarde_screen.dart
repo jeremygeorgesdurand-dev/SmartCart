@@ -109,6 +109,105 @@ class _SauvegardeScreenState extends ConsumerState<SauvegardeScreen> {
     }
   }
 
+  // Partage temps réel : obtient/affiche mon code de catalogue.
+  Future<void> _partagerCatalogueDirect() async {
+    setState(() => _enCours = true);
+    try {
+      final code = await ref.read(syncServiceProvider).partagerMonCatalogue();
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Ton code de catalogue'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Donne ce code aux personnes qui veulent suivre ton '
+                  'catalogue. Elles le recevront et le garderont à jour '
+                  'automatiquement.'),
+              const SizedBox(height: 16),
+              SelectableText(code,
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.bold, letterSpacing: 4)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Fermer'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Échec : $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _enCours = false);
+    }
+  }
+
+  // Suivre le catalogue d'un autre compte via son code.
+  Future<void> _suivreCatalogue() async {
+    final ctrl = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Suivre un catalogue'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            hintText: 'Code à 6 caractères',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: const Text('Suivre'),
+          ),
+        ],
+      ),
+    );
+    if (code == null || code.isEmpty) return;
+
+    setState(() => _enCours = true);
+    try {
+      final ok = await ref.read(syncServiceProvider).suivreCatalogue(code);
+      if (!mounted) return;
+      if (ok) {
+        ref.invalidate(categoriesNotifierProvider);
+        ref.invalidate(rayonsNotifierProvider);
+        ref.invalidate(articlesNotifierProvider);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? 'Catalogue suivi : il se mettra à jour en direct'
+            : 'Code invalide'),
+        backgroundColor: ok ? couleurSucces(context) : null,
+      ));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Échec : $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _enCours = false);
+    }
+  }
+
   Future<void> _importerCatalogue() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
@@ -203,6 +302,22 @@ class _SauvegardeScreenState extends ConsumerState<SauvegardeScreen> {
             subtitle:
                 const Text('Fusionne un catalogue reçu dans le tien'),
             onTap: _enCours ? null : _importerCatalogue,
+          ),
+          const Divider(height: 32),
+          const _EnteteSection(titre: 'Catalogue partagé en temps réel'),
+          ListTile(
+            leading: const Icon(Icons.sync_outlined),
+            title: const Text('Partager mon catalogue en direct'),
+            subtitle: const Text(
+                'Les personnes qui suivent reçoivent tes articles/catégories '
+                'automatiquement'),
+            onTap: _enCours ? null : _partagerCatalogueDirect,
+          ),
+          ListTile(
+            leading: const Icon(Icons.rss_feed_outlined),
+            title: const Text('Suivre un catalogue'),
+            subtitle: const Text('Reçois en direct le catalogue d\'un proche'),
+            onTap: _enCours ? null : _suivreCatalogue,
           ),
           const Divider(height: 32),
           const _EnteteSection(titre: 'Sauvegarde complète'),

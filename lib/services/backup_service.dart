@@ -177,16 +177,39 @@ class BackupService {
       throw const FormatException(
           "Ce fichier n'est pas une sauvegarde SmartCart valide");
     }
+    return fusionnerCatalogue(
+      categories: [
+        for (final c in (data['categories'] as List? ?? []))
+          Categorie.fromMap(c as Map<String, dynamic>)
+      ],
+      rayons: [
+        for (final r in (data['rayons'] as List? ?? []))
+          Rayon.fromMap(r as Map<String, dynamic>)
+      ],
+      articles: [
+        for (final a in (data['articles'] as List? ?? []))
+          Article.fromMap(a as Map<String, dynamic>)
+      ],
+    );
+  }
 
+  /// Fusionne un catalogue (catégories, rayons, articles) dans le catalogue
+  /// LOCAL, par NOM (jamais de doublon, articles rattachés à la bonne catégorie
+  /// locale). Réutilisé par l'import fichier ET par le catalogue partagé en
+  /// temps réel. N'ajoute jamais de liste ni de prix.
+  Future<RestaurationResultat> fusionnerCatalogue({
+    required List<Categorie> categories,
+    required List<Rayon> rayons,
+    required List<Article> articles,
+  }) async {
     // Catégories : réutilise la locale du même nom, sinon crée. On garde une
     // table importedId → localId pour réaffecter les articles ensuite.
     final catParNom = {
       for (final c in await _db.getCategories()) _norm(c.nom): c.id
     };
     final catIdMap = <String, String>{};
-    var categories = 0;
-    for (final c in (data['categories'] as List? ?? [])) {
-      final cat = Categorie.fromMap(c as Map<String, dynamic>);
+    var nbCategories = 0;
+    for (final cat in categories) {
       final local = catParNom[_norm(cat.nom)];
       if (local != null) {
         catIdMap[cat.id] = local;
@@ -194,7 +217,7 @@ class BackupService {
         await _db.insertCategorie(cat);
         catIdMap[cat.id] = cat.id;
         catParNom[_norm(cat.nom)] = cat.id;
-        categories++;
+        nbCategories++;
       }
     }
 
@@ -203,9 +226,8 @@ class BackupService {
       for (final r in await _db.getRayons()) _norm(r.nom): r.id
     };
     final rayonIdMap = <String, String>{};
-    var rayons = 0;
-    for (final r in (data['rayons'] as List? ?? [])) {
-      final ray = Rayon.fromMap(r as Map<String, dynamic>);
+    var nbRayons = 0;
+    for (final ray in rayons) {
       final local = rayonParNom[_norm(ray.nom)];
       if (local != null) {
         rayonIdMap[ray.id] = local;
@@ -213,7 +235,7 @@ class BackupService {
         await _db.insertRayon(ray);
         rayonIdMap[ray.id] = ray.id;
         rayonParNom[_norm(ray.nom)] = ray.id;
-        rayons++;
+        nbRayons++;
       }
     }
 
@@ -221,9 +243,8 @@ class BackupService {
     final artParNom = {
       for (final a in await _db.getArticles()) _norm(a.nom): a
     };
-    var articles = 0;
-    for (final a in (data['articles'] as List? ?? [])) {
-      final art = Article.fromMap(a as Map<String, dynamic>);
+    var nbArticles = 0;
+    for (final art in articles) {
       final catLocal =
           art.categorieId != null ? catIdMap[art.categorieId] : null;
       final rayonLocal = art.rayonId != null ? rayonIdMap[art.rayonId] : null;
@@ -247,14 +268,14 @@ class BackupService {
         );
         await _db.insertArticle(nouveau);
         artParNom[_norm(art.nom)] = nouveau;
-        articles++;
+        nbArticles++;
       }
     }
 
     return RestaurationResultat(
-      categories: categories,
-      rayons: rayons,
-      articles: articles,
+      categories: nbCategories,
+      rayons: nbRayons,
+      articles: nbArticles,
       listes: 0,
       articlesListe: 0,
       prixArticles: 0,
