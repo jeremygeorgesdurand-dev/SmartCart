@@ -143,9 +143,11 @@ class _SauvegardeScreenState extends ConsumerState<SauvegardeScreen> {
     setState(() => _enCours = true);
     try {
       final contenu = String.fromCharCodes(bytes);
-      // restaurer() fusionne catégories/rayons/articles (et ignore les listes/
-      // prix, absents d'un fichier catalogue) : exactement ce qu'il faut ici.
-      final res = await ref.read(backupServiceProvider).restaurer(contenu);
+      // Import CATALOGUE : fusionne catégories/rayons/articles PAR NOM (jamais
+      // de doublon, articles rattachés à la bonne catégorie locale) et n'ajoute
+      // aucune liste ni prix, même si le fichier est une sauvegarde complète.
+      final res =
+          await ref.read(backupServiceProvider).importerCatalogue(contenu);
 
       ref.invalidate(categoriesNotifierProvider);
       ref.invalidate(rayonsNotifierProvider);

@@ -1,6 +1,7 @@
 // Vérifie le cycle complet export → restauration de BackupService : ce
 // qui sort de exporterVersJson() doit pouvoir être réinjecté par
 // restaurer() sans perte, dans une base vierge.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -101,6 +102,53 @@ void main() {
     final recettesRestaurees = await db.getRecettes();
     expect(recettesRestaurees.single.nom, 'Tarte aux pommes');
     expect(recettesRestaurees.single.ingredients.single.nom, 'Pommes');
+  });
+
+  test('importerCatalogue : fusionne les catégories par nom, réaffecte les '
+      'articles et n\'ajoute aucune liste', () async {
+    final d = await db.db;
+    await d.delete('categories');
+    await d.delete('rayons');
+    // Catégorie LOCALE "Frigo" avec un id local.
+    await db.insertCategorie(
+        Categorie(id: 'cat_local', nom: 'Frigo', couleur: 0xFF00FF00, ordre: 0));
+
+    // Fichier venu d'un AUTRE compte : "Frigo" avec un id différent + une
+    // nouvelle catégorie, un article rattaché au "Frigo" distant, et une
+    // liste (qui doit être IGNORÉE à l'import catalogue).
+    final json = jsonEncode({
+      'version': 1,
+      'type': 'catalogue',
+      'categories': [
+        Categorie(id: 'cat_remote', nom: 'Frigo', couleur: 0xFF00FF00, ordre: 0)
+            .toMap(),
+        Categorie(
+                id: 'cat_epi', nom: 'Épicerie', couleur: 0xFFFF0000, ordre: 1)
+            .toMap(),
+      ],
+      'articles': [
+        Article(id: 'art_lait', nom: 'Lait', categorieId: 'cat_remote').toMap(),
+      ],
+      'listes': [
+        ListeCourses(id: 'liste_x', nom: 'Ne doit pas apparaître').toMap(),
+      ],
+    });
+
+    final res = await backup.importerCatalogue(json);
+
+    // Aucune liste créée.
+    expect(res.listes, 0);
+    final listes = await db.getListes(inclureArchivees: true);
+    expect(listes.where((l) => l.id == 'liste_x'), isEmpty);
+
+    // "Frigo" n'est pas dupliqué ; "Épicerie" est créée.
+    final cats = await db.getCategories();
+    expect(cats.where((c) => c.nom == 'Frigo').length, 1);
+    expect(cats.any((c) => c.nom == 'Épicerie'), isTrue);
+
+    // L'article importé pointe vers le "Frigo" LOCAL (réaffecté par nom).
+    final lait = (await db.getArticles()).firstWhere((a) => a.nom == 'Lait');
+    expect(lait.categorieId, 'cat_local');
   });
 
   test('rejette un fichier qui n\'est pas une sauvegarde SmartCart', () async {
