@@ -1,28 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+import '../models/models.dart';
 import '../providers/providers.dart';
 import '../utils/theme_utils.dart';
 
 // Affichage SÉPARÉ et en lecture seule d'un catalogue SUIVI (partage temps
 // réel). Ses articles/catégories ne se mélangent pas au catalogue perso : on
-// peut les consulter, tout copier dans le sien, ou arrêter de suivre.
-class CatalogueSuiviScreen extends ConsumerWidget {
+// peut les consulter, en sélectionner pour les ajouter à une liste (ils sont
+// alors copiés dans son propre catalogue), tout copier, ou arrêter de suivre.
+class CatalogueSuiviScreen extends ConsumerStatefulWidget {
   final String catalogueId;
   final String nom;
   const CatalogueSuiviScreen(
       {super.key, required this.catalogueId, required this.nom});
 
-  Future<void> _toutAjouter(BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<CatalogueSuiviScreen> createState() =>
+      _CatalogueSuiviScreenState();
+}
+
+class _CatalogueSuiviScreenState extends ConsumerState<CatalogueSuiviScreen> {
+  // Ids (du catalogue suivi) des articles sélectionnés.
+  final Set<String> _selection = {};
+
+  Future<void> _toutAjouter() async {
     final db = ref.read(dbServiceProvider);
     final res = await ref.read(backupServiceProvider).fusionnerCatalogue(
-          categories: await db.getCategoriesParSource(catalogueId),
-          rayons: await db.getRayonsParSource(catalogueId),
-          articles: await db.getArticlesParSource(catalogueId),
+          categories: await db.getCategoriesParSource(widget.catalogueId),
+          rayons: await db.getRayonsParSource(widget.catalogueId),
+          articles: await db.getArticlesParSource(widget.catalogueId),
         );
     ref.invalidate(articlesNotifierProvider);
     ref.invalidate(categoriesNotifierProvider);
     ref.invalidate(rayonsNotifierProvider);
-    if (!context.mounted) return;
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('Ajouté à ton catalogue : ${res.articles} article(s), '
           '${res.categories} catégorie(s)'),
@@ -30,13 +42,103 @@ class CatalogueSuiviScreen extends ConsumerWidget {
     ));
   }
 
-  Future<void> _arreter(BuildContext context, WidgetRef ref) async {
+  // Copie les articles sélectionnés dans MON catalogue (fusion par nom) puis
+  // les ajoute à la liste choisie.
+  Future<void> _ajouterALaListe() async {
+    final db = ref.read(dbServiceProvider);
+    final tousArticles = await db.getArticlesParSource(widget.catalogueId);
+    final choisis =
+        tousArticles.where((a) => _selection.contains(a.id)).toList();
+    if (choisis.isEmpty) return;
+
+    // Choix de la liste cible (existante ou nouvelle).
+    final listeId = await _choisirListe();
+    if (listeId == null) return;
+
+    // 1) Copier les articles choisis dans mon catalogue (par nom, avec leurs
+    //    catégories/rayons rattachés aux miens). On passe toutes les
+    //    catégories/rayons du catalogue suivi pour un bon rattachement.
+    await ref.read(backupServiceProvider).fusionnerCatalogue(
+          categories: await db.getCategoriesParSource(widget.catalogueId),
+          rayons: await db.getRayonsParSource(widget.catalogueId),
+          articles: choisis,
+        );
+    ref.invalidate(articlesNotifierProvider);
+
+    // 2) Retrouver les articles (désormais dans MON catalogue) par nom et les
+    //    ajouter à la liste.
+    final miens = await db.getArticles();
+    String norm(String s) => s.trim().toLowerCase();
+    final parNom = {for (final a in miens) norm(a.nom): a};
+    final notifier = ref.read(articlesListeProvider(listeId).notifier);
+    var ajoutes = 0;
+    for (final c in choisis) {
+      final local = parNom[norm(c.nom)];
+      if (local == null) continue;
+      await notifier.ajouter(ArticleListe(
+        id: 'al_${const Uuid().v4()}',
+        listeId: listeId,
+        articleId: local.id,
+      ));
+      ajoutes++;
+    }
+
+    if (!mounted) return;
+    setState(() => _selection.clear());
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('$ajoutes article(s) ajouté(s) à la liste'),
+      backgroundColor: couleurSucces(context),
+    ));
+  }
+
+  // Feuille de choix : une liste existante (non archivée) ou une nouvelle.
+  Future<String?> _choisirListe() async {
+    final listes = (await ref.read(listesNotifierProvider.future))
+        .where((l) => !l.archivee)
+        .toList();
+    if (!mounted) return null;
+    return showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetCtx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('Ajouter à…',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add),
+              title: const Text('Nouvelle liste'),
+              onTap: () async {
+                final id = 'liste_${const Uuid().v4()}';
+                await ref.read(listesNotifierProvider.notifier).ajouter(
+                    ListeCourses(id: id, nom: 'Liste ${widget.nom}'));
+                if (sheetCtx.mounted) Navigator.pop(sheetCtx, id);
+              },
+            ),
+            const Divider(height: 1),
+            for (final l in listes)
+              ListTile(
+                leading: const Icon(Icons.list_alt),
+                title: Text(l.nom),
+                onTap: () => Navigator.pop(sheetCtx, l.id),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _arreter() async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Arrêter de suivre ?'),
-        content: Text('« $nom » sera retiré de tes catalogues suivis. Ton '
-            'catalogue personnel n\'est pas touché.'),
+        content: Text('« ${widget.nom} » sera retiré de tes catalogues '
+            'suivis. Ton catalogue personnel n\'est pas touché.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -48,34 +150,43 @@ class CatalogueSuiviScreen extends ConsumerWidget {
       ),
     );
     if (ok != true) return;
-    await ref.read(syncServiceProvider).arreterDeSuivreCatalogue(catalogueId);
+    await ref
+        .read(syncServiceProvider)
+        .arreterDeSuivreCatalogue(widget.catalogueId);
     ref.invalidate(cataloguesSuivisProvider);
-    if (context.mounted) Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final contenuAsync = ref.watch(contenuCatalogueSuiviProvider(catalogueId));
+  Widget build(BuildContext context) {
+    final contenuAsync =
+        ref.watch(contenuCatalogueSuiviProvider(widget.catalogueId));
     return Scaffold(
       appBar: AppBar(
-        title: Text(nom),
+        title: Text(widget.nom),
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) {
-              if (v == 'arreter') _arreter(context, ref);
+              if (v == 'arreter') _arreter();
+              if (v == 'tout') _toutAjouter();
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(
+                  value: 'tout',
+                  child: Text('Tout ajouter à mon catalogue')),
               PopupMenuItem(
                   value: 'arreter', child: Text('Arrêter de suivre')),
             ],
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _toutAjouter(context, ref),
-        icon: const Icon(Icons.library_add_outlined),
-        label: const Text('Tout ajouter à mon catalogue'),
-      ),
+      floatingActionButton: _selection.isEmpty
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _ajouterALaListe,
+              icon: const Icon(Icons.playlist_add),
+              label: Text('Ajouter à une liste (${_selection.length})'),
+            ),
       body: contenuAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erreur : $e')),
@@ -91,10 +202,10 @@ class CatalogueSuiviScreen extends ConsumerWidget {
           }
           final catParId = {for (final c in contenu.categories) c.id: c};
           // Groupe les articles par catégorie (du catalogue suivi).
-          final groupes = <String, List<String>>{};
+          final groupes = <String, List<Article>>{};
           for (final a in contenu.articles) {
             final cle = a.categorieId ?? '__aucune__';
-            groupes.putIfAbsent(cle, () => []).add(a.nom);
+            groupes.putIfAbsent(cle, () => []).add(a);
           }
           final cles = groupes.keys.toList()
             ..sort((x, y) {
@@ -104,8 +215,17 @@ class CatalogueSuiviScreen extends ConsumerWidget {
                   .compareTo(catParId[y]?.ordre ?? 99);
             });
           return ListView(
-            padding: const EdgeInsets.only(bottom: 88),
+            padding: const EdgeInsets.only(bottom: 96),
             children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Text(
+                  'Coche des articles pour les ajouter à une liste (ils seront '
+                  'copiés dans ton catalogue).',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.outline),
+                ),
+              ),
               for (final cle in cles) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
@@ -128,10 +248,19 @@ class CatalogueSuiviScreen extends ConsumerWidget {
                   ),
                 ),
                 const Divider(height: 1),
-                for (final nom in groupes[cle]!)
-                  ListTile(
+                for (final a in groupes[cle]!)
+                  CheckboxListTile(
                     dense: true,
-                    title: Text(nom),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: _selection.contains(a.id),
+                    onChanged: (v) => setState(() {
+                      if (v == true) {
+                        _selection.add(a.id);
+                      } else {
+                        _selection.remove(a.id);
+                      }
+                    }),
+                    title: Text(a.nom),
                   ),
               ],
             ],
