@@ -109,8 +109,13 @@ service cloud.firestore {
     // catalogue et ses sous-collections ; seul le propriétaire ÉCRIT le
     // contenu. Rejoindre/quitter = s'ajouter/se retirer soi-même de `membres`.
     match /catalogues_partages/{catalogueId} {
-      allow read: if request.auth != null
-        && request.auth.uid in resource.data.membres;
+      // Le propriétaire (dont l'uid EST l'id du document) peut toujours lire,
+      // même si le doc n'existe pas encore (1er partage). `||` court-circuite
+      // donc on n'évalue pas resource.data.membres sur un doc inexistant.
+      allow read: if request.auth != null && (
+        request.auth.uid == catalogueId
+        || request.auth.uid in resource.data.membres
+      );
 
       allow create: if request.auth != null
         && request.resource.data.proprietaireId == request.auth.uid
