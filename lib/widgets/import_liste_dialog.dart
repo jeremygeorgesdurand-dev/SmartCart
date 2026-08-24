@@ -21,6 +21,9 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
   ListeImportResult? _apercu;
   bool _importing = false;
   String? _erreur;
+  // Quand on importe SANS liste cible (menu « Importer une liste »), on peut
+  // choisir d'ajouter les articles UNIQUEMENT au catalogue, sans créer de liste.
+  bool _catalogueSeulement = false;
 
   @override
   void dispose() {
@@ -73,11 +76,13 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
     final categories = ref.read(categoriesNotifierProvider).valueOrNull ?? [];
     final rayons = ref.read(rayonsNotifierProvider).valueOrNull ?? [];
 
-    // Créer ou récupérer la liste cible
-    final String listeId;
-    if (widget.listeId != null) {
-      listeId = widget.listeId!;
-    } else {
+    // Doit-on ajouter les articles à une liste ? Non si « catalogue seulement »
+    // (uniquement possible quand aucune liste cible n'est fournie).
+    final bool versListe = widget.listeId != null || !_catalogueSeulement;
+
+    // Créer ou récupérer la liste cible (seulement si on remplit une liste).
+    String? listeId = widget.listeId;
+    if (versListe && listeId == null) {
       final newId = 'liste_${const Uuid().v4()}';
       await ref.read(listesNotifierProvider.notifier).ajouter(ListeCourses(
         id: newId,
@@ -92,9 +97,12 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
       ref.read(articlesNotifierProvider).valueOrNull ?? [],
     );
 
-    // IDs déjà dans la liste
-    final itemsListe = await db.getArticlesListe(listeId);
-    final idsDejaInListe = itemsListe.map((i) => i.articleId).toSet();
+    // IDs déjà dans la liste (aucun si on n'alimente pas de liste)
+    final idsDejaInListe = <String>{};
+    if (versListe) {
+      final itemsListe = await db.getArticlesListe(listeId!);
+      idsDejaInListe.addAll(itemsListe.map((i) => i.articleId));
+    }
 
     int nbImportes = 0;
 
@@ -147,11 +155,11 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
         }
       }
 
-      // ── Étape 2 : Ajouter à la liste ────────────────────────
-      if (!idsDejaInListe.contains(article.id)) {
+      // ── Étape 2 : Ajouter à la liste (sauf en mode catalogue seulement) ──
+      if (versListe && !idsDejaInListe.contains(article.id)) {
         await db.insertArticleListe(ArticleListe(
           id: 'al_${const Uuid().v4()}',
-          listeId: listeId,
+          listeId: listeId!,
           articleId: article.id,
           quantite: ai.quantite,
           unite: ai.unite,
@@ -161,18 +169,26 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
     }
 
     ref.invalidate(articlesNotifierProvider);
-    ref.invalidate(listesNotifierProvider);
-    ref.invalidate(articlesListeProvider(listeId));
+    if (versListe) {
+      ref.invalidate(listesNotifierProvider);
+      ref.invalidate(articlesListeProvider(listeId!));
+    }
 
     if (!mounted) return;
     Navigator.pop(context);
+    final String message;
+    if (!versListe) {
+      message = '${_apercu!.articles.length} article(s) ajouté(s) au catalogue'
+          '${nbImportes > 0 ? " ($nbImportes nouveaux)" : ""}';
+    } else if (widget.listeId != null) {
+      message = '${_apercu!.articles.length} article(s) importé(s) dans la liste';
+    } else {
+      message = '"${_apercu!.nomListe}" créée avec '
+          '${_apercu!.articles.length} article(s)'
+          '${nbImportes > 0 ? " ($nbImportes nouveaux)" : ""}';
+    }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-        widget.listeId != null
-            ? '${_apercu!.articles.length} article(s) importé(s) dans la liste'
-            : '"${_apercu!.nomListe}" créée avec ${_apercu!.articles.length} article(s)'
-                '${nbImportes > 0 ? " ($nbImportes nouveaux)" : ""}',
-      ),
+      content: Text(message),
       backgroundColor: couleurSucces(context),
     ));
   }
@@ -242,6 +258,27 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
                   ],
                 ),
               ),
+            // Choix (uniquement à l'import « nouvelle liste ») : créer une
+            // liste, ou n'ajouter les articles qu'au catalogue.
+            if (_apercu != null && widget.listeId == null) ...[
+              const SizedBox(height: 12),
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                      value: false,
+                      icon: Icon(Icons.list_alt, size: 18),
+                      label: Text('Créer une liste')),
+                  ButtonSegment(
+                      value: true,
+                      icon: Icon(Icons.inventory_2_outlined, size: 18),
+                      label: Text('Catalogue seul')),
+                ],
+                selected: {_catalogueSeulement},
+                onSelectionChanged: (s) =>
+                    setState(() => _catalogueSeulement = s.first),
+              ),
+            ],
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -259,7 +296,11 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.upload),
-                  label: Text(_importing ? 'Import...' : 'Importer'),
+                  label: Text(_importing
+                      ? 'Import...'
+                      : (_catalogueSeulement && widget.listeId == null
+                          ? 'Ajouter au catalogue'
+                          : 'Importer')),
                 ),
               ],
             ),
