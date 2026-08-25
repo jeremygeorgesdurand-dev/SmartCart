@@ -12,7 +12,6 @@ import '../widgets/animated_list_item.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'scanner_screen.dart';
-import 'catalogue_suivi_screen.dart';
 import '../widgets/import_liste_dialog.dart' show ImportListeDialog, ExportDialog;
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
@@ -91,17 +90,11 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
   Widget _titreAvecSelecteur(BuildContext context) {
     final suivis = ref.watch(cataloguesSuivisProvider).valueOrNull ?? [];
     if (suivis.isEmpty) return const Text('Catalogue');
+    // Bascule DANS le même onglet (pas de nouvelle fenêtre) via l'état partagé :
+    // HomeScreen remplace le corps de l'onglet Catalogue par le catalogue suivi.
     return PopupMenuButton<String?>(
-      onSelected: (id) {
-        if (id == null) return; // « Mon catalogue » : on y est déjà.
-        final nom = suivis.firstWhere((s) => s.id == id).nom;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) =>
-                  CatalogueSuiviScreen(catalogueId: id, nom: nom)),
-        );
-      },
+      onSelected: (id) =>
+          ref.read(catalogueSelectionneProvider.notifier).state = id,
       itemBuilder: (_) => [
         const PopupMenuItem<String?>(
             value: null, child: Text('Mon catalogue')),

@@ -3,11 +3,23 @@ class VersionInfo {
   // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
   // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
   // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
-  static const String version = '1.19.0';
-  static const String buildNumber = '46';
+  static const String version = '1.20.0';
+  static const String buildNumber = '47';
   static const String dateMiseAJour = '25 août 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.20.0',
+      date: '25 août 2026',
+      changements: [
+        'Catalogue suivi : bascule dans le MÊME onglet (plus de nouvelle '
+            'fenêtre) via « Mon catalogue ▾ » — on revient à son catalogue ou '
+            'on change de catalogue suivi sans quitter l\'écran',
+        'Liste collaborative : correction d\'une liste qui apparaissait vide '
+            'dans l\'app alors que le widget comptait bien les articles (les '
+            'articles recréés par la synchro sont désormais affichés)',
+      ],
+    ),
     Release(
       version: '1.19.0',
       date: '25 août 2026',

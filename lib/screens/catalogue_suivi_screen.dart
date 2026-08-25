@@ -157,7 +157,34 @@ class _CatalogueSuiviScreenState extends ConsumerState<CatalogueSuiviScreen> {
         .read(syncServiceProvider)
         .arreterDeSuivreCatalogue(widget.catalogueId);
     ref.invalidate(cataloguesSuivisProvider);
-    if (mounted) Navigator.pop(context);
+    // On est dans l'onglet Catalogue (pas une fenêtre poussée) : revenir à
+    // « Mon catalogue » = remettre la sélection à null.
+    ref.read(catalogueSelectionneProvider.notifier).state = null;
+  }
+
+  // Sélecteur de catalogue affiché comme titre (identique à celui du
+  // catalogue perso) : permet de revenir à « Mon catalogue » ou de basculer
+  // sur un autre catalogue suivi sans changer de fenêtre.
+  Widget _titreSelecteur() {
+    final suivis = ref.watch(cataloguesSuivisProvider).valueOrNull ?? [];
+    return PopupMenuButton<String?>(
+      onSelected: (id) =>
+          ref.read(catalogueSelectionneProvider.notifier).state = id,
+      itemBuilder: (_) => [
+        const PopupMenuItem<String?>(
+            value: null, child: Text('Mon catalogue')),
+        const PopupMenuDivider(),
+        for (final s in suivis)
+          PopupMenuItem<String?>(value: s.id, child: Text(s.nom)),
+      ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: Text(widget.nom, overflow: TextOverflow.ellipsis)),
+          const Icon(Icons.arrow_drop_down),
+        ],
+      ),
+    );
   }
 
   @override
@@ -166,7 +193,7 @@ class _CatalogueSuiviScreenState extends ConsumerState<CatalogueSuiviScreen> {
         ref.watch(contenuCatalogueSuiviProvider(widget.catalogueId));
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.nom),
+        title: _titreSelecteur(),
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) {
