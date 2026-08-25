@@ -23,6 +23,9 @@ class CatalogueSuiviScreen extends ConsumerStatefulWidget {
 class _CatalogueSuiviScreenState extends ConsumerState<CatalogueSuiviScreen> {
   // Ids (du catalogue suivi) des articles sélectionnés.
   final Set<String> _selection = {};
+  // Mêmes filtres que le catalogue perso : recherche + catégorie choisie.
+  String _recherche = '';
+  String? _categorieFiltre; // null = toutes les catégories
 
   Future<void> _toutAjouter() async {
     final db = ref.read(dbServiceProvider);
@@ -201,9 +204,24 @@ class _CatalogueSuiviScreenState extends ConsumerState<CatalogueSuiviScreen> {
             ));
           }
           final catParId = {for (final c in contenu.categories) c.id: c};
-          // Groupe les articles par catégorie (du catalogue suivi).
+          // Catégories triées pour les chips de filtre.
+          final categoriesTriees = [...contenu.categories]
+            ..sort((a, b) => a.ordre.compareTo(b.ordre));
+          // Filtre recherche + catégorie (comme le catalogue perso).
+          final articlesFiltres = contenu.articles.where((a) {
+            if (_recherche.isNotEmpty &&
+                !a.nom.toLowerCase().contains(_recherche.toLowerCase())) {
+              return false;
+            }
+            if (_categorieFiltre != null &&
+                a.categorieId != _categorieFiltre) {
+              return false;
+            }
+            return true;
+          }).toList();
+          // Groupe les articles filtrés par catégorie (du catalogue suivi).
           final groupes = <String, List<Article>>{};
-          for (final a in contenu.articles) {
+          for (final a in articlesFiltres) {
             final cle = a.categorieId ?? '__aucune__';
             groupes.putIfAbsent(cle, () => []).add(a);
           }
@@ -214,7 +232,60 @@ class _CatalogueSuiviScreenState extends ConsumerState<CatalogueSuiviScreen> {
               return (catParId[x]?.ordre ?? 99)
                   .compareTo(catParId[y]?.ordre ?? 99);
             });
-          return ListView(
+          return Column(
+            children: [
+              // Recherche
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Rechercher...',
+                    prefixIcon: const Icon(Icons.search),
+                    isDense: true,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onChanged: (v) => setState(() => _recherche = v),
+                ),
+              ),
+              // Chips de catégories (Toutes + chaque catégorie du catalogue suivi)
+              SizedBox(
+                height: 44,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 6),
+                      child: FilterChip(
+                        label: const Text('Toutes'),
+                        selected: _categorieFiltre == null,
+                        onSelected: (_) =>
+                            setState(() => _categorieFiltre = null),
+                      ),
+                    ),
+                    for (final c in categoriesTriees)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 6),
+                        child: FilterChip(
+                          avatar: CircleAvatar(
+                              radius: 6,
+                              backgroundColor: Color(c.couleur)),
+                          label: Text(c.nom),
+                          selected: _categorieFiltre == c.id,
+                          onSelected: (_) => setState(() =>
+                              _categorieFiltre =
+                                  _categorieFiltre == c.id ? null : c.id),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView(
             padding: const EdgeInsets.only(bottom: 96),
             children: [
               Padding(
@@ -263,6 +334,9 @@ class _CatalogueSuiviScreenState extends ConsumerState<CatalogueSuiviScreen> {
                     title: Text(a.nom),
                   ),
               ],
+            ],
+                ),
+              ),
             ],
           );
         },

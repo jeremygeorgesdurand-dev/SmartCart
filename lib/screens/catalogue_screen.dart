@@ -9,6 +9,8 @@ import '../widgets/ajouter_article_dialog.dart' show AjouterArticleDialog, Ajout
 import '../widgets/filtres_bar.dart';
 import '../widgets/vocal_button.dart';
 import '../widgets/animated_list_item.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'scanner_screen.dart';
 import 'catalogue_suivi_screen.dart';
 import '../widgets/import_liste_dialog.dart' show ImportListeDialog, ExportDialog;
@@ -117,6 +119,112 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     );
   }
 
+  // Partage temps réel du catalogue : QR + code.
+  Future<void> _partagerCatalogueDirect() async {
+    try {
+      final code = await ref.read(syncServiceProvider).partagerMonCatalogue();
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Partager mon catalogue'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Fais scanner ce QR code (ou donne le code) à qui '
+                  'veut suivre ton catalogue en direct.'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.white,
+                child: QrImageView(data: code, size: 200),
+              ),
+              const SizedBox(height: 12),
+              SelectableText(code,
+                  style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 4)),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Fermer')),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Échec : $e')));
+      }
+    }
+  }
+
+  // Suivre un catalogue : scan QR ou saisie du code.
+  Future<void> _suivreCatalogue() async {
+    final ctrl = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: const Text('Suivre un catalogue'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                  hintText: 'Code à 6 caractères',
+                  border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text('Scanner un QR code'),
+              onPressed: () async {
+                final scanned = await Navigator.push<String>(
+                    dctx,
+                    MaterialPageRoute(
+                        builder: (_) => const _ScanQrScreen()));
+                if (scanned != null && dctx.mounted) {
+                  Navigator.pop(dctx, scanned);
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dctx),
+              child: const Text('Annuler')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dctx, ctrl.text.trim()),
+              child: const Text('Suivre')),
+        ],
+      ),
+    );
+    if (code == null || code.isEmpty) return;
+    try {
+      final ok = await ref.read(syncServiceProvider).suivreCatalogue(code);
+      if (!mounted) return;
+      if (ok) ref.invalidate(cataloguesSuivisProvider);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? 'Catalogue suivi : « Mon catalogue ▾ » en haut pour le voir'
+            : 'Code invalide'),
+        backgroundColor: ok ? couleurSucces(context) : null,
+      ));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Échec : $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final articlesAsync = ref.watch(articlesFiltresProvider);
@@ -196,6 +304,10 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                 case 'doublons':
                   Navigator.push(context,
                       MaterialPageRoute(builder: (_) => const DoublonsScreen()));
+                case 'partager_cat':
+                  _partagerCatalogueDirect();
+                case 'suivre_cat':
+                  _suivreCatalogue();
               }
             },
             itemBuilder: (_) => [
@@ -257,6 +369,21 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                         );
                       }),
                     ],
+                  ])),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                  value: 'partager_cat',
+                  child: Row(children: [
+                    Icon(Icons.qr_code_2, size: 18),
+                    SizedBox(width: 10),
+                    Text('Partager mon catalogue')
+                  ])),
+              const PopupMenuItem(
+                  value: 'suivre_cat',
+                  child: Row(children: [
+                    Icon(Icons.rss_feed, size: 18),
+                    SizedBox(width: 10),
+                    Text('Suivre un catalogue')
                   ])),
             ],
           ),
@@ -719,6 +846,36 @@ class _GroupHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Petit écran de scan d'un QR code (partage de catalogue). Renvoie le contenu
+// scanné une seule fois via Navigator.pop.
+class _ScanQrScreen extends StatefulWidget {
+  const _ScanQrScreen();
+  @override
+  State<_ScanQrScreen> createState() => _ScanQrScreenState();
+}
+
+class _ScanQrScreenState extends State<_ScanQrScreen> {
+  bool _fait = false;
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Scanner le QR code')),
+      body: MobileScanner(
+        onDetect: (capture) {
+          if (_fait) return;
+          final code = capture.barcodes.isNotEmpty
+              ? capture.barcodes.first.rawValue
+              : null;
+          if (code != null && code.isNotEmpty) {
+            _fait = true;
+            Navigator.pop(context, code);
+          }
+        },
       ),
     );
   }
