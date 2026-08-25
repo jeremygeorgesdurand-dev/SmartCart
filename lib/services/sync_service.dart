@@ -851,6 +851,43 @@ class SyncService {
     }
   }
 
+  // Filet de sécurité : ré-importe TOUS les articles des listes collaboratives
+  // depuis Firestore (au cas où l'écoute temps réel aurait raté des documents,
+  // ce qui donnait un compteur incomplet, ex. « 0/15 » au lieu de « 0/39 »).
+  // Insertion seule (jamais de suppression) : ne peut pas perdre d'article.
+  Future<void> reconcilierPullListesPartagees() async {
+    if (!_estConnecte) return;
+    final snap = await _listesPartageesCol
+        .where('membres', arrayContains: _uid)
+        .get();
+    for (final doc in snap.docs) {
+      final listeId = doc.id;
+      final itemsSnap =
+          await _listesPartageesCol.doc(listeId).collection('articles').get();
+      final catalogueIds =
+          (await _localDb.getArticles()).map((a) => a.id).toSet();
+      for (final itemDoc in itemsSnap.docs) {
+        try {
+          final data = itemDoc.data();
+          final item = ArticleListe.fromMap(data);
+          // Recrée l'article local minimal s'il manque, pour que la ligne
+          // s'affiche ET soit comptée par le widget.
+          final nomArticle = data['nomArticle'] as String?;
+          if (nomArticle != null &&
+              nomArticle.isNotEmpty &&
+              !catalogueIds.contains(item.articleId)) {
+            await _localDb
+                .insertArticle(Article(id: item.articleId, nom: nomArticle));
+            catalogueIds.add(item.articleId);
+          }
+          await _localDb.insertArticleListe(item);
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+  }
+
   // Retire un AUTRE membre d'une liste collaborative. N'importe quel
   // membre peut le faire (pas seulement le propriétaire), cohérent avec
   // le modèle de confiance "petit groupe" des règles Firestore.

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -270,6 +271,33 @@ class ApparenceScreen extends ConsumerWidget {
               },
             ),
             leading: const Icon(Icons.text_fields),
+          ),
+          const Divider(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text('Écran',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    )),
+          ),
+          Card(
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            child: SwitchListTile(
+              secondary: const Icon(Icons.screen_rotation_outlined),
+              title: const Text('Rotation de l\'écran'),
+              subtitle: const Text(
+                  'Suivre l\'orientation du téléphone (sinon bloqué en portrait)'),
+              value: ref.watch(rotationAutoriseeProvider),
+              onChanged: (v) async {
+                ref.read(rotationAutoriseeProvider.notifier).state = v;
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('rotation_autorisee', v);
+                await SystemChrome.setPreferredOrientations(v
+                    ? DeviceOrientation.values
+                    : [DeviceOrientation.portraitUp]);
+              },
+            ),
           ),
           const Divider(),
           Padding(

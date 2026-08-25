@@ -186,6 +186,9 @@ final couleurThemeProvider = StateProvider<String>((ref) => 'vert');
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 final afficherOnboardingProvider = StateProvider<bool>((ref) => false);
 final tailleTexteProvider = StateProvider<double>((ref) => 1.0);
+// Rotation de l'écran : false = verrouillé en portrait (défaut), true = suit
+// l'orientation du téléphone.
+final rotationAutoriseeProvider = StateProvider<bool>((ref) => false);
 
 // ─── TRI ET FILTRES ──────────────────────────────────────────────
 enum SortMode { alphabetique, categorie, rayon }

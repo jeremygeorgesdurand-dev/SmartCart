@@ -59,6 +59,13 @@ void main() async {
   final onboardingVu = prefs.getBool('onboarding_vu') ?? false;
   final tailleTexte = prefs.getDouble('taille_texte') ?? 1.0;
 
+  // Rotation de l'écran : verrouillée en portrait par défaut ; l'utilisateur
+  // peut l'autoriser dans Réglages → Apparence.
+  final rotationAutorisee = prefs.getBool('rotation_autorisee') ?? false;
+  await SystemChrome.setPreferredOrientations(rotationAutorisee
+      ? DeviceOrientation.values
+      : [DeviceOrientation.portraitUp]);
+
   // Resynchronise le widget d'écran d'accueil avec la couleur actuelle à
   // chaque démarrage (pas seulement au moment où l'utilisateur la change
   // dans Paramètres) : couvre le cas d'un widget ajouté après coup ou
@@ -72,6 +79,7 @@ void main() async {
       afficherBudgetProvider.overrideWith((ref) => afficherBudget),
       afficherPrixProvider.overrideWith((ref) => afficherPrix),
       afficherRecettesProvider.overrideWith((ref) => afficherRecettes),
+      rotationAutoriseeProvider.overrideWith((ref) => rotationAutorisee),
       couleurThemeProvider.overrideWith((ref) => couleurTheme),
       fondActiveProvider.overrideWith((ref) => fondActif),
       fondOpaciteProvider.overrideWith((ref) => fondOpacite),

@@ -110,7 +110,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   Future<void> _syncSilencieuxResume() async {
     try {
-      await ref.read(syncServiceProvider).reconcilierListesPartagees();
+      final sync = ref.read(syncServiceProvider);
+      // D'abord POUSSER mes items locaux, puis TIRER tout le cloud (filet de
+      // sécurité contre un compteur incomplet sur une liste collaborative).
+      await sync.reconcilierListesPartagees();
+      await sync.reconcilierPullListesPartagees();
+      ref.invalidate(articlesListeProvider);
+      ref.invalidate(listesNotifierProvider);
     } catch (_) {
       // hors-ligne / non connecté : sans gravité, se refera au prochain retour.
     }
