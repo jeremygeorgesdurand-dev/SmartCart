@@ -155,8 +155,9 @@ class QuickAddActivity : Activity() {
             val existant = db.rawQuery(
                 "SELECT id, quantite FROM articles_liste WHERE listeId = ? AND articleId = ? LIMIT 1",
                 arrayOf(listeId, articleId))
+            val alId: String
             if (existant.moveToFirst()) {
-                val alId = existant.getString(0)
+                alId = existant.getString(0)
                 val quantiteActuelle = existant.getInt(1)
                 existant.close()
                 db.execSQL(
@@ -164,13 +165,38 @@ class QuickAddActivity : Activity() {
                     arrayOf(quantiteActuelle + 1, alId))
             } else {
                 existant.close()
+                alId = "al_${System.currentTimeMillis()}"
                 db.insert("articles_liste", null, ContentValues().apply {
-                    put("id", "al_${System.currentTimeMillis()}")
+                    put("id", alId)
                     put("listeId", listeId)
                     put("articleId", articleId)
                     put("quantite", 1)
                     put("coche", 0)
                 })
+            }
+
+            // Si la liste est COLLABORATIVE, le natif ne peut pas écrire vers
+            // Firestore : on note la ligne dans une file d'attente que l'app
+            // pousse à son prochain démarrage (voir reconcilierListesPartagees).
+            // On dénormalise aussi le nom sur la ligne pour un affichage correct.
+            try {
+                val cListe = db.rawQuery(
+                    "SELECT partagee FROM listes WHERE id = ? LIMIT 1",
+                    arrayOf(listeId))
+                val partagee = cListe.moveToFirst() && cListe.getInt(0) == 1
+                cListe.close()
+                if (partagee) {
+                    db.execSQL(
+                        "UPDATE articles_liste SET nomArticle = ? WHERE id = ? AND (nomArticle IS NULL OR nomArticle = '')",
+                        arrayOf(nom, alId))
+                    db.execSQL(
+                        "INSERT OR REPLACE INTO sync_ajouts_widget (id, listeId) VALUES (?, ?)",
+                        arrayOf(alId, listeId))
+                }
+            } catch (e: Exception) {
+                // Table absente (app pas encore migrée) : sans gravité, l'ajout
+                // local reste, il se synchronisera quand l'app aura migré.
+                Log.e("QuickAddActivity", "file d'attente widget: $e")
             }
             db.close()
 

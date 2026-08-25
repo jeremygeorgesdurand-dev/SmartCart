@@ -854,28 +854,40 @@ class SyncService {
     return out;
   }
 
-  // Ré-pousse vers Firestore tous les articles des listes collaboratives
-  // locales. Indispensable pour le « + » du widget d'écran d'accueil : il
-  // écrit l'article DIRECTEMENT en base SQLite (code natif, QuickAddActivity)
-  // sans passer par la synchro, donc un article ajouté depuis le widget à une
-  // liste partagée n'arrivait jamais chez les autres membres. On réconcilie au
-  // retour de l'app au premier plan. `set` est idempotent (les écritures en
-  // attente sont ignorées par le listener, pas de boucle d'écho).
+  // Pousse vers Firestore UNIQUEMENT les lignes ajoutées par le widget d'écran
+  // d'accueil à une liste collaborative (le natif écrit direct en SQLite, sans
+  // passer par le cloud). On ne re-pousse JAMAIS la liste entière : le faire
+  // ressuscitait les articles qu'un autre membre venait de supprimer et défaisait
+  // ses coches (l'état local périmé écrasait l'état cloud à jour). La file
+  // `sync_ajouts_widget` ne contient que ces ajouts ciblés ; on les pousse puis
+  // on les retire de la file.
   Future<void> reconcilierListesPartagees() async {
     if (!_estConnecte) return;
-    final listes = await _localDb.getListes(inclureArchivees: true);
-    for (final liste in listes.where((l) => l.partagee)) {
-      final items = await _localDb.getArticlesListe(liste.id);
-      for (final item in items) {
+    final ajouts = await _localDb.getAjoutsWidget();
+    if (ajouts.isEmpty) return;
+    for (final ajout in ajouts) {
+      final liste = await _localDb.getListe(ajout.listeId);
+      // Seulement si la liste est (toujours) collaborative.
+      if (liste?.partagee != true) {
+        await _localDb.supprimerAjoutWidget(ajout.id);
+        continue;
+      }
+      final items = await _localDb.getArticlesListe(ajout.listeId);
+      final item = items.where((i) => i.id == ajout.id).firstOrNull;
+      // La ligne peut avoir été supprimée entre-temps : on retire simplement
+      // l'entrée en attente sans rien pousser.
+      if (item != null) {
         await sauvegarderArticleListe(item);
       }
+      await _localDb.supprimerAjoutWidget(ajout.id);
     }
   }
 
-  // Filet de sécurité : ré-importe TOUS les articles des listes collaboratives
-  // depuis Firestore (au cas où l'écoute temps réel aurait raté des documents,
-  // ce qui donnait un compteur incomplet, ex. « 0/15 » au lieu de « 0/39 »).
-  // Insertion seule (jamais de suppression) : ne peut pas perdre d'article.
+  // Filet de sécurité : ré-importe les articles des listes collaboratives depuis
+  // Firestore (au cas où l'écoute temps réel aurait raté des documents → compteur
+  // incomplet). NON destructif : pour une ligne DÉJÀ locale, on ne met à jour que
+  // le nom (jamais coche/quantité), afin de ne pas défaire une action locale pas
+  // encore synchronisée. Aucune suppression (l'écoute temps réel gère les retraits).
   Future<void> reconcilierPullListesPartagees() async {
     if (!_estConnecte) return;
     final snap = await _listesPartageesCol
@@ -885,22 +897,27 @@ class SyncService {
       final listeId = doc.id;
       final itemsSnap =
           await _listesPartageesCol.doc(listeId).collection('articles').get();
-      final catalogueIds =
-          (await _localDb.getArticles()).map((a) => a.id).toSet();
+      final locaux = {
+        for (final i in await _localDb.getArticlesListe(listeId)) i.id: i
+      };
       for (final itemDoc in itemsSnap.docs) {
         try {
           final data = itemDoc.data();
           final item = ArticleListe.fromMap(data);
-          // Recrée l'article local minimal s'il manque, pour que la ligne
-          // s'affiche ET soit comptée par le widget.
-          final nomArticle = data['nomArticle'] as String?;
-          if (nomArticle != null &&
-              nomArticle.isNotEmpty &&
-              !catalogueIds.contains(item.articleId)) {
-            await _localDb
-                .insertArticle(Article(id: item.articleId, nom: nomArticle));
-            catalogueIds.add(item.articleId);
+          final existant = locaux[item.id];
+          if (existant != null) {
+            // Déjà là : ne toucher qu'au nom manquant, garder l'état local
+            // (coche/quantité) qui peut être plus récent que le cloud relu ici.
+            if ((existant.nomArticle == null ||
+                    existant.nomArticle!.isEmpty) &&
+                item.nomArticle != null &&
+                item.nomArticle!.isNotEmpty) {
+              await _localDb.insertArticleListe(
+                  existant.copyWith(nomArticle: item.nomArticle));
+            }
+            continue;
           }
+          // Nouvelle ligne (l'écoute temps réel l'avait ratée) : on l'ajoute.
           await _localDb.insertArticleListe(await _garantirNom(item));
         } catch (_) {
           continue;

@@ -29,7 +29,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 16,
+      version: 17,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -275,6 +275,20 @@ class DatabaseService {
             ''');
           }
         }
+        if (oldV < 17) {
+          // File d'attente des ajouts faits par le WIDGET d'écran d'accueil à
+          // une liste collaborative : le code natif écrit directement en SQLite
+          // (sans passer par Firestore), on note donc ici quelles lignes doivent
+          // être poussées au retour dans l'app. On NE re-pousse plus JAMAIS la
+          // liste entière (cela ressuscitait des articles supprimés par un autre
+          // membre et défaisait ses coches).
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS sync_ajouts_widget (
+              id TEXT PRIMARY KEY,
+              listeId TEXT NOT NULL
+            )
+          ''');
+        }
       },
     );
   }
@@ -405,6 +419,15 @@ class DatabaseService {
         nomArticle TEXT,
         FOREIGN KEY (listeId) REFERENCES listes(id) ON DELETE CASCADE,
         FOREIGN KEY (articleId) REFERENCES articles(id)
+      )
+    ''');
+
+    // File d'attente des ajouts faits par le widget à une liste collaborative
+    // (poussés vers Firestore au retour dans l'app).
+    await db.execute('''
+      CREATE TABLE sync_ajouts_widget (
+        id TEXT PRIMARY KEY,
+        listeId TEXT NOT NULL
       )
     ''');
 
@@ -718,6 +741,23 @@ class DatabaseService {
     final d = await db;
     await d.insert('articles_liste', al.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  // ─── FILE D'ATTENTE DES AJOUTS WIDGET (listes collaboratives) ───────
+  // Lignes ajoutées par le widget natif à une liste collaborative, à pousser
+  // vers Firestore au retour dans l'app (le natif ne peut pas écrire au cloud).
+  Future<List<({String id, String listeId})>> getAjoutsWidget() async {
+    final d = await db;
+    final rows = await d.query('sync_ajouts_widget');
+    return rows
+        .map((r) =>
+            (id: r['id'] as String, listeId: r['listeId'] as String))
+        .toList();
+  }
+
+  Future<void> supprimerAjoutWidget(String id) async {
+    final d = await db;
+    await d.delete('sync_ajouts_widget', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> updateArticleListe(ArticleListe al) async {

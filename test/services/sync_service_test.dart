@@ -60,6 +60,7 @@ void main() {
     final d = await localDb.db;
     await d.delete('articles_liste');
     await d.delete('listes');
+    await d.delete('sync_ajouts_widget');
 
     serviceA = SyncService(localDb, firestore: firestore, auth: authA);
     serviceB = SyncService(localDb, firestore: firestore, auth: authB);
@@ -353,6 +354,54 @@ void main() {
       final doc =
           await firestore.collection('users').doc('uidA').collection('listes').doc('orpheline').get();
       expect(doc.exists, isFalse);
+    });
+  });
+
+  group('reconcilierListesPartagees (file d\'attente widget)', () {
+    test(
+        'ne ressuscite PAS un article supprimé par un autre membre '
+        '(ligne locale périmée, absente de la file d\'attente)', () async {
+      // Liste collaborative locale avec une ligne 'al1' que le cloud n'a PAS
+      // (un autre membre l'a supprimée). Aucune entrée en file d'attente.
+      await localDb.insertListe(ListeCourses(
+          id: 'lc', nom: 'Collab', partagee: true, code: 'ABC123'));
+      await localDb.insertArticleListe(ArticleListe(
+          id: 'al1', listeId: 'lc', articleId: 'art1', nomArticle: 'Lait'));
+
+      await serviceA.reconcilierListesPartagees();
+
+      // Le doc ne doit PAS être recréé côté cloud.
+      final doc = await firestore
+          .collection('listes_partagees')
+          .doc('lc')
+          .collection('articles')
+          .doc('al1')
+          .get();
+      expect(doc.exists, isFalse);
+    });
+
+    test('pousse une ligne ajoutée par le widget (présente dans la file)',
+        () async {
+      await localDb.insertListe(ListeCourses(
+          id: 'lc', nom: 'Collab', partagee: true, code: 'ABC123'));
+      await localDb.insertArticleListe(ArticleListe(
+          id: 'al2', listeId: 'lc', articleId: 'art2', nomArticle: 'Pain'));
+      // Simule l'entrée écrite par le widget natif.
+      final d = await localDb.db;
+      await d.insert('sync_ajouts_widget', {'id': 'al2', 'listeId': 'lc'});
+
+      await serviceA.reconcilierListesPartagees();
+
+      final doc = await firestore
+          .collection('listes_partagees')
+          .doc('lc')
+          .collection('articles')
+          .doc('al2')
+          .get();
+      expect(doc.exists, isTrue);
+      expect(doc.data()!['nomArticle'], 'Pain');
+      // La file d'attente est vidée après poussée.
+      expect(await localDb.getAjoutsWidget(), isEmpty);
     });
   });
 }
