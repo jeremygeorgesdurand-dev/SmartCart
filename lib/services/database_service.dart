@@ -257,6 +257,22 @@ class DatabaseService {
           if (tables.isNotEmpty) {
             await db.execute(
                 'ALTER TABLE articles_liste ADD COLUMN nomArticle TEXT');
+            // Backfill : on capture MAINTENANT le nom depuis l'article du
+            // catalogue tant qu'il existe encore (pour les listes
+            // collaboratives, l'app avait « recréé » ces articles). Sans ce
+            // remplissage, ces lignes perdraient leur nom si l'article était
+            // nettoyé plus tard, et disparaîtraient de la liste (compteur qui
+            // affichait moins que le widget).
+            await db.execute('''
+              UPDATE articles_liste
+              SET nomArticle = (
+                SELECT a.nom FROM articles a WHERE a.id = articles_liste.articleId
+              )
+              WHERE nomArticle IS NULL
+                AND EXISTS (
+                  SELECT 1 FROM articles a WHERE a.id = articles_liste.articleId
+                )
+            ''');
           }
         }
       },

@@ -212,8 +212,13 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     // Bascule DANS le même écran : seule la liste d'articles change. On remet
     // les filtres/recherche à zéro car les catégories diffèrent d'un catalogue
     // à l'autre (un id de filtre n'a pas de sens dans l'autre catalogue).
-    return PopupMenuButton<String?>(
-      onSelected: (id) {
+    // IMPORTANT : PopupMenuButton considère une valeur NULLE comme une
+    // ANNULATION (il n'appelle jamais onSelected) — « Mon catalogue » ne faisait
+    // donc rien. On utilise une sentinelle non-nulle et on la retraduit en null.
+    const sentinelleMien = '__mien__';
+    return PopupMenuButton<String>(
+      onSelected: (v) {
+        final id = v == sentinelleMien ? null : v;
         ref.read(catalogueSelectionneProvider.notifier).state = id;
         ref.read(filterCategorieProvider.notifier).state = null;
         ref.read(filterRayonProvider.notifier).state = null;
@@ -224,11 +229,13 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
         _searchController.clear();
       },
       itemBuilder: (_) => [
-        CheckedPopupMenuItem<String?>(
-            value: null, checked: sel == null, child: const Text('Mon catalogue')),
+        CheckedPopupMenuItem<String>(
+            value: sentinelleMien,
+            checked: sel == null,
+            child: const Text('Mon catalogue')),
         const PopupMenuDivider(),
         for (final s in suivis)
-          CheckedPopupMenuItem<String?>(
+          CheckedPopupMenuItem<String>(
               value: s.id, checked: sel == s.id, child: Text(s.nom)),
       ],
       child: Row(

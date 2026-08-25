@@ -216,6 +216,7 @@ class ArticleListe {
     String? note,
     bool? coche,
     String? modifiePar,
+    String? nomArticle,
   }) =>
       ArticleListe(
         id: id,
@@ -231,7 +232,7 @@ class ArticleListe {
         rayonCouleur: rayonCouleur,
         rayonOrdre: rayonOrdre,
         modifiePar: modifiePar ?? this.modifiePar,
-        nomArticle: nomArticle,
+        nomArticle: nomArticle ?? this.nomArticle,
       );
 
   Map<String, dynamic> toMap() => {

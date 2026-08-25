@@ -406,7 +406,7 @@ class SyncService {
                       ));
                     }
                   }
-                  await _localDb.insertArticleListe(item);
+                  await _localDb.insertArticleListe(await _garantirNom(item));
                 } catch (_) {
                   continue;
                 }
@@ -823,6 +823,27 @@ class SyncService {
     );
   }
 
+  // Garantit qu'une ligne de liste collaborative porte un nom affichable avant
+  // insertion locale : le nom reçu, sinon celui déjà stocké localement (ne pas
+  // l'écraser par null), sinon celui de l'article s'il est à mon catalogue.
+  // Sans ça, une ligne dont le doc Firestore n'a pas (encore) `nomArticle`
+  // restait sans nom et disparaissait de la liste (compteur inférieur au widget).
+  Future<ArticleListe> _garantirNom(ArticleListe item) async {
+    if (item.nomArticle != null && item.nomArticle!.isNotEmpty) return item;
+    // 1) Nom déjà présent sur la ligne locale (sync précédente).
+    final locales = await _localDb.getArticlesListe(item.listeId);
+    final ancien = locales.where((e) => e.id == item.id).firstOrNull;
+    if (ancien?.nomArticle != null && ancien!.nomArticle!.isNotEmpty) {
+      return item.copyWith(nomArticle: ancien.nomArticle);
+    }
+    // 2) Nom depuis mon catalogue si j'ai l'article.
+    final art = (await _localDb.getArticles())
+        .where((a) => a.id == item.articleId)
+        .firstOrNull;
+    if (art != null) return item.copyWith(nomArticle: art.nom);
+    return item;
+  }
+
   static String _normNom(String s) {
     const a = 'àâäéèêëïîôöùûüçñ';
     const b = 'aaaeeeeiioouuucn';
@@ -880,7 +901,7 @@ class SyncService {
                 .insertArticle(Article(id: item.articleId, nom: nomArticle));
             catalogueIds.add(item.articleId);
           }
-          await _localDb.insertArticleListe(item);
+          await _localDb.insertArticleListe(await _garantirNom(item));
         } catch (_) {
           continue;
         }
@@ -1131,7 +1152,12 @@ class SyncService {
         'rayonCouleur': couleurRayon,
         'rayonOrdre': ordreRayon,
         'lastModifiedBy': _uid,
-        if (article != null) 'nomArticle': article.nom,
+        // Nom dénormalisé : celui de mon article si je l'ai, sinon celui déjà
+        // porté par la ligne (ajouté par un autre membre). Ne JAMAIS l'écraser
+        // par null quand je n'ai pas l'article à mon catalogue, sinon les autres
+        // membres perdent le nom et la ligne disparaît de leur liste.
+        if ((article?.nom ?? al.nomArticle) != null)
+          'nomArticle': article?.nom ?? al.nomArticle,
       });
     } else {
       await _col('listes')

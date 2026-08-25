@@ -3,11 +3,24 @@ class VersionInfo {
   // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
   // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
   // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
-  static const String version = '1.21.0';
-  static const String buildNumber = '48';
+  static const String version = '1.22.0';
+  static const String buildNumber = '49';
   static const String dateMiseAJour = '25 août 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.22.0',
+      date: '25 août 2026',
+      changements: [
+        'Catalogue : le bouton « Mon catalogue » du sélecteur fonctionne enfin '
+            '(on peut revenir à son catalogue après avoir ouvert un catalogue '
+            'suivi)',
+        'Listes collaboratives : les articles gardent leur nom même quand ils '
+            'ne sont pas à ton catalogue — plus de lignes qui manquaient (le '
+            'compteur rejoint celui du widget). Le nom est récupéré et conservé '
+            'au fil des synchronisations',
+      ],
+    ),
     Release(
       version: '1.21.0',
       date: '25 août 2026',
