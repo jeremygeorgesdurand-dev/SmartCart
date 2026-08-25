@@ -7,7 +7,6 @@ import '../services/widget_service.dart';
 import '../widgets/background_logo.dart';
 import 'budget_screen.dart';
 import 'catalogue_screen.dart';
-import 'catalogue_suivi_screen.dart';
 import 'listes_screen.dart';
 import 'parametres_screen.dart';
 import 'recettes_screen.dart';
@@ -163,20 +162,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final fondActif = ref.watch(fondActiveProvider);
     final fondOpacite = ref.watch(fondOpaciteProvider);
 
-    // Onglet Catalogue : reste le MÊME onglet (pas de nouvelle fenêtre), mais
-    // affiche soit mon catalogue, soit un catalogue suivi choisi via le
-    // sélecteur « Mon catalogue ▾ » (basculé par catalogueSelectionneProvider).
-    final catalogueSel = ref.watch(catalogueSelectionneProvider);
-    final cataloguesSuivis =
-        ref.watch(cataloguesSuivisProvider).valueOrNull ?? [];
-    final suiviActif = catalogueSel == null
-        ? null
-        : cataloguesSuivis.where((s) => s.id == catalogueSel).firstOrNull;
-    final Widget cataloguePage = suiviActif == null
-        ? const CatalogueScreen()
-        : CatalogueSuiviScreen(
-            catalogueId: suiviActif.id, nom: suiviActif.nom);
-
     void allerA(int index, int nbEcrans) {
       final cible = index.clamp(0, nbEcrans - 1);
       if (cible == _currentIndex) return;
@@ -207,7 +192,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           selectedIcon: Icon(Icons.inventory_2),
           label: 'Catalogue',
         ),
-        page: cataloguePage,
+        page: const CatalogueScreen(),
       ),
       if (afficherRecettes)
         (

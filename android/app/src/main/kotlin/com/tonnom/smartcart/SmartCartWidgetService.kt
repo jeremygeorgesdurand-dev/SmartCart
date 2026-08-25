@@ -84,15 +84,21 @@ private class SmartCartRemoteViewsFactory(
             // en cache par la recherche en ligne (Open Prices), lui aussi
             // déjà en base localement — jamais d'appel réseau depuis le
             // widget, seulement les données que l'app a déjà récupérées.
+            // LEFT JOIN (et non INNER) + COALESCE sur le nom/rayon : les
+            // articles d'une liste COLLABORATIVE ne sont pas dans le catalogue
+            // du membre. On lit alors le nom et le rayon DÉNORMALISÉS portés par
+            // la ligne (al.nomArticle / al.rayonNom / al.rayonOrdre), sinon ces
+            // lignes disparaissaient du corps du widget alors qu'elles étaient
+            // comptées dans l'en-tête (ex. corps incomplet sous « 0/39 »).
             val cursor = db.rawQuery(
-                "SELECT al.id, a.nom, al.quantite, al.unite, al.coche, " +
-                    "r.nom, r.ordre, " +
-                    "(SELECT MIN(prix) FROM prix_articles WHERE articleId = a.id), " +
+                "SELECT al.id, COALESCE(a.nom, al.nomArticle), al.quantite, al.unite, al.coche, " +
+                    "COALESCE(r.nom, al.rayonNom), COALESCE(r.ordre, al.rayonOrdre), " +
+                    "(SELECT MIN(prix) FROM prix_articles WHERE articleId = al.articleId), " +
                     "pcw.trouve, pcw.prix " +
                     "FROM articles_liste al " +
-                    "JOIN articles a ON a.id = al.articleId " +
+                    "LEFT JOIN articles a ON a.id = al.articleId " +
                     "LEFT JOIN rayons r ON r.id = a.rayonId " +
-                    "LEFT JOIN prix_cache_web pcw ON pcw.articleId = a.id " +
+                    "LEFT JOIN prix_cache_web pcw ON pcw.articleId = al.articleId " +
                     "WHERE al.listeId = ?",
                 arrayOf(listeId))
             val tout = mutableListOf<Art>()

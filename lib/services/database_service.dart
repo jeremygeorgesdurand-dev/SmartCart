@@ -29,7 +29,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 15,
+      version: 16,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -243,6 +243,22 @@ class DatabaseService {
             )
           ''');
         }
+        if (oldV < 16) {
+          // Nom de l'article dénormalisé SUR la ligne de liste. Indispensable
+          // pour les listes collaboratives : les articles d'une liste partagée
+          // ne sont pas dans le catalogue PERSONNEL du membre, donc l'affichage
+          // ne pouvait pas retrouver leur nom et masquait la ligne (liste qui
+          // paraissait vide alors que le widget comptait bien les articles).
+          // Avec le nom porté par la ligne, l'affichage ne dépend plus du
+          // catalogue local.
+          final tables = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name = 'articles_liste'");
+          if (tables.isNotEmpty) {
+            await db.execute(
+                'ALTER TABLE articles_liste ADD COLUMN nomArticle TEXT');
+          }
+        }
       },
     );
   }
@@ -370,6 +386,7 @@ class DatabaseService {
         rayonCouleur INTEGER,
         rayonOrdre INTEGER,
         modifiePar TEXT,
+        nomArticle TEXT,
         FOREIGN KEY (listeId) REFERENCES listes(id) ON DELETE CASCADE,
         FOREIGN KEY (articleId) REFERENCES articles(id)
       )
@@ -524,8 +541,18 @@ class DatabaseService {
     final d = await db;
     // articles_liste n'a pas de ON DELETE CASCADE sur articleId (seulement
     // listeId) : sans ce nettoyage explicite, supprimer un article laisse
-    // des lignes orphelines dans les listes qui le référençaient encore.
-    await d.delete('articles_liste', where: 'articleId = ?', whereArgs: [id]);
+    // des lignes orphelines dans les listes PERSONNELLES qui le référençaient.
+    // ATTENTION : on NE touche PAS aux lignes des listes COLLABORATIVES. Leurs
+    // articles ne sont pas dans le catalogue du membre (elles portent leur
+    // propre nom dénormalisé) ; un même articleId « recréé » a pu être nettoyé
+    // comme orphelin sur un autre appareil, ce qui, en cascade, vidait la liste
+    // collaborative (compteur qui tombait à 0, listes dupliquées « liées »).
+    // Les suppressions d'articles d'une liste partagée passent par Firestore.
+    await d.rawDelete(
+      'DELETE FROM articles_liste WHERE articleId = ? AND listeId IN '
+      '(SELECT id FROM listes WHERE partagee = 0)',
+      [id],
+    );
     await d.delete('prix_articles', where: 'articleId = ?', whereArgs: [id]);
     await d.delete('prix_historique', where: 'articleId = ?', whereArgs: [id]);
     await d.delete('prix_cache_web', where: 'articleId = ?', whereArgs: [id]);

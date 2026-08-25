@@ -7,8 +7,10 @@ class FiltresBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final catAsync = ref.watch(categoriesNotifierProvider);
-    final rayAsync = ref.watch(rayonsNotifierProvider);
+    // Catégories/rayons du catalogue AFFICHÉ (le mien ou un catalogue suivi),
+    // pour que les filtres suivent la bascule.
+    final catAsync = ref.watch(catalogueCategoriesAffichees);
+    final rayAsync = ref.watch(catalogueRayonsAffiches);
     final filterCat = ref.watch(filterCategorieProvider);
     final filterRay = ref.watch(filterRayonProvider);
 

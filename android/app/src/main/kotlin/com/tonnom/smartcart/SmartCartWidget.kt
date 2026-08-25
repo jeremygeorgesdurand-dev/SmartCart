@@ -112,11 +112,13 @@ class SmartCartWidget : AppWidgetProvider() {
                 if (!dbFile.exists()) return 0.0
                 val db = android.database.sqlite.SQLiteDatabase.openDatabase(
                     dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
+                // Prix rattaché à al.articleId directement (pas besoin de
+                // joindre le catalogue, absent pour une liste collaborative).
                 val c = db.rawQuery(
                     "SELECT COALESCE(" +
-                        "(SELECT MIN(prix) FROM prix_articles WHERE articleId = a.id), " +
-                        "(SELECT prix FROM prix_cache_web WHERE articleId = a.id AND trouve = 1)) " +
-                        "FROM articles_liste al JOIN articles a ON a.id = al.articleId " +
+                        "(SELECT MIN(prix) FROM prix_articles WHERE articleId = al.articleId), " +
+                        "(SELECT prix FROM prix_cache_web WHERE articleId = al.articleId AND trouve = 1)) " +
+                        "FROM articles_liste al " +
                         "WHERE al.listeId = ?",
                     arrayOf(listeId))
                 var somme = 0.0
@@ -298,8 +300,9 @@ class SmartCartWidget : AppWidgetProvider() {
                 val db = android.database.sqlite.SQLiteDatabase.openDatabase(
                     dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
                 val cursor = db.rawQuery(
-                    "SELECT al.id, al.quantite, al.coche, a.nom " +
-                        "FROM articles_liste al JOIN articles a ON a.id = al.articleId " +
+                    "SELECT al.id, al.quantite, al.coche, COALESCE(a.nom, al.nomArticle) " +
+                        "FROM articles_liste al " +
+                        "LEFT JOIN articles a ON a.id = al.articleId " +
                         "WHERE al.listeId = ?",
                     arrayOf(listeId))
 

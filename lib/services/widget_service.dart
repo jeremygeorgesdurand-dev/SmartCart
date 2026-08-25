@@ -15,8 +15,9 @@ class WidgetService {
     final coches = items.where((i) => i.coche).length;
 
     final articlesJson = items.map((item) {
-      final article =
-          catalogue.where((a) => a.id == item.articleId).firstOrNull;
+      // Liste collaborative : l'article n'est pas au catalogue du membre, on
+      // prend le nom dénormalisé porté par la ligne (articlePourLigne).
+      final article = articlePourLigne(item, catalogue);
       return {
         'id': item.id,           // articleListe.id pour cocher
         'articleId': item.articleId,

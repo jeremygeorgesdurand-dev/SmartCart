@@ -43,6 +43,15 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     final selection = ref.read(articlesSelectionnesProvider);
     if (liste == null || selection.isEmpty) return;
 
+    final sel = ref.read(catalogueSelectionneProvider);
+    // Depuis un catalogue SUIVI : les articles ne sont pas à MON catalogue. On
+    // les copie d'abord (fusion par nom, avec leurs catégories/rayons) puis on
+    // les retrouve par nom dans mon catalogue pour les ajouter à la liste.
+    if (sel != null) {
+      await _ajouterSelectionSuivieAListe(sel, liste, selection);
+      return;
+    }
+
     final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
     int nbAjoutes = 0;
 
@@ -84,29 +93,149 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     }
   }
 
+  // Ajoute à une liste des articles COCHÉS dans un catalogue SUIVI : ils sont
+  // d'abord copiés dans mon catalogue (fusion par nom, avec leurs catégories et
+  // rayons), puis retrouvés par nom et ajoutés à la liste.
+  Future<void> _ajouterSelectionSuivieAListe(
+      String catId, ListeCourses liste, Set<String> selection) async {
+    final db = ref.read(dbServiceProvider);
+    final contenu =
+        ref.read(contenuCatalogueSuiviProvider(catId)).valueOrNull;
+    if (contenu == null) return;
+    final choisis =
+        contenu.articles.where((a) => selection.contains(a.id)).toList();
+    if (choisis.isEmpty) return;
+
+    await ref.read(backupServiceProvider).fusionnerCatalogue(
+          categories: contenu.categories,
+          rayons: contenu.rayons,
+          articles: choisis,
+        );
+    ref.invalidate(articlesNotifierProvider);
+
+    final miens = await db.getArticles();
+    String norm(String s) => s.trim().toLowerCase();
+    final parNom = {for (final a in miens) norm(a.nom): a};
+    final notifier = ref.read(articlesListeProvider(liste.id).notifier);
+    final itemsExistants = await db.getArticlesListe(liste.id);
+    final idsDejaPresents = itemsExistants.map((i) => i.articleId).toSet();
+    var nbAjoutes = 0;
+    for (final c in choisis) {
+      final local = parNom[norm(c.nom)];
+      if (local == null || idsDejaPresents.contains(local.id)) continue;
+      await notifier.ajouter(ArticleListe(
+        id: 'al_${const Uuid().v4()}',
+        listeId: liste.id,
+        articleId: local.id,
+      ));
+      idsDejaPresents.add(local.id);
+      nbAjoutes++;
+    }
+
+    ref.read(articlesSelectionnesProvider.notifier).state = {};
+    ref.read(listeSelectionneeProvider.notifier).state = null;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(nbAjoutes == 0
+            ? 'Articles déjà présents dans la liste'
+            : '$nbAjoutes article(s) ajouté(s) à "${liste.nom}"'),
+        backgroundColor: nbAjoutes > 0 ? couleurSucces(context) : null,
+      ));
+    }
+  }
+
+  // « Tout ajouter à mon catalogue » (depuis un catalogue suivi).
+  Future<void> _toutAjouterCatalogueSuivi() async {
+    final catId = ref.read(catalogueSelectionneProvider);
+    if (catId == null) return;
+    final contenu =
+        ref.read(contenuCatalogueSuiviProvider(catId)).valueOrNull;
+    if (contenu == null) return;
+    final res = await ref.read(backupServiceProvider).fusionnerCatalogue(
+          categories: contenu.categories,
+          rayons: contenu.rayons,
+          articles: contenu.articles,
+        );
+    ref.invalidate(articlesNotifierProvider);
+    ref.invalidate(categoriesNotifierProvider);
+    ref.invalidate(rayonsNotifierProvider);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Ajouté à ton catalogue : ${res.articles} article(s), '
+            '${res.categories} catégorie(s)'),
+        backgroundColor: couleurSucces(context),
+      ));
+    }
+  }
+
+  // « Arrêter de suivre » : on revient à mon catalogue (même écran).
+  Future<void> _arreterCatalogueSuivi() async {
+    final catId = ref.read(catalogueSelectionneProvider);
+    if (catId == null) return;
+    final nom = (ref.read(cataloguesSuivisProvider).valueOrNull ?? [])
+            .where((s) => s.id == catId)
+            .firstOrNull
+            ?.nom ??
+        'ce catalogue';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Arrêter de suivre ?'),
+        content: Text('« $nom » sera retiré de tes catalogues suivis. '
+            'Ton catalogue personnel n\'est pas touché.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Arrêter')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref.read(syncServiceProvider).arreterDeSuivreCatalogue(catId);
+    ref.read(catalogueSelectionneProvider.notifier).state = null;
+    ref.invalidate(cataloguesSuivisProvider);
+  }
+
   // Titre du Catalogue : simple texte, ou un sélecteur « Mon catalogue ▾ » si
   // l'utilisateur suit des catalogues partagés (il peut alors basculer sur
   // l'un d'eux, affiché à part en lecture seule).
   Widget _titreAvecSelecteur(BuildContext context) {
     final suivis = ref.watch(cataloguesSuivisProvider).valueOrNull ?? [];
     if (suivis.isEmpty) return const Text('Catalogue');
-    // Bascule DANS le même onglet (pas de nouvelle fenêtre) via l'état partagé :
-    // HomeScreen remplace le corps de l'onglet Catalogue par le catalogue suivi.
+    final sel = ref.watch(catalogueSelectionneProvider);
+    final nomActif = sel == null
+        ? 'Mon catalogue'
+        : (suivis.where((s) => s.id == sel).firstOrNull?.nom ?? 'Mon catalogue');
+    // Bascule DANS le même écran : seule la liste d'articles change. On remet
+    // les filtres/recherche à zéro car les catégories diffèrent d'un catalogue
+    // à l'autre (un id de filtre n'a pas de sens dans l'autre catalogue).
     return PopupMenuButton<String?>(
-      onSelected: (id) =>
-          ref.read(catalogueSelectionneProvider.notifier).state = id,
+      onSelected: (id) {
+        ref.read(catalogueSelectionneProvider.notifier).state = id;
+        ref.read(filterCategorieProvider.notifier).state = null;
+        ref.read(filterRayonProvider.notifier).state = null;
+        ref.read(searchQueryProvider.notifier).state = '';
+        ref.read(listeSelectionneeProvider.notifier).state = null;
+        ref.read(articlesSelectionnesProvider.notifier).state = {};
+        if (_searchVisible) setState(() => _searchVisible = false);
+        _searchController.clear();
+      },
       itemBuilder: (_) => [
-        const PopupMenuItem<String?>(
-            value: null, child: Text('Mon catalogue')),
+        CheckedPopupMenuItem<String?>(
+            value: null, checked: sel == null, child: const Text('Mon catalogue')),
         const PopupMenuDivider(),
         for (final s in suivis)
-          PopupMenuItem<String?>(value: s.id, child: Text(s.nom)),
+          CheckedPopupMenuItem<String?>(
+              value: s.id, checked: sel == s.id, child: Text(s.nom)),
       ],
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Mon catalogue'),
-          Icon(Icons.arrow_drop_down),
+          Flexible(child: Text(nomActif, overflow: TextOverflow.ellipsis)),
+          const Icon(Icons.arrow_drop_down),
         ],
       ),
     );
@@ -220,11 +349,16 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final articlesAsync = ref.watch(articlesFiltresProvider);
+    final articlesAsync = ref.watch(catalogueArticlesFiltresProvider);
     final listesAsync = ref.watch(listesNotifierProvider);
     final listeSelectionnee = ref.watch(listeSelectionneeProvider);
     final selection = ref.watch(articlesSelectionnesProvider);
     final sort = ref.watch(sortModeProvider);
+    // Vrai quand on affiche un catalogue SUIVI (lecture seule) : on masque
+    // alors les outils d'édition (ajout, vocal, scanner) et on rend les tuiles
+    // non modifiables. Le reste de l'interface (recherche, filtres, sélecteur,
+    // ajout à une liste) est identique à mon catalogue.
+    final suivi = ref.watch(catalogueSuiviAffiche);
 
     return Scaffold(
       appBar: AppBar(
@@ -261,19 +395,20 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
               }
             },
           ),
-          // Vocal
-          IconButton(
-            icon: const Icon(Icons.mic),
-            tooltip: 'Saisie vocale',
-            onPressed: _ouvrirVocal,
-          ),
-          // Scanner
-          IconButton(
-            icon: const Icon(Icons.qr_code_scanner),
-            tooltip: 'Scanner un code-barres',
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const ScannerScreen())),
-          ),
+          // Vocal + scanner : seulement sur MON catalogue (édition).
+          if (!suivi) ...[
+            IconButton(
+              icon: const Icon(Icons.mic),
+              tooltip: 'Saisie vocale',
+              onPressed: _ouvrirVocal,
+            ),
+            IconButton(
+              icon: const Icon(Icons.qr_code_scanner),
+              tooltip: 'Scanner un code-barres',
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ScannerScreen())),
+            ),
+          ],
           // Menu
           PopupMenuButton<String>(
             onSelected: (v) {
@@ -301,6 +436,10 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                   _partagerCatalogueDirect();
                 case 'suivre_cat':
                   _suivreCatalogue();
+                case 'tout_ajouter':
+                  _toutAjouterCatalogueSuivi();
+                case 'arreter_suivi':
+                  _arreterCatalogueSuivi();
               }
             },
             itemBuilder: (_) => [
@@ -326,58 +465,77 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                     Text('Par rayon')
                   ])),
               const PopupMenuDivider(),
-              const PopupMenuItem(
-                  value: 'exporter',
-                  child: Row(children: [
-                    Icon(Icons.download, size: 18),
-                    SizedBox(width: 10),
-                    Text('Exporter le catalogue')
-                  ])),
-              const PopupMenuItem(
-                  value: 'importer',
-                  child: Row(children: [
-                    Icon(Icons.upload_file, size: 18),
-                    SizedBox(width: 10),
-                    Text('Importer des articles')
-                  ])),
-              const PopupMenuDivider(),
-              PopupMenuItem(
-                  value: 'doublons',
-                  child: Row(children: [
-                    const Icon(Icons.content_copy, size: 18),
-                    const SizedBox(width: 10),
-                    const Text('Détecter les doublons'),
-                    if (ref.watch(doublonsProvider).isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Builder(builder: (context) {
-                        final fond = couleurAvertissement(context);
-                        return CircleAvatar(
-                          radius: 9,
-                          backgroundColor: fond,
-                          child: Text(
-                            '${ref.watch(doublonsProvider).length}',
-                            style: TextStyle(
-                                fontSize: 10, color: texteContrastant(fond)),
-                          ),
-                        );
-                      }),
-                    ],
-                  ])),
-              const PopupMenuDivider(),
-              const PopupMenuItem(
-                  value: 'partager_cat',
-                  child: Row(children: [
-                    Icon(Icons.qr_code_2, size: 18),
-                    SizedBox(width: 10),
-                    Text('Partager mon catalogue')
-                  ])),
-              const PopupMenuItem(
-                  value: 'suivre_cat',
-                  child: Row(children: [
-                    Icon(Icons.rss_feed, size: 18),
-                    SizedBox(width: 10),
-                    Text('Suivre un catalogue')
-                  ])),
+              // Catalogue SUIVI : actions de lecture seule. Mon catalogue :
+              // outils d'édition/partage.
+              if (suivi) ...[
+                const PopupMenuItem(
+                    value: 'tout_ajouter',
+                    child: Row(children: [
+                      Icon(Icons.library_add, size: 18),
+                      SizedBox(width: 10),
+                      Text('Tout ajouter à mon catalogue')
+                    ])),
+                const PopupMenuItem(
+                    value: 'arreter_suivi',
+                    child: Row(children: [
+                      Icon(Icons.unpublished_outlined, size: 18),
+                      SizedBox(width: 10),
+                      Text('Arrêter de suivre')
+                    ])),
+              ] else ...[
+                const PopupMenuItem(
+                    value: 'exporter',
+                    child: Row(children: [
+                      Icon(Icons.download, size: 18),
+                      SizedBox(width: 10),
+                      Text('Exporter le catalogue')
+                    ])),
+                const PopupMenuItem(
+                    value: 'importer',
+                    child: Row(children: [
+                      Icon(Icons.upload_file, size: 18),
+                      SizedBox(width: 10),
+                      Text('Importer des articles')
+                    ])),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                    value: 'doublons',
+                    child: Row(children: [
+                      const Icon(Icons.content_copy, size: 18),
+                      const SizedBox(width: 10),
+                      const Text('Détecter les doublons'),
+                      if (ref.watch(doublonsProvider).isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Builder(builder: (context) {
+                          final fond = couleurAvertissement(context);
+                          return CircleAvatar(
+                            radius: 9,
+                            backgroundColor: fond,
+                            child: Text(
+                              '${ref.watch(doublonsProvider).length}',
+                              style: TextStyle(
+                                  fontSize: 10, color: texteContrastant(fond)),
+                            ),
+                          );
+                        }),
+                      ],
+                    ])),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                    value: 'partager_cat',
+                    child: Row(children: [
+                      Icon(Icons.qr_code_2, size: 18),
+                      SizedBox(width: 10),
+                      Text('Partager mon catalogue')
+                    ])),
+                const PopupMenuItem(
+                    value: 'suivre_cat',
+                    child: Row(children: [
+                      Icon(Icons.rss_feed, size: 18),
+                      SizedBox(width: 10),
+                      Text('Suivre un catalogue')
+                    ])),
+              ],
             ],
           ),
         ],
@@ -576,50 +734,54 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                     itemCount: articles.length,
                     itemBuilder: (_, i) => AnimatedListItem(
                       index: i,
-                      child: ArticleTile(article: articles[i]),
+                      child: ArticleTile(
+                          article: articles[i], lectureSeule: suivi),
                     ),
                   );
                 }
-                return _buildGroupedList(articles, sort);
+                return _buildGroupedList(articles, sort, suivi);
               },
             ),
           ),
         ],
       ),
-      floatingActionButton: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Ajout avec options
-          FloatingActionButton.small(
-            heroTag: 'add_full',
-            onPressed: () => showDialog(
-                context: context,
-                builder: (_) => const AjouterArticleDialog()),
-            tooltip: 'Ajout avec options',
-            child: const Icon(Icons.tune),
-          ),
-          const SizedBox(width: 10),
-          // Ajout rapide
-          FloatingActionButton.extended(
-            heroTag: 'add_quick',
-            onPressed: () async {
-              // Le contexte de cet écran reste stable même après la
-              // fermeture du dialogue d'ajout rapide : c'est lui qui doit
-              // ouvrir le dialogue "avec options" suivant, pas le dialogue
-              // qu'on vient de fermer (son contexte serait déjà invalide).
-              final nom = await showDialog<String>(
-                  context: context,
-                  builder: (_) => const AjoutRapideDialog());
-              if (nom == null || !context.mounted) return;
-              showDialog(
-                  context: context,
-                  builder: (_) => AjouterArticleDialog(nomInitial: nom));
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Ajout rapide'),
-          ),
-        ],
-      ),
+      // Catalogue suivi (lecture seule) : pas de boutons d'ajout d'article.
+      floatingActionButton: suivi
+          ? null
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // Ajout avec options
+                FloatingActionButton.small(
+                  heroTag: 'add_full',
+                  onPressed: () => showDialog(
+                      context: context,
+                      builder: (_) => const AjouterArticleDialog()),
+                  tooltip: 'Ajout avec options',
+                  child: const Icon(Icons.tune),
+                ),
+                const SizedBox(width: 10),
+                // Ajout rapide
+                FloatingActionButton.extended(
+                  heroTag: 'add_quick',
+                  onPressed: () async {
+                    // Le contexte de cet écran reste stable même après la
+                    // fermeture du dialogue d'ajout rapide : c'est lui qui doit
+                    // ouvrir le dialogue "avec options" suivant, pas le dialogue
+                    // qu'on vient de fermer (son contexte serait déjà invalide).
+                    final nom = await showDialog<String>(
+                        context: context,
+                        builder: (_) => const AjoutRapideDialog());
+                    if (nom == null || !context.mounted) return;
+                    showDialog(
+                        context: context,
+                        builder: (_) => AjouterArticleDialog(nomInitial: nom));
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Ajout rapide'),
+                ),
+              ],
+            ),
     );
   }
 
@@ -693,21 +855,22 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     return _buildGroupedBase(articles, sort, buildTile);
   }
 
-  Widget _buildGroupedList(List<Article> articles, SortMode sort) {
+  Widget _buildGroupedList(List<Article> articles, SortMode sort, bool suivi) {
     return _buildGroupedBase(
       articles,
       sort,
       (article, idx) => AnimatedListItem(
         index: idx,
-        child: ArticleTile(article: article),
+        child: ArticleTile(article: article, lectureSeule: suivi),
       ),
     );
   }
 
   Widget _buildGroupedBase(List<Article> articles, SortMode sort,
       Widget Function(Article, int) buildTile) {
-    final catAsync = ref.watch(categoriesNotifierProvider);
-    final rayAsync = ref.watch(rayonsNotifierProvider);
+    // Catégories/rayons du catalogue AFFICHÉ (mien ou suivi).
+    final catAsync = ref.watch(catalogueCategoriesAffichees);
+    final rayAsync = ref.watch(catalogueRayonsAffiches);
 
     return catAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),

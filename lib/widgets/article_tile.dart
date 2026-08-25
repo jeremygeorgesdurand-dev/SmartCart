@@ -10,14 +10,23 @@ import 'prix_article_badge.dart';
 
 class ArticleTile extends ConsumerWidget {
   final Article article;
-  const ArticleTile({super.key, required this.article});
+  // Lecture seule (catalogue SUIVI) : pas de suppression par glissement ni
+  // d'ouverture du dialogue d'édition — on ne modifie pas le catalogue d'autrui.
+  final bool lectureSeule;
+  const ArticleTile({super.key, required this.article, this.lectureSeule = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final categorie = ref.watch(categoriesNotifierProvider).valueOrNull
+    // Catégorie/rayon résolus dans le catalogue AFFICHÉ (le mien ou un suivi),
+    // pour que les puces restent correctes après bascule.
+    final categorie = ref.watch(catalogueCategoriesAffichees).valueOrNull
         ?.where((c) => c.id == article.categorieId).firstOrNull;
-    final rayon = ref.watch(rayonsNotifierProvider).valueOrNull
+    final rayon = ref.watch(catalogueRayonsAffiches).valueOrNull
         ?.where((r) => r.id == article.rayonId).firstOrNull;
+
+    if (lectureSeule) {
+      return _carte(context, categorie, rayon, onTap: null);
+    }
 
     return SwipeZoneDismissible(
       key: Key('article_${article.id}'),
@@ -95,80 +104,93 @@ class ArticleTile extends ConsumerWidget {
             ),
           );
       },
-      child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => showDialog(
-            context: context,
-            builder: (_) => AjouterArticleDialog(articleExistant: article),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              children: [
-                // Nom + chips
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        article.nom,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+      child: _carte(
+        context,
+        categorie,
+        rayon,
+        onTap: () => showDialog(
+          context: context,
+          builder: (_) => AjouterArticleDialog(articleExistant: article),
+        ),
+      ),
+    );
+  }
+
+  // Carte d'un article (nom + puces + prix). `onTap` null = lecture seule
+  // (catalogue suivi) : la carte reste identique mais n'est ni éditable ni
+  // munie du chevron « modifier ».
+  Widget _carte(BuildContext context, dynamic categorie, dynamic rayon,
+      {required VoidCallback? onTap}) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              // Nom + chips
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      article.nom,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    if (article.marque != null)
+                      Text(article.marque!,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .outline)),
+                    if (categorie != null || rayon != null) ...[
+                      const SizedBox(height: 5),
+                      Wrap(
+                        spacing: 5,
+                        children: [
+                          if (categorie != null)
+                            _Chip(
+                              label: categorie.nom,
+                              color: Color(categorie.couleur),
+                            ),
+                          if (rayon != null)
+                            _Chip(
+                              label: rayon.nom,
+                              color: Color(rayon.couleur),
+                              icon: Icons.store_outlined,
+                            ),
+                        ],
                       ),
-                      if (article.marque != null)
-                        Text(article.marque!,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .outline)),
-                      if (categorie != null || rayon != null) ...[
-                        const SizedBox(height: 5),
-                        Wrap(
-                          spacing: 5,
-                          children: [
-                            if (categorie != null)
-                              _Chip(
-                                label: categorie.nom,
-                                color: Color(categorie.couleur),
-                              ),
-                            if (rayon != null)
-                              _Chip(
-                                label: rayon.nom,
-                                color: Color(rayon.couleur),
-                                icon: Icons.store_outlined,
-                              ),
-                          ],
-                        ),
-                      ],
                     ],
-                  ),
+                  ],
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: PrixArticleBadge(article: article),
+              ),
+
+              if (article.barcode != null)
+                IconButton(
+                  icon: const Icon(Icons.info_outline, size: 20),
+                  tooltip: 'Infos nutritionnelles',
+                  color: Theme.of(context).colorScheme.primary,
+                  onPressed: () => _afficherInfosNutritionnelles(
+                      context, article.barcode!),
                 ),
 
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: PrixArticleBadge(article: article),
-                ),
-
-                if (article.barcode != null)
-                  IconButton(
-                    icon: const Icon(Icons.info_outline, size: 20),
-                    tooltip: 'Infos nutritionnelles',
-                    color: Theme.of(context).colorScheme.primary,
-                    onPressed: () => _afficherInfosNutritionnelles(
-                        context, article.barcode!),
-                  ),
-
-                // Icône modifier
+              // Icône modifier (masquée en lecture seule)
+              if (onTap != null)
                 Icon(Icons.chevron_right,
-                    color:
-                        Theme.of(context).colorScheme.outlineVariant,
+                    color: Theme.of(context).colorScheme.outlineVariant,
                     size: 20),
-              ],
-            ),
+            ],
           ),
         ),
       ),

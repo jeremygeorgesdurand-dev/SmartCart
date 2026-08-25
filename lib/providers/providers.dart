@@ -111,16 +111,54 @@ final cataloguesSuivisProvider =
   return ref.read(dbServiceProvider).getCataloguesSuivis();
 });
 
-// Contenu d'un catalogue suivi : articles + catégories (pour l'affichage séparé).
+// Contenu d'un catalogue suivi : articles + catégories + rayons.
 final contenuCatalogueSuiviProvider = FutureProvider.family<
-    ({List<Article> articles, List<Categorie> categories}), String>(
-    (ref, catId) async {
+    ({List<Article> articles, List<Categorie> categories, List<Rayon> rayons}),
+    String>((ref, catId) async {
   ref.watch(articlesNotifierProvider);
   final db = ref.read(dbServiceProvider);
   return (
     articles: await db.getArticlesParSource(catId),
     categories: await db.getCategoriesParSource(catId),
+    rayons: await db.getRayonsParSource(catId),
   );
+});
+
+// ── CATALOGUE AFFICHÉ dans l'écran Catalogue (mien OU suivi) ────────
+// Ces providers laissent le MÊME écran Catalogue basculer entre mon catalogue
+// et un catalogue suivi : seul le contenu (articles/catégories/rayons) change,
+// le reste de l'interface (barre de recherche, filtres, sélecteur) est identique.
+// Ils NE touchent PAS aux providers globaux (articlesNotifierProvider…), qui
+// restent MON catalogue partout ailleurs (listes, budget, widget).
+
+// Articles à afficher : les miens si aucune sélection, sinon ceux du suivi.
+final catalogueArticlesAffichesProvider =
+    Provider<AsyncValue<List<Article>>>((ref) {
+  final sel = ref.watch(catalogueSelectionneProvider);
+  if (sel == null) return ref.watch(articlesNotifierProvider);
+  return ref
+      .watch(contenuCatalogueSuiviProvider(sel))
+      .whenData((c) => c.articles);
+});
+
+final catalogueCategoriesAffichees =
+    Provider<AsyncValue<List<Categorie>>>((ref) {
+  final sel = ref.watch(catalogueSelectionneProvider);
+  if (sel == null) return ref.watch(categoriesNotifierProvider);
+  return ref
+      .watch(contenuCatalogueSuiviProvider(sel))
+      .whenData((c) => c.categories);
+});
+
+final catalogueRayonsAffiches = Provider<AsyncValue<List<Rayon>>>((ref) {
+  final sel = ref.watch(catalogueSelectionneProvider);
+  if (sel == null) return ref.watch(rayonsNotifierProvider);
+  return ref.watch(contenuCatalogueSuiviProvider(sel)).whenData((c) => c.rayons);
+});
+
+// Vrai si l'écran Catalogue affiche un catalogue SUIVI (lecture seule).
+final catalogueSuiviAffiche = Provider<bool>((ref) {
+  return ref.watch(catalogueSelectionneProvider) != null;
 });
 
 // Profils des membres d'une liste collaborative, indexés par uid (nom + photo),
@@ -372,6 +410,51 @@ final articlesFiltresProvider =
       case SortMode.rayon:
         liste.sort(
             (a, b) => (a.rayonId ?? '').compareTo(b.rayonId ?? ''));
+    }
+    return liste;
+  });
+});
+
+// Comme articlesFiltresProvider, mais sur le catalogue AFFICHÉ (mien ou suivi).
+// C'est ce provider qu'utilise l'écran Catalogue, pour que la bascule ne change
+// que la liste d'articles.
+final catalogueArticlesFiltresProvider =
+    Provider<AsyncValue<List<Article>>>((ref) {
+  final articlesAsync = ref.watch(catalogueArticlesAffichesProvider);
+  final sort = ref.watch(sortModeProvider);
+  final filterCat = ref.watch(filterCategorieProvider);
+  final filterRay = ref.watch(filterRayonProvider);
+  final query = ref.watch(searchQueryProvider);
+
+  return articlesAsync.whenData((articles) {
+    var liste = articles.where((a) {
+      final matchQuery = query.isEmpty ||
+          a.nom.toLowerCase().contains(query.toLowerCase());
+      final matchCat = filterCat == null || a.categorieId == filterCat;
+      final matchRay = filterRay == null || a.rayonId == filterRay;
+      return matchQuery && matchCat && matchRay;
+    }).toList();
+
+    switch (sort) {
+      case SortMode.alphabetique:
+        liste.sort((a, b) {
+          if (filterCat != null) {
+            final aM = a.categorieId == filterCat ? 0 : 1;
+            final bM = b.categorieId == filterCat ? 0 : 1;
+            if (aM != bM) return aM.compareTo(bM);
+          }
+          if (filterRay != null) {
+            final aM = a.rayonId == filterRay ? 0 : 1;
+            final bM = b.rayonId == filterRay ? 0 : 1;
+            if (aM != bM) return aM.compareTo(bM);
+          }
+          return cleTriAlpha(a.nom).compareTo(cleTriAlpha(b.nom));
+        });
+      case SortMode.categorie:
+        liste.sort((a, b) =>
+            (a.categorieId ?? '').compareTo(b.categorieId ?? ''));
+      case SortMode.rayon:
+        liste.sort((a, b) => (a.rayonId ?? '').compareTo(b.rayonId ?? ''));
     }
     return liste;
   });

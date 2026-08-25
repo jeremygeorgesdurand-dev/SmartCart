@@ -605,14 +605,15 @@ class _ListeCard extends ConsumerWidget {
                             loading: () => const SizedBox.shrink(),
                             error: (err, stack) => const SizedBox.shrink(),
                             data: (items) {
-                              // Exclut les lignes dont l'article n'existe plus au
-                              // catalogue (orphelines) : sans ce filtre, ce
-                              // compteur pouvait afficher un total supérieur au
-                              // nombre d'articles réellement visibles une fois la
-                              // liste ouverte, qui applique le même filtre.
+                              // Exclut les lignes réellement inaffichables (ni
+                              // article au catalogue, ni nom dénormalisé) : une
+                              // ligne de liste collaborative reste comptée grâce
+                              // à son nom porté (articlePourLigne), pour coller
+                              // au compteur du widget (ex. 0/39) et à ce qui
+                              // s'affiche une fois la liste ouverte.
                               final visibles = items
                                   .where((a) =>
-                                      catalogue.any((c) => c.id == a.articleId))
+                                      articlePourLigne(a, catalogue) != null)
                                   .toList();
                               final total = visibles.length;
                               final coches =
@@ -1321,12 +1322,13 @@ class DetailListeScreen extends ConsumerWidget {
                       const Center(child: CircularProgressIndicator()),
                   error: (e, _) => const SizedBox.shrink(),
                   data: (rayons) {
-                    // Enrichir les items
+                    // Enrichir les items. Pour une liste collaborative, l'article
+                    // n'est pas au catalogue du membre : on le reconstruit à
+                    // partir du nom porté par la ligne (articlePourLigne) au lieu
+                    // de masquer la ligne — sinon la liste paraissait vide.
                     final itemsEnrichis = items
                         .map((item) {
-                          final article = catalogue
-                              .where((a) => a.id == item.articleId)
-                              .firstOrNull;
+                          final article = articlePourLigne(item, catalogue);
                           return article != null
                               ? (item: item, article: article)
                               : null;
@@ -2149,8 +2151,9 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
               final coches = <(ArticleListe, Article)>[];
 
               for (final item in items) {
-                final article =
-                    catalogue.where((a) => a.id == item.articleId).firstOrNull;
+                // Liste collaborative : l'article n'est pas au catalogue du
+                // membre, on le reconstruit depuis le nom porté par la ligne.
+                final article = articlePourLigne(item, catalogue);
                 if (article == null) continue;
                 if (item.coche) {
                   coches.add((item, article));

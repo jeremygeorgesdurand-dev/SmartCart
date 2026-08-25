@@ -186,6 +186,12 @@ class ArticleListe {
   // uid du dernier membre ayant ajouté/modifié/coché cette ligne (liste
   // collaborative). Sert à afficher « qui a fait quoi ». Nul en local perso.
   final String? modifiePar;
+  // Nom de l'article dénormalisé SUR la ligne. Pour une liste collaborative,
+  // l'article référencé (articleId) n'existe PAS dans le catalogue personnel du
+  // membre : sans ce nom porté par la ligne, l'affichage ne pouvait pas la
+  // retrouver et la masquait (liste qui paraissait vide alors que le widget
+  // comptait bien les articles). Nul pour les listes perso (on lit le catalogue).
+  final String? nomArticle;
 
   ArticleListe({
     required this.id,
@@ -201,6 +207,7 @@ class ArticleListe {
     this.rayonCouleur,
     this.rayonOrdre,
     this.modifiePar,
+    this.nomArticle,
   });
 
   ArticleListe copyWith({
@@ -224,6 +231,7 @@ class ArticleListe {
         rayonCouleur: rayonCouleur,
         rayonOrdre: rayonOrdre,
         modifiePar: modifiePar ?? this.modifiePar,
+        nomArticle: nomArticle,
       );
 
   Map<String, dynamic> toMap() => {
@@ -240,6 +248,7 @@ class ArticleListe {
         'rayonCouleur': rayonCouleur,
         'rayonOrdre': rayonOrdre,
         'modifiePar': modifiePar,
+        'nomArticle': nomArticle,
       };
 
   factory ArticleListe.fromMap(Map<String, dynamic> map) => ArticleListe(
@@ -259,7 +268,24 @@ class ArticleListe {
         // Function/écriture pose 'lastModifiedBy'.
         modifiePar:
             (map['modifiePar'] ?? map['lastModifiedBy']) as String?,
+        nomArticle: map['nomArticle'] as String?,
       );
+}
+
+// Résout l'article à AFFICHER pour une ligne de liste : celui du catalogue s'il
+// existe, sinon un article « synthétique » reconstruit à partir du nom porté
+// par la ligne (`nomArticle`). Indispensable aux listes collaboratives, dont
+// les articles ne sont pas dans le catalogue personnel du membre : sans ce
+// repli, la ligne était masquée et la liste paraissait vide alors que le widget
+// (qui compte les lignes brutes) en affichait le bon nombre. Renvoie null
+// seulement s'il n'y a vraiment aucun nom à afficher (ligne perso orpheline).
+Article? articlePourLigne(ArticleListe item, List<Article> catalogue) {
+  for (final a in catalogue) {
+    if (a.id == item.articleId) return a;
+  }
+  final nom = item.nomArticle;
+  if (nom == null || nom.trim().isEmpty) return null;
+  return Article(id: item.articleId, nom: nom);
 }
 
 // ============================================================

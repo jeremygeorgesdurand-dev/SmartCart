@@ -3,11 +3,26 @@ class VersionInfo {
   // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
   // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
   // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
-  static const String version = '1.20.0';
-  static const String buildNumber = '47';
+  static const String version = '1.21.0';
+  static const String buildNumber = '48';
   static const String dateMiseAJour = '25 août 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.21.0',
+      date: '25 août 2026',
+      changements: [
+        'Listes collaboratives fiabilisées : le nombre d\'articles est enfin '
+            'cohérent partout (liste, widget, mode courses). Les articles reçus '
+            's\'affichent toujours, même s\'ils ne sont pas dans ton catalogue',
+        'Une liste collaborative ne se vide plus toute seule, et dupliquer une '
+            'liste crée bien une copie indépendante (elles ne sont plus liées)',
+        'Catalogue suivi : bascule SANS changer d\'écran — « Mon catalogue ▾ » '
+            'ne change que la liste des articles ; la recherche, les filtres et '
+            'le sélecteur restent en place. On peut passer d\'un catalogue à '
+            'l\'autre et revenir au sien instantanément',
+      ],
+    ),
     Release(
       version: '1.20.0',
       date: '25 août 2026',
