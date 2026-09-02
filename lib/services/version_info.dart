@@ -3,11 +3,24 @@ class VersionInfo {
   // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
   // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
   // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
-  static const String version = '1.24.0';
-  static const String buildNumber = '51';
+  static const String version = '1.25.0';
+  static const String buildNumber = '52';
   static const String dateMiseAJour = '27 août 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.25.0',
+      date: '27 août 2026',
+      changements: [
+        'Nouveau : Profils magasin (Réglages → Organisation). Chaque profil a '
+            'sa propre organisation de rayons (ordre + couleurs) ET l\'aisle de '
+            'chaque article, plus une liste associée — un profil par magasin',
+        'On bascule d\'un profil à l\'autre en un geste : toute l\'organisation '
+            'suit (rayons, ordre de courses, affectation des articles)',
+        'Partage d\'un profil par QR code ou code : l\'organisation ET la liste '
+            'associée sont partagées d\'un coup',
+      ],
+    ),
     Release(
       version: '1.24.0',
       date: '27 août 2026',

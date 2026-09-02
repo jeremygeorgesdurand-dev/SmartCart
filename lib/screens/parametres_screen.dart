@@ -8,6 +8,7 @@ import 'categories_screen.dart';
 import 'compte_screen.dart';
 import 'fonctionnalites_screen.dart';
 import 'rayons_screen.dart';
+import 'profils_screen.dart';
 import 'sauvegarde_screen.dart';
 import 'widget_config_screen.dart';
 
@@ -61,6 +62,14 @@ class ParametresScreen extends ConsumerWidget {
                   sousTitre: 'Ordre des rayons pour les courses',
                   onTap: () => Navigator.push(context,
                       MaterialPageRoute(builder: (_) => const RayonsScreen())),
+                ),
+                const Divider(height: 1),
+                _MenuTile(
+                  icone: Icons.storefront_outlined,
+                  titre: 'Profils magasin',
+                  sousTitre: 'Une organisation de rayons par magasin, partageable',
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const ProfilsScreen())),
                 ),
               ],
             ),

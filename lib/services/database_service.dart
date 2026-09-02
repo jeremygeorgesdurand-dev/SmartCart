@@ -491,6 +491,16 @@ class DatabaseService {
   // Instantané JSON de l'organisation « en direct » (rayons perso + affectation
   // article→rayon par NOM). Sert à capturer/rétablir un profil magasin.
   static Future<String> _capturerOrganisation(Database db) async {
+    // Robuste face à un schéma partiel (bases de test minimales) : si les tables
+    // n'existent pas encore, on renvoie un instantané vide.
+    final tables = (await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('rayons','articles')"))
+        .map((r) => r['name'] as String)
+        .toSet();
+    if (!tables.contains('rayons') || !tables.contains('articles')) {
+      return jsonEncode({'rayons': [], 'assignations': {}});
+    }
     final rayons = await db.query('rayons',
         where: 'source IS NULL', orderBy: 'ordre ASC');
     final articles =
