@@ -588,7 +588,15 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                     Expanded(
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<ListeCourses?>(
-                          value: listeSelectionnee,
+                          // La valeur DOIT être une instance PRÉSENTE dans
+                          // `items`, comparée par `==` : on la retrouve par id
+                          // dans `listes` plutôt que d'utiliser l'instance
+                          // stockée (qui peut être une copie périmée après un
+                          // rechargement du provider) — sinon DropdownButton
+                          // lève une assertion et fait planter l'écran.
+                          value: listes
+                              .where((l) => l.id == listeSelectionnee?.id)
+                              .firstOrNull,
                           isDense: true,
                           // Explicite plutôt que de compter sur la petite
                           // flèche grise par défaut (facile à manquer) :
@@ -1050,34 +1058,48 @@ class _SelecteurQuantite extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final couleur = Theme.of(context).colorScheme.primary;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          iconSize: 20,
-          icon: Icon(Icons.remove_circle_outline, color: couleur),
-          onPressed: quantite > 1 ? () => onChange(quantite - 1) : null,
-          tooltip: 'Moins',
+    // On englobe tout le sélecteur dans un absorbeur de tap : sans lui, taper
+    // dans les espaces entre les boutons (ou sur le nombre) traversait jusqu'au
+    // ListTile parent et DÉ-sélectionnait l'article (remettant la quantité à 1),
+    // donnant l'impression que « choisir le nombre » ne marchait pas.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: Container(
+        decoration: BoxDecoration(
+          color: couleur.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(24),
         ),
-        SizedBox(
-          width: 20,
-          child: Text('$quantite',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              iconSize: 24,
+              icon: Icon(Icons.remove_circle, color: couleur),
+              onPressed: quantite > 1 ? () => onChange(quantite - 1) : null,
+              tooltip: 'Moins',
+            ),
+            SizedBox(
+              width: 24,
+              child: Text('$quantite',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              iconSize: 24,
+              icon: Icon(Icons.add_circle, color: couleur),
+              onPressed: () => onChange(quantite + 1),
+              tooltip: 'Plus',
+            ),
+          ],
         ),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          iconSize: 20,
-          icon: Icon(Icons.add_circle_outline, color: couleur),
-          onPressed: () => onChange(quantite + 1),
-          tooltip: 'Plus',
-        ),
-      ],
+      ),
     );
   }
 }
