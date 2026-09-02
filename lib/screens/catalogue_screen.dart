@@ -14,6 +14,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'scanner_screen.dart';
 import '../widgets/import_liste_dialog.dart' show ImportListeDialog, ExportDialog;
 import '../utils/erreur_utils.dart';
+import '../utils/messages.dart';
 import '../utils/theme_utils.dart';
 import 'doublons_screen.dart';
 
@@ -53,6 +54,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     }
 
     final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
+    final quantites = ref.read(articlesQuantitesProvider);
     int nbAjoutes = 0;
 
     // Charger une seule fois les articles déjà dans la liste
@@ -69,27 +71,26 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
               id: 'al_${const Uuid().v4()}',
               listeId: liste.id,
               articleId: articleId,
+              quantite: quantites[articleId] ?? 1,
             ),
           );
       idsDejaPresents.add(articleId); // éviter doublons dans la même sélection
       nbAjoutes++;
     }
 
-    // Une fois l'ajout fait, on quitte complètement le mode sélection
-    // (sinon la liste reste sélectionnée et le catalogue reste affiché en
-    // mode "cocher des articles", ce qui prête à confusion).
+    // On vide la sélection d'articles et les quantités, mais on GARDE la liste
+    // sélectionnée pour pouvoir enchaîner d'autres ajouts sans la re-choisir.
     ref.read(articlesSelectionnesProvider.notifier).state = {};
-    ref.read(listeSelectionneeProvider.notifier).state = null;
+    ref.read(articlesQuantitesProvider.notifier).state = {};
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-          nbAjoutes == 0
-              ? 'Articles déjà présents dans la liste'
-              : '$nbAjoutes article(s) ajouté(s) à "${liste.nom}"',
-        ),
-        backgroundColor: nbAjoutes > 0 ? couleurSucces(context) : null,
-      ));
+      afficherMessage(
+        context,
+        nbAjoutes == 0
+            ? 'Articles déjà présents dans la liste'
+            : '$nbAjoutes article(s) ajouté(s) à "${liste.nom}"',
+        couleur: nbAjoutes > 0 ? couleurSucces(context) : null,
+      );
     }
   }
 
@@ -113,6 +114,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
         );
     ref.invalidate(articlesNotifierProvider);
 
+    final quantites = ref.read(articlesQuantitesProvider);
     final miens = await db.getArticles();
     String norm(String s) => s.trim().toLowerCase();
     final parNom = {for (final a in miens) norm(a.nom): a};
@@ -127,20 +129,24 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
         id: 'al_${const Uuid().v4()}',
         listeId: liste.id,
         articleId: local.id,
+        quantite: quantites[c.id] ?? 1,
       ));
       idsDejaPresents.add(local.id);
       nbAjoutes++;
     }
 
+    // On garde la liste sélectionnée (enchaîner les ajouts) ; on ne vide que
+    // la sélection d'articles et les quantités.
     ref.read(articlesSelectionnesProvider.notifier).state = {};
-    ref.read(listeSelectionneeProvider.notifier).state = null;
+    ref.read(articlesQuantitesProvider.notifier).state = {};
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(nbAjoutes == 0
+      afficherMessage(
+        context,
+        nbAjoutes == 0
             ? 'Articles déjà présents dans la liste'
-            : '$nbAjoutes article(s) ajouté(s) à "${liste.nom}"'),
-        backgroundColor: nbAjoutes > 0 ? couleurSucces(context) : null,
-      ));
+            : '$nbAjoutes article(s) ajouté(s) à "${liste.nom}"',
+        couleur: nbAjoutes > 0 ? couleurSucces(context) : null,
+      );
     }
   }
 
@@ -794,9 +800,11 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
 
   Widget _buildSelectionList(List<Article> articles, SortMode sort) {
     final selection = ref.watch(articlesSelectionnesProvider);
+    final quantites = ref.watch(articlesQuantitesProvider);
 
     Widget buildTile(Article article, int index) {
       final selectionne = selection.contains(article.id);
+      final qte = quantites[article.id] ?? 1;
       return AnimatedListItem(
         index: index,
         child: ListTile(
@@ -806,6 +814,11 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                 Set<String>.from(ref.read(articlesSelectionnesProvider));
             if (selectionne) {
               current.remove(article.id);
+              // Décocher remet sa quantité à 1 (retirée de la map).
+              final m = Map<String, int>.from(
+                  ref.read(articlesQuantitesProvider))
+                ..remove(article.id);
+              ref.read(articlesQuantitesProvider.notifier).state = m;
             } else {
               current.add(article.id);
             }
@@ -831,10 +844,23 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                     : null,
               )),
           subtitle: article.marque != null ? Text(article.marque!) : null,
-          // Prix visible directement dans la sélection : avant, il fallait
-          // ajouter l'article puis ouvrir la liste pour savoir combien il
-          // coûtait.
-          trailing: PrixArticleBadge(article: article),
+          // Article coché : sélecteur de quantité (− n +). Sinon, simple prix
+          // indicatif (visible directement dans la sélection).
+          trailing: selectionne
+              ? _SelecteurQuantite(
+                  quantite: qte,
+                  onChange: (v) {
+                    final m = Map<String, int>.from(
+                        ref.read(articlesQuantitesProvider));
+                    if (v <= 1) {
+                      m.remove(article.id);
+                    } else {
+                      m[article.id] = v;
+                    }
+                    ref.read(articlesQuantitesProvider.notifier).state = m;
+                  },
+                )
+              : PrixArticleBadge(article: article),
           tileColor: selectionne
               ? Theme.of(context)
                   .colorScheme
@@ -1010,6 +1036,48 @@ class _GroupHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// Sélecteur de quantité compact (− n +) affiché sur un article coché, pour
+// choisir combien on en ajoute à la liste.
+class _SelecteurQuantite extends StatelessWidget {
+  final int quantite;
+  final ValueChanged<int> onChange;
+  const _SelecteurQuantite({required this.quantite, required this.onChange});
+
+  @override
+  Widget build(BuildContext context) {
+    final couleur = Theme.of(context).colorScheme.primary;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          iconSize: 20,
+          icon: Icon(Icons.remove_circle_outline, color: couleur),
+          onPressed: quantite > 1 ? () => onChange(quantite - 1) : null,
+          tooltip: 'Moins',
+        ),
+        SizedBox(
+          width: 20,
+          child: Text('$quantite',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          iconSize: 20,
+          icon: Icon(Icons.add_circle_outline, color: couleur),
+          onPressed: () => onChange(quantite + 1),
+          tooltip: 'Plus',
+        ),
+      ],
     );
   }
 }

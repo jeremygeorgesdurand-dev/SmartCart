@@ -290,6 +290,66 @@ Article? articlePourLigne(ArticleListe item, List<Article> catalogue) {
 }
 
 // ============================================================
+// Profil magasin : un jeu de rayons (ordre + couleurs) ET l'affectation des
+// articles à ces rayons, propre à un magasin donné, plus une liste associée
+// optionnelle. Le profil ACTIF est reflété par les rayons/affectations « en
+// direct » ; changer de profil échange tout ce jeu. `donnees` est un instantané
+// JSON { rayons:[{nom,couleur,ordre}], assignations:{nomArticle:nomRayon} }.
+// ============================================================
+class Profil {
+  final String id;
+  final String nom;
+  final String? listeId; // liste associée (optionnelle)
+  final String? donnees; // instantané JSON (géré par ProfilService)
+  final bool actif;
+  final int ordre;
+
+  Profil({
+    required this.id,
+    required this.nom,
+    this.listeId,
+    this.donnees,
+    this.actif = false,
+    this.ordre = 0,
+  });
+
+  Profil copyWith({
+    String? nom,
+    String? listeId,
+    String? donnees,
+    bool? actif,
+    int? ordre,
+    bool effacerListe = false,
+  }) =>
+      Profil(
+        id: id,
+        nom: nom ?? this.nom,
+        listeId: effacerListe ? null : (listeId ?? this.listeId),
+        donnees: donnees ?? this.donnees,
+        actif: actif ?? this.actif,
+        ordre: ordre ?? this.ordre,
+      );
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'nom': nom,
+        'listeId': listeId,
+        'donnees': donnees,
+        'actif': actif ? 1 : 0,
+        'ordre': ordre,
+      };
+
+  factory Profil.fromMap(Map<String, dynamic> map) => Profil(
+        id: map['id'] as String,
+        nom: map['nom'] as String,
+        listeId: map['listeId'] as String?,
+        donnees: map['donnees'] as String?,
+        actif: (map['actif'] as int? ?? 0) == 1,
+        ordre: map['ordre'] as int? ?? 0,
+      );
+}
+
+// ============================================================
 // models/liste_courses.dart
 // ============================================================
 class ListeCourses {

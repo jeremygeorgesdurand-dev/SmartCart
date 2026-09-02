@@ -48,6 +48,11 @@ class SyncService {
       _db.collection('catalogues_partages');
   CollectionReference get _codesCatalogueCol =>
       _db.collection('codes_catalogue');
+  // Profils magasin partagés : instantané (rayons + affectations) + code de la
+  // liste associée éventuelle.
+  CollectionReference get _profilsPartagesCol =>
+      _db.collection('profils_partages');
+  CollectionReference get _codesProfilCol => _db.collection('codes_profil');
 
   // ── UPLOAD COMPLET (local → Firestore) ─────────────────────────
   Future<void> uploadTout() async {
@@ -646,6 +651,66 @@ class SyncService {
     });
     await _stockerCatalogueSuivi(catId);
     return true;
+  }
+
+  // ── PARTAGE D'UN PROFIL MAGASIN ────────────────────────────────
+  // Partage l'instantané d'un profil (rayons + affectations) et, si une liste
+  // lui est associée, la partage aussi (liste collaborative) et joint son code.
+  // Retourne le code du profil à transmettre.
+  Future<String> partagerProfil(Profil p) async {
+    final uid = _uid;
+    String code;
+    do {
+      code = _genererCode();
+    } while ((await _codesProfilCol.doc(code).get()).exists);
+
+    String? listeCode;
+    if (p.listeId != null) {
+      final liste = await _localDb.getListe(p.listeId!);
+      if (liste != null) {
+        final items = await _localDb.getArticlesListe(liste.id);
+        // partagerListe est idempotent : rend la liste collaborative si besoin.
+        listeCode = await partagerListe(liste, items);
+      }
+    }
+
+    await _profilsPartagesCol.doc(p.id).set({
+      'proprietaireId': uid,
+      'code': code,
+      'nom': p.nom,
+      'donnees': p.donnees,
+      if (listeCode != null) 'listeCode': listeCode,
+    });
+    await _codesProfilCol.doc(code).set({'profilId': p.id});
+    return code;
+  }
+
+  // Suit un profil partagé via son code : crée un profil LOCAL à partir de
+  // l'instantané reçu (non actif par défaut). Retourne le nom et le code de la
+  // liste associée (à rejoindre séparément), ou null si le code est invalide.
+  Future<({String profilId, String nom, String? listeCode})?> suivreProfil(
+      String code) async {
+    final codeDoc =
+        await _codesProfilCol.doc(code.trim().toUpperCase()).get();
+    if (!codeDoc.exists) return null;
+    final profilId =
+        (codeDoc.data() as Map<String, dynamic>)['profilId'] as String;
+    final doc = await _profilsPartagesCol.doc(profilId).get();
+    if (!doc.exists) return null;
+    final data = doc.data() as Map<String, dynamic>;
+    final nom = (data['nom'] as String?) ?? 'Profil partagé';
+    final nouvel = Profil(
+      id: 'profil_${DateTime.now().millisecondsSinceEpoch}',
+      nom: nom,
+      donnees: data['donnees'] as String?,
+      ordre: 999,
+    );
+    await _localDb.insertProfil(nouvel);
+    return (
+      profilId: nouvel.id,
+      nom: nom,
+      listeCode: data['listeCode'] as String?
+    );
   }
 
   // Arrête de suivre un catalogue (se retire des membres).

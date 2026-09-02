@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -29,7 +31,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 17,
+      version: 18,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -289,6 +291,35 @@ class DatabaseService {
             )
           ''');
         }
+        if (oldV < 18) {
+          // Profils magasin : chaque profil a SON jeu de rayons (ordre+couleurs)
+          // et SON affectation des articles aux rayons, plus une liste associée.
+          // Le profil ACTIF est reflété par les rayons/affectations « en direct ».
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS profils (
+              id TEXT PRIMARY KEY,
+              nom TEXT NOT NULL,
+              listeId TEXT,
+              donnees TEXT,
+              actif INTEGER DEFAULT 0,
+              ordre INTEGER DEFAULT 0
+            )
+          ''');
+          // Crée un profil par défaut capturant l'organisation actuelle, pour
+          // que rien ne change pour un utilisateur existant.
+          final dejaUnProfil = await db.rawQuery(
+              'SELECT COUNT(*) AS n FROM profils');
+          if ((dejaUnProfil.first['n'] as int) == 0) {
+            final donnees = await _capturerOrganisation(db);
+            await db.insert('profils', {
+              'id': 'profil_defaut',
+              'nom': 'Mon magasin',
+              'donnees': donnees,
+              'actif': 1,
+              'ordre': 0,
+            });
+          }
+        }
       },
     );
   }
@@ -431,10 +462,61 @@ class DatabaseService {
       )
     ''');
 
+    // Profils magasin (voir migration v18).
+    await db.execute('''
+      CREATE TABLE profils (
+        id TEXT PRIMARY KEY,
+        nom TEXT NOT NULL,
+        listeId TEXT,
+        donnees TEXT,
+        actif INTEGER DEFAULT 0,
+        ordre INTEGER DEFAULT 0
+      )
+    ''');
+
     // Données par défaut : catégories maison
     await _insertDefaultCategories(db);
     // Données par défaut : rayons magasin
     await _insertDefaultRayons(db);
+    // Profil magasin par défaut, capturant l'organisation initiale.
+    await db.insert('profils', {
+      'id': 'profil_defaut',
+      'nom': 'Mon magasin',
+      'donnees': await _capturerOrganisation(db),
+      'actif': 1,
+      'ordre': 0,
+    });
+  }
+
+  // Instantané JSON de l'organisation « en direct » (rayons perso + affectation
+  // article→rayon par NOM). Sert à capturer/rétablir un profil magasin.
+  static Future<String> _capturerOrganisation(Database db) async {
+    final rayons = await db.query('rayons',
+        where: 'source IS NULL', orderBy: 'ordre ASC');
+    final articles =
+        await db.query('articles', where: 'source IS NULL');
+    final rayonNomParId = {
+      for (final r in rayons) r['id'] as String: r['nom'] as String
+    };
+    final assignations = <String, String>{};
+    for (final a in articles) {
+      final rid = a['rayonId'] as String?;
+      if (rid == null) continue;
+      final rnom = rayonNomParId[rid];
+      if (rnom == null) continue;
+      assignations[a['nom'] as String] = rnom;
+    }
+    return jsonEncode({
+      'rayons': [
+        for (final r in rayons)
+          {
+            'nom': r['nom'],
+            'couleur': r['couleur'],
+            'ordre': r['ordre'],
+          }
+      ],
+      'assignations': assignations,
+    });
   }
 
   Future<void> _insertDefaultCategories(Database db) async {
@@ -652,6 +734,104 @@ class DatabaseService {
   Future<void> deleteRayon(String id) async {
     final d = await db;
     await d.delete('rayons', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ─── PROFILS MAGASIN ─────────────────────────────────────
+  Future<List<Profil>> getProfils() async {
+    final d = await db;
+    final rows = await d.query('profils', orderBy: 'ordre ASC, nom ASC');
+    return rows.map(Profil.fromMap).toList();
+  }
+
+  Future<Profil?> getProfilActif() async {
+    final d = await db;
+    final rows = await d.query('profils', where: 'actif = 1', limit: 1);
+    if (rows.isEmpty) return null;
+    return Profil.fromMap(rows.first);
+  }
+
+  Future<void> insertProfil(Profil p) async {
+    final d = await db;
+    await d.insert('profils', p.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> updateProfil(Profil p) async {
+    final d = await db;
+    await d.update('profils', p.toMap(), where: 'id = ?', whereArgs: [p.id]);
+  }
+
+  Future<void> deleteProfil(String id) async {
+    final d = await db;
+    await d.delete('profils', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Instantané JSON de l'organisation « en direct » (public).
+  Future<String> capturerOrganisationActive() async {
+    final d = await db;
+    return _capturerOrganisation(d);
+  }
+
+  // Rétablit dans l'organisation « en direct » un instantané de profil :
+  // remplace le jeu de rayons perso (nouveaux ids) et réaffecte chaque article
+  // à son rayon d'après l'instantané (rapproché par NOM). Ne touche jamais aux
+  // catalogues suivis (source non NULL).
+  Future<void> appliquerDonneesProfil(String? donnees) async {
+    final d = await db;
+    final data = (donnees == null || donnees.isEmpty)
+        ? <String, dynamic>{}
+        : jsonDecode(donnees) as Map<String, dynamic>;
+    final rayonsSnap =
+        (data['rayons'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final assignations =
+        (data['assignations'] as Map?)?.cast<String, dynamic>() ?? {};
+
+    await d.transaction((txn) async {
+      // 1) Remplace les rayons perso.
+      await txn.delete('rayons', where: 'source IS NULL');
+      final nomRayonVersId = <String, String>{};
+      for (var i = 0; i < rayonsSnap.length; i++) {
+        final r = rayonsSnap[i];
+        final id = 'rayon_${DateTime.now().microsecondsSinceEpoch}_$i';
+        nomRayonVersId[(r['nom'] as String).toLowerCase()] = id;
+        await txn.insert('rayons', {
+          'id': id,
+          'nom': r['nom'],
+          'ordre': r['ordre'] ?? i,
+          'couleur': r['couleur'] ?? 6296528,
+        });
+      }
+      // 2) Réaffecte les articles perso par nom.
+      final articles =
+          await txn.query('articles', where: 'source IS NULL');
+      for (final a in articles) {
+        final nom = a['nom'] as String;
+        final rnom = assignations[nom] as String?;
+        final nouvelId =
+            rnom == null ? null : nomRayonVersId[rnom.toLowerCase()];
+        await txn.update('articles', {'rayonId': nouvelId},
+            where: 'id = ?', whereArgs: [a['id']]);
+      }
+    });
+  }
+
+  // Change de profil actif : sauvegarde l'organisation courante dans le profil
+  // actif, puis charge l'instantané du profil cible et le rend actif.
+  Future<void> activerProfil(String id) async {
+    final d = await db;
+    final actuel = await getProfilActif();
+    if (actuel != null && actuel.id != id) {
+      final snap = await _capturerOrganisation(d);
+      await d.update('profils', {'donnees': snap},
+          where: 'id = ?', whereArgs: [actuel.id]);
+    }
+    final cibleRows =
+        await d.query('profils', where: 'id = ?', whereArgs: [id], limit: 1);
+    if (cibleRows.isEmpty) return;
+    final cible = Profil.fromMap(cibleRows.first);
+    await appliquerDonneesProfil(cible.donnees);
+    await d.update('profils', {'actif': 0});
+    await d.update('profils', {'actif': 1}, where: 'id = ?', whereArgs: [id]);
   }
 
   // ─── LISTES DE COURSES ───────────────────────────────────

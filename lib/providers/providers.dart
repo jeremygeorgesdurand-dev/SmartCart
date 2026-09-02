@@ -241,6 +241,10 @@ final searchQueryProvider = StateProvider<String>((ref) => '');
 final listeSelectionneeProvider = StateProvider<ListeCourses?>((ref) => null);
 final articlesSelectionnesProvider =
     StateProvider<Set<String>>((ref) => {});
+// Quantité choisie par article coché (avant ajout à une liste). Par défaut 1
+// (absent de la map = 1). Vidé après l'ajout.
+final articlesQuantitesProvider =
+    StateProvider<Map<String, int>>((ref) => {});
 
 // ─── CATÉGORIES ──────────────────────────────────────────────────
 final categoriesProvider = FutureProvider<List<Categorie>>(
@@ -320,6 +324,89 @@ class RayonsNotifier extends AsyncNotifier<List<Rayon>> {
       await _syncSilencieux(() => sync.sauvegarderRayon(r));
     }
     ref.invalidateSelf();
+  }
+}
+
+// ─── PROFILS MAGASIN ─────────────────────────────────────────────
+final profilActifProvider = FutureProvider<Profil?>((ref) {
+  ref.watch(profilsNotifierProvider);
+  return ref.read(dbServiceProvider).getProfilActif();
+});
+
+final profilsNotifierProvider =
+    AsyncNotifierProvider<ProfilsNotifier, List<Profil>>(ProfilsNotifier.new);
+
+class ProfilsNotifier extends AsyncNotifier<List<Profil>> {
+  @override
+  Future<List<Profil>> build() => ref.read(dbServiceProvider).getProfils();
+
+  Future<Profil> creer(String nom) async {
+    final db = ref.read(dbServiceProvider);
+    final profils = await db.getProfils();
+    // Nouveau profil = copie de l'organisation actuelle (point de départ).
+    final p = Profil(
+      id: 'profil_${DateTime.now().millisecondsSinceEpoch}',
+      nom: nom,
+      donnees: await db.capturerOrganisationActive(),
+      ordre: profils.length,
+    );
+    await db.insertProfil(p);
+    ref.invalidateSelf();
+    return p;
+  }
+
+  Future<void> renommer(Profil p, String nom) async {
+    await ref.read(dbServiceProvider).updateProfil(p.copyWith(nom: nom));
+    ref.invalidateSelf();
+  }
+
+  Future<void> lierListe(Profil p, String? listeId) async {
+    await ref.read(dbServiceProvider).updateProfil(listeId == null
+        ? p.copyWith(effacerListe: true)
+        : p.copyWith(listeId: listeId));
+    ref.invalidateSelf();
+  }
+
+  Future<void> supprimer(String id) async {
+    final db = ref.read(dbServiceProvider);
+    final profils = await db.getProfils();
+    if (profils.length <= 1) return; // garder au moins un profil
+    final cible = profils.where((p) => p.id == id).firstOrNull;
+    await db.deleteProfil(id);
+    // Si on supprime le profil actif, on active le premier restant.
+    if (cible?.actif == true) {
+      final restant = profils.where((p) => p.id != id).firstOrNull;
+      if (restant != null) await db.activerProfil(restant.id);
+    }
+    ref.invalidateSelf();
+    _rafraichirOrganisation();
+  }
+
+  Future<void> activer(String id) async {
+    await ref.read(dbServiceProvider).activerProfil(id);
+    ref.invalidateSelf();
+    _rafraichirOrganisation();
+  }
+
+  // Capture l'organisation courante dans le profil actif (avant un partage,
+  // pour que l'instantané envoyé soit à jour).
+  Future<void> capturerActif() async {
+    final db = ref.read(dbServiceProvider);
+    final actif = await db.getProfilActif();
+    if (actif == null) return;
+    await db.updateProfil(
+        actif.copyWith(donnees: await db.capturerOrganisationActive()));
+    ref.invalidateSelf();
+  }
+
+  // Après un changement de profil : les rayons et l'affectation des articles
+  // ont changé « en direct » → on invalide tout ce qui en dépend.
+  void _rafraichirOrganisation() {
+    ref.invalidate(rayonsNotifierProvider);
+    ref.invalidate(articlesNotifierProvider);
+    ref.invalidate(categoriesNotifierProvider);
+    // Re-synchronise les rayons (ids recréés) vers le cloud, best-effort.
+    unawaited(_syncSilencieux(() => ref.read(syncServiceProvider).uploadTout()));
   }
 }
 

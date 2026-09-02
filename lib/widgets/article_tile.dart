@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../providers/off_details_provider.dart';
+import '../utils/messages.dart';
 import '../utils/theme_utils.dart';
 import 'ajouter_article_dialog.dart';
 import 'animated_list_item.dart';
@@ -90,19 +91,15 @@ class ArticleTile extends ConsumerWidget {
         // pas forcément le dernier déclenché. Un margin explicite écarte
         // aussi le message des boutons flottants "Ajout rapide"/"Ajout avec
         // options" du Catalogue, avec lesquels il se superposait sinon.
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(
-            SnackBar(
-              content: Text('"${articleSupprime.nom}" supprimé du catalogue'),
-              action: SnackBarAction(
-                label: 'Annuler',
-                onPressed: () => notifier.ajouter(articleSupprime),
-              ),
-              duration: const Duration(seconds: 3),
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 90),
-            ),
-          );
+        afficherMessage(
+          context,
+          '"${articleSupprime.nom}" supprimé du catalogue',
+          action: SnackBarAction(
+            label: 'Annuler',
+            onPressed: () => notifier.ajouter(articleSupprime),
+          ),
+          duree: const Duration(seconds: 3),
+        );
       },
       child: _carte(
         context,
