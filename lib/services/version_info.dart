@@ -3,11 +3,20 @@ class VersionInfo {
   // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
   // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
   // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
-  static const String version = '1.25.1';
-  static const String buildNumber = '53';
-  static const String dateMiseAJour = '2 septembre 2026';
+  static const String version = '1.25.2';
+  static const String buildNumber = '54';
+  static const String dateMiseAJour = '3 septembre 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.25.2',
+      date: '3 septembre 2026',
+      changements: [
+        'Partage d\'un profil avec une liste : quand une liste personnelle '
+            'devient collaborative, la personne qui rejoint voit enfin les '
+            'articles qui étaient déjà dedans (leur nom est bien transmis)',
+      ],
+    ),
     Release(
       version: '1.25.1',
       date: '2 septembre 2026',

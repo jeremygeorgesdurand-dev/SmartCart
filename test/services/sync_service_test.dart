@@ -357,6 +357,31 @@ void main() {
     });
   });
 
+  group('partagerListe : dénormalisation du nom', () {
+    test(
+        'les articles déjà présents d\'une liste personnelle partagée '
+        'emportent leur nom (visibles chez la personne qui rejoint)', () async {
+      final d = await localDb.db;
+      await d.delete('articles');
+      await localDb.insertArticle(Article(id: 'art1', nom: 'Lait'));
+      final liste = ListeCourses(id: 'lp', nom: 'Perso');
+      await localDb.insertListe(liste);
+      final item =
+          ArticleListe(id: 'al1', listeId: 'lp', articleId: 'art1');
+
+      await serviceA.partagerListe(liste, [item]);
+
+      final doc = await firestore
+          .collection('listes_partagees')
+          .doc('lp')
+          .collection('articles')
+          .doc('al1')
+          .get();
+      expect(doc.exists, isTrue);
+      expect(doc.data()!['nomArticle'], 'Lait');
+    });
+  });
+
   group('reconcilierListesPartagees (file d\'attente widget)', () {
     test(
         'ne ressuscite PAS un article supprimé par un autre membre '

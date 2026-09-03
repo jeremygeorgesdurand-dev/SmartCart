@@ -574,7 +574,11 @@ class SyncService {
     if (items.isNotEmpty) {
       final batchArticles = _db.batch();
       for (final item in items) {
-        batchArticles.set(docRef.collection('articles').doc(item.id), item.toMap());
+        // Dénormalise nom/catégorie/rayon : ces articles viennent d'une liste
+        // PERSONNELLE (champs nuls sur la ligne), sans quoi la personne qui
+        // rejoint ne verrait aucun des articles déjà présents.
+        batchArticles.set(docRef.collection('articles').doc(item.id),
+            await _donneesArticlePartage(item));
       }
       await batchArticles.commit();
     }
@@ -671,6 +675,10 @@ class SyncService {
         final items = await _localDb.getArticlesListe(liste.id);
         // partagerListe est idempotent : rend la liste collaborative si besoin.
         listeCode = await partagerListe(liste, items);
+        // Backfill des noms sur les articles DÉJÀ présents (cas d'une liste
+        // déjà partagée avant ce correctif, où ils étaient partis sans nom) :
+        // fusion des seuls champs d'affichage, sans toucher coche/quantité.
+        await enrichirArticlesListePartagee(liste.id, items);
       }
     }
 
@@ -683,6 +691,30 @@ class SyncService {
     });
     await _codesProfilCol.doc(code).set({'profilId': p.id});
     return code;
+  }
+
+  // Fusionne (merge) le nom/catégorie/rayon dénormalisés sur les articles d'une
+  // liste collaborative, SANS toucher coche/quantité : sûr même si d'autres
+  // membres ont modifié ces lignes. Sert à rattraper une liste partagée avant
+  // que la dénormalisation n'existe (articles invisibles chez les autres).
+  Future<void> enrichirArticlesListePartagee(
+      String listeId, List<ArticleListe> items) async {
+    if (!_estConnecte) return;
+    for (final item in items) {
+      final d = await _donneesArticlePartage(item);
+      await _listesPartageesCol
+          .doc(listeId)
+          .collection('articles')
+          .doc(item.id)
+          .set({
+        if (d['nomArticle'] != null) 'nomArticle': d['nomArticle'],
+        'catNom': d['catNom'],
+        'catCouleur': d['catCouleur'],
+        'rayonNom': d['rayonNom'],
+        'rayonCouleur': d['rayonCouleur'],
+        'rayonOrdre': d['rayonOrdre'],
+      }, SetOptions(merge: true));
+    }
   }
 
   // Suit un profil partagé via son code : crée un profil LOCAL à partir de
@@ -1179,68 +1211,11 @@ class SyncService {
     if (!_estConnecte) return;
     final liste = await _localDb.getListe(al.listeId);
     if (liste?.partagee == true) {
-      // Une ligne de liste ne référence qu'un `articleId` du catalogue, or le
-      // catalogue est PERSONNEL à chaque compte : sans le nom, un membre qui
-      // reçoit l'ajout d'un autre n'a aucun Article correspondant en base et
-      // la ligne reste invisible chez lui. On dénormalise donc le nom (et la
-      // catégorie/rayon quand ils existent) dans le document partagé pour que
-      // les autres puissent recréer un article local affichable. Voir la
-      // reconstruction dans le listener de listes_partagees.
-      final articles = await _localDb.getArticles();
-      final article = articles.where((a) => a.id == al.articleId).firstOrNull;
-      // Les catégories/rayons sont PROPRES à chaque compte : un id de
-      // catégorie n'a aucun sens chez l'autre membre. On envoie donc le NOM
-      // de la catégorie/du rayon ; à la réception, chacun le fait correspondre
-      // à sa propre catégorie du même nom (voir le listener). Réponse à la
-      // question « chacun ses catégories ? » : oui, mais on les rapproche par
-      // nom pour que l'article tombe dans la bonne rubrique chez tout le monde.
-      // Priorité à l'instantané DÉJÀ porté par la ligne (typiquement la
-      // catégorie que le propriétaire a imposée et qu'on a reçue) : sans ça, la
-      // réconciliation au retour de l'app ré-écraserait la catégorie du
-      // propriétaire par la mienne. Ce n'est qu'à défaut (nouvel ajout, catNom
-      // encore nul) qu'on prend la catégorie locale de l'article.
-      String? nomCat = al.catNom;
-      int? couleurCat = al.catCouleur;
-      if (nomCat == null && article?.categorieId != null) {
-        final cats = await _localDb.getCategories();
-        final cat =
-            cats.where((c) => c.id == article!.categorieId).firstOrNull;
-        nomCat = cat?.nom;
-        couleurCat = cat?.couleur;
-      }
-      // Même logique pour le rayon magasin (nom + couleur + ordre).
-      String? nomRayon = al.rayonNom;
-      int? couleurRayon = al.rayonCouleur;
-      int? ordreRayon = al.rayonOrdre;
-      if (nomRayon == null && article?.rayonId != null) {
-        final rayons = await _localDb.getRayons();
-        final r = rayons.where((x) => x.id == article!.rayonId).firstOrNull;
-        nomRayon = r?.nom;
-        couleurRayon = r?.couleur;
-        ordreRayon = r?.ordre;
-      }
       await _listesPartageesCol
           .doc(al.listeId)
           .collection('articles')
           .doc(al.id)
-          .set({
-        ...al.toMap(),
-        // Instantané de catégorie ET de rayon transporté avec l'article, pour
-        // un regroupement identique chez tous les membres (l'al local du
-        // vendeur a ces champs nuls, on les écrase ici avec ses vraies valeurs).
-        'catNom': nomCat,
-        'catCouleur': couleurCat,
-        'rayonNom': nomRayon,
-        'rayonCouleur': couleurRayon,
-        'rayonOrdre': ordreRayon,
-        'lastModifiedBy': _uid,
-        // Nom dénormalisé : celui de mon article si je l'ai, sinon celui déjà
-        // porté par la ligne (ajouté par un autre membre). Ne JAMAIS l'écraser
-        // par null quand je n'ai pas l'article à mon catalogue, sinon les autres
-        // membres perdent le nom et la ligne disparaît de leur liste.
-        if ((article?.nom ?? al.nomArticle) != null)
-          'nomArticle': article?.nom ?? al.nomArticle,
-      });
+          .set(await _donneesArticlePartage(al));
     } else {
       await _col('listes')
           .doc(al.listeId)
@@ -1248,6 +1223,53 @@ class SyncService {
           .doc(al.id)
           .set(al.toMap());
     }
+  }
+
+  // Construit le document Firestore d'une ligne de liste COLLABORATIVE, avec le
+  // nom/catégorie/rayon DÉNORMALISÉS. Une ligne ne référence qu'un `articleId`
+  // du catalogue, or le catalogue est PERSONNEL à chaque compte : sans le nom,
+  // un membre qui reçoit la ligne n'a aucun Article correspondant en base et la
+  // ligne reste invisible chez lui. On rapproche aussi la catégorie/le rayon
+  // par NOM pour un regroupement identique partout. Utilisé par les écritures
+  // individuelles ET par partagerListe (sinon les articles DÉJÀ présents dans
+  // une liste personnelle rendue collaborative partaient sans nom → invisibles
+  // chez la personne qui rejoint).
+  Future<Map<String, dynamic>> _donneesArticlePartage(ArticleListe al) async {
+    final articles = await _localDb.getArticles();
+    final article = articles.where((a) => a.id == al.articleId).firstOrNull;
+    // Priorité à l'instantané déjà porté par la ligne (ex. catégorie imposée
+    // par le propriétaire) ; à défaut on prend la catégorie/rayon locale.
+    String? nomCat = al.catNom;
+    int? couleurCat = al.catCouleur;
+    if (nomCat == null && article?.categorieId != null) {
+      final cats = await _localDb.getCategories();
+      final cat = cats.where((c) => c.id == article!.categorieId).firstOrNull;
+      nomCat = cat?.nom;
+      couleurCat = cat?.couleur;
+    }
+    String? nomRayon = al.rayonNom;
+    int? couleurRayon = al.rayonCouleur;
+    int? ordreRayon = al.rayonOrdre;
+    if (nomRayon == null && article?.rayonId != null) {
+      final rayons = await _localDb.getRayons();
+      final r = rayons.where((x) => x.id == article!.rayonId).firstOrNull;
+      nomRayon = r?.nom;
+      couleurRayon = r?.couleur;
+      ordreRayon = r?.ordre;
+    }
+    return {
+      ...al.toMap(),
+      'catNom': nomCat,
+      'catCouleur': couleurCat,
+      'rayonNom': nomRayon,
+      'rayonCouleur': couleurRayon,
+      'rayonOrdre': ordreRayon,
+      'lastModifiedBy': _uid,
+      // Ne JAMAIS écraser le nom par null si je n'ai pas l'article : sinon la
+      // ligne disparaît chez les autres membres.
+      if ((article?.nom ?? al.nomArticle) != null)
+        'nomArticle': article?.nom ?? al.nomArticle,
+    };
   }
 
   Future<void> supprimerArticleListe(String listeId, String id) async {
