@@ -86,6 +86,7 @@ class MainActivity : FlutterActivity() {
                             "action" to (action ?: ""),
                             "liste_id" to (listeId ?: ""),
                             "article_liste_id" to (articleListeId ?: ""),
+                            "code_partage" to codeInvitation(intent),
                         ))
                     }
                     else -> result.notImplemented()
@@ -102,8 +103,20 @@ class MainActivity : FlutterActivity() {
                 "action" to (intent.getStringExtra("action") ?: ""),
                 "liste_id" to (intent.getStringExtra("open_liste_id") ?: intent.getStringExtra("liste_id") ?: ""),
                 "article_liste_id" to (intent.getStringExtra("article_liste_id") ?: ""),
+                "code_partage" to codeInvitation(intent),
             ))
         }
+    }
+
+    // Extrait le code d'invitation d'un lien « smartcart://rejoindre/CODE »
+    // (ou « smartcart://rejoindre?code=CODE »). Chaîne vide si l'intent n'est
+    // pas un tel lien.
+    private fun codeInvitation(intent: android.content.Intent?): String {
+        val data = intent?.data ?: return ""
+        if (data.scheme != "smartcart" || data.host != "rejoindre") return ""
+        val parPath = data.lastPathSegment?.trim().orEmpty()
+        if (parPath.isNotEmpty()) return parPath
+        return data.getQueryParameter("code")?.trim().orEmpty()
     }
 
     private fun refreshAllWidgets() {

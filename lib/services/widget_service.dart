@@ -71,7 +71,8 @@ class WidgetService {
 
   /// Appelé depuis MainActivity quand l'app est lancée via widget
   static void ecouterIntents(
-      void Function(String action, String listeId, String articleListeId)
+      void Function(String action, String listeId, String articleListeId,
+              String codePartage)
           onIntent) {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onNewIntent') {
@@ -80,6 +81,7 @@ class WidgetService {
           args['action']?.toString() ?? '',
           args['liste_id']?.toString() ?? '',
           args['article_liste_id']?.toString() ?? '',
+          args['code_partage']?.toString() ?? '',
         );
       }
     });
@@ -92,9 +94,15 @@ class WidgetService {
         'action': result?['action']?.toString() ?? '',
         'liste_id': result?['liste_id']?.toString() ?? '',
         'article_liste_id': result?['article_liste_id']?.toString() ?? '',
+        'code_partage': result?['code_partage']?.toString() ?? '',
       };
     } catch (_) {
-      return {'action': '', 'liste_id': '', 'article_liste_id': ''};
+      return {
+        'action': '',
+        'liste_id': '',
+        'article_liste_id': '',
+        'code_partage': ''
+      };
     }
   }
 

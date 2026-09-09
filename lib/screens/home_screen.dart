@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/widget_service.dart';
 import '../widgets/background_logo.dart';
@@ -34,12 +35,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // (tap sur le nom/l'en-tête) via un extra d'intent : sans ce pont, on
     // atterrissait juste sur le dernier écran affiché, pas sur la liste
     // choisie.
-    WidgetService.ecouterIntents(
-        (action, listeId, __) => _ouvrirDepuisWidget(action, listeId));
+    WidgetService.ecouterIntents((action, listeId, __, codePartage) {
+      if (codePartage.isNotEmpty) {
+        _rejoindreDepuisLien(codePartage);
+      } else {
+        _ouvrirDepuisWidget(action, listeId);
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final intent = await WidgetService.getWidgetIntent();
+      final codePartage = intent['code_partage'] ?? '';
       final listeId = intent['liste_id'] ?? '';
-      if (listeId.isNotEmpty) {
+      if (codePartage.isNotEmpty) {
+        _rejoindreDepuisLien(codePartage);
+      } else if (listeId.isNotEmpty) {
         _ouvrirDepuisWidget(intent['action'] ?? '', listeId);
       }
       // Au démarrage à froid, l'écoute temps réel a pu rater des articles de
@@ -155,6 +164,79 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ? ModeCoursesScreen(liste: liste)
           : DetailListeScreen(liste: liste),
     ));
+  }
+
+  // Évite qu'un même code soit traité deux fois (l'intent de démarrage à froid
+  // est lu à la fois par le postFrame et par onNewIntent selon les appareils).
+  String? _dernierCodeTraite;
+
+  // Ouverture via un lien d'invitation « smartcart://rejoindre/CODE » : on
+  // confirme puis on rejoint la liste, et on atterrit directement dessus.
+  Future<void> _rejoindreDepuisLien(String codeBrut) async {
+    final code = codeBrut.trim().toUpperCase();
+    if (code.isEmpty || code == _dernierCodeTraite || !mounted) return;
+    _dernierCodeTraite = code;
+
+    final confirme = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        icon: const Icon(Icons.group_add),
+        title: const Text('Rejoindre une liste ?'),
+        content: Text(
+          'Vous avez ouvert une invitation (code $code). '
+          'Voulez-vous rejoindre cette liste collaborative ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Rejoindre'),
+          ),
+        ],
+      ),
+    );
+    if (confirme != true || !mounted) return;
+
+    ({bool ok, bool dejaMembre, ListeCourses? liste}) resultat;
+    try {
+      resultat =
+          await ref.read(listesNotifierProvider.notifier).rejoindre(code);
+    } catch (_) {
+      if (mounted) {
+        _messageVert('Impossible de rejoindre (réseau ?)', succes: false);
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    if (!resultat.ok) {
+      _messageVert('Code invalide ou liste introuvable', succes: false);
+      return;
+    }
+    _messageVert(resultat.dejaMembre
+        ? 'Vous étiez déjà dans cette liste'
+        : 'Liste rejointe !');
+    // Atterrir directement sur la liste rejointe.
+    final liste = resultat.liste;
+    if (liste != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => DetailListeScreen(liste: liste)),
+      );
+    }
+  }
+
+  void _messageVert(String texte, {bool succes = true}) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text(texte),
+        backgroundColor:
+            succes ? Theme.of(context).colorScheme.primary : null,
+        duration: const Duration(seconds: 3),
+      ));
   }
 
   @override

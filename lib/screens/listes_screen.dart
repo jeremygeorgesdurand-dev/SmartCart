@@ -8,6 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../services/partage_service.dart';
 import '../widgets/animated_list_item.dart';
 import '../widgets/import_liste_dialog.dart';
 import '../widgets/prix_article_badge.dart';
@@ -182,10 +183,11 @@ class ListesScreen extends ConsumerWidget {
           bool enCours = false;
 
           Future<void> rejoindre() async {
-            final code = ctrl.text.trim();
+            // Accepte un code brut ou un lien d'invitation collé.
+            final code = PartageService.codeDepuisTexte(ctrl.text);
             if (code.isEmpty || enCours) return;
             setState(() => enCours = true);
-            ({bool ok, bool dejaMembre}) resultat;
+            ({bool ok, bool dejaMembre, ListeCourses? liste}) resultat;
             try {
               resultat = await ref
                   .read(listesNotifierProvider.notifier)
@@ -453,7 +455,9 @@ class _ScannerCodeQrScreenState extends State<_ScannerCodeQrScreen> {
     if (valeur == null || valeur.isEmpty) return;
     _detecte = true;
     HapticFeedback.mediumImpact();
-    Navigator.pop(context, valeur.trim());
+    // Accepte aussi bien un QR contenant le code brut qu'un lien
+    // « smartcart://rejoindre/CODE » (nouveaux QR).
+    Navigator.pop(context, PartageService.codeDepuisTexte(valeur));
   }
 
   @override
@@ -957,7 +961,9 @@ class _ListeCard extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: QrImageView(
-                    data: code,
+                    // Le QR encode le lien profond : scanné par n'importe quel
+                    // appareil photo, il ouvre SmartCart et rejoint la liste.
+                    data: PartageService.lienInvitation(code),
                     version: QrVersions.auto,
                     size: 160,
                     padding: EdgeInsets.zero,

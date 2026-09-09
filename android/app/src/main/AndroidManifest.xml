@@ -45,6 +45,18 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- Lien d'invitation « smartcart://rejoindre/CODE » : ouvre l'app
+                 et rejoint la liste collaborative directement (scanné par
+                 n'importe quel appareil photo, ou tapé depuis un message).
+                 Ne fonctionne que si l'app est installée ; le repli Play Store
+                 pour un lien https viendra avec la mise en ligne. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="smartcart" android:host="rejoindre" />
+            </intent-filter>
         </activity>
 
         <!-- Ajout rapide depuis le "+" du widget : Activity native légère

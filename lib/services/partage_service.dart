@@ -51,17 +51,35 @@ class PartageService {
     await Clipboard.setData(ClipboardData(text: texte));
   }
 
+  /// Lien d'invitation profond : ouvre l'app et rejoint la liste directement
+  /// (si l'app est installée). Le repli Play Store pour un lien https viendra
+  /// avec la mise en ligne.
+  static String lienInvitation(String code) => 'smartcart://rejoindre/$code';
+
+  /// Extrait le code d'un texte scanné ou collé : accepte le code brut
+  /// (« ABC123 ») aussi bien qu'un lien « smartcart://rejoindre/ABC123 ».
+  static String codeDepuisTexte(String texte) {
+    final t = texte.trim();
+    final uri = Uri.tryParse(t);
+    if (uri != null && uri.scheme == 'smartcart' && uri.host == 'rejoindre') {
+      if (uri.pathSegments.isNotEmpty) return uri.pathSegments.last;
+      return uri.queryParameters['code'] ?? '';
+    }
+    return t;
+  }
+
   /// Partage une invitation à rejoindre une liste collaborative : message
-  /// pré-rempli (nom + code) envoyé via le menu natif (SMS, WhatsApp…). En
-  /// attendant un vrai lien profond (nécessite une config Play Store), on
-  /// guide le destinataire vers « Rejoindre une liste » + le code.
+  /// pré-rempli (nom + lien + code) envoyé via le menu natif (SMS, WhatsApp…).
+  /// Le lien ouvre l'app installée ; le code sert de secours pour la saisie
+  /// manuelle là où le lien n'est pas cliquable.
   Future<void> partagerInvitation({
     required String nomListe,
     required String code,
   }) async {
     final texte = 'Rejoins ma liste de courses « $nomListe » sur SmartCart 🛒\n\n'
-        'Dans l\'app : menu ⋮ → « Rejoindre une liste », puis saisis le code :\n'
-        '$code';
+        '👉 ${lienInvitation(code)}\n\n'
+        '(Si le lien ne s\'ouvre pas : dans l\'app, menu ⋮ → '
+        '« Rejoindre une liste », puis saisis le code $code)';
     await Share.share(texte, subject: '🛒 Rejoins « $nomListe » sur SmartCart');
   }
 

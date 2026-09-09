@@ -628,10 +628,11 @@ class ListesNotifier extends AsyncNotifier<List<ListeCourses>> {
   // est invalide ; `dejaMembre` indique si cet appareil faisait déjà partie
   // de la liste (pour distinguer "liste rejointe" de "vous y étiez déjà"
   // dans le message affiché à l'utilisateur).
-  Future<({bool ok, bool dejaMembre})> rejoindre(String code) async {
+  Future<({bool ok, bool dejaMembre, ListeCourses? liste})> rejoindre(
+      String code) async {
     final resultat =
         await ref.read(syncServiceProvider).rejoindreListeParCode(code);
-    if (resultat == null) return (ok: false, dejaMembre: false);
+    if (resultat == null) return (ok: false, dejaMembre: false, liste: null);
 
     final db = ref.read(dbServiceProvider);
     final dejaMembre = await db.getListe(resultat.liste.id) != null;
@@ -641,7 +642,7 @@ class ListesNotifier extends AsyncNotifier<List<ListeCourses>> {
     }
     ref.invalidateSelf();
     ref.invalidate(articlesListeProvider(resultat.liste.id));
-    return (ok: true, dejaMembre: dejaMembre);
+    return (ok: true, dejaMembre: dejaMembre, liste: resultat.liste);
   }
 
   Future<void> quitterPartage(ListeCourses liste) async {
