@@ -13,6 +13,7 @@ import '../widgets/import_liste_dialog.dart';
 import '../widgets/prix_article_badge.dart';
 import '../widgets/vocal_button.dart';
 import '../utils/erreur_utils.dart';
+import '../utils/messages.dart';
 import '../utils/theme_utils.dart';
 import 'recherche_globale_screen.dart';
 
@@ -1004,6 +1005,13 @@ class _ListeCard extends ConsumerWidget {
             },
             child: const Text('Copier'),
           ),
+          TextButton.icon(
+            onPressed: () => ref
+                .read(partageServiceProvider)
+                .partagerInvitation(nomListe: liste.nom, code: code),
+            icon: const Icon(Icons.person_add_alt, size: 18),
+            label: const Text('Inviter'),
+          ),
           ValueListenableBuilder<bool>(
             valueListenable: jeSuisProprietaire,
             builder: (_, estProprietaire, __) => estProprietaire
@@ -1231,6 +1239,9 @@ class DetailListeScreen extends ConsumerWidget {
     final articlesListeAsync = ref.watch(articlesListeProvider(liste.id));
     final articlesAsync = ref.watch(articlesNotifierProvider);
     final sortMode = ref.watch(articleListeSortProvider);
+    final rechercheActive = ref.watch(rechercheListeActiveProvider(liste.id));
+    final query =
+        ref.watch(rechercheListeProvider(liste.id)).trim().toLowerCase();
     final total = ref.watch(afficherPrixProvider)
         ? ref.watch(totalListeProvider(liste.id))
         : 0.0;
@@ -1253,6 +1264,20 @@ class DetailListeScreen extends ConsumerWidget {
               )
             : null,
         actions: [
+          IconButton(
+            icon: Icon(rechercheActive ? Icons.search_off : Icons.search),
+            tooltip: rechercheActive ? 'Fermer la recherche' : 'Rechercher',
+            onPressed: () {
+              final active = !rechercheActive;
+              ref.read(rechercheListeActiveProvider(liste.id).notifier).state =
+                  active;
+              // Fermer la recherche remet le filtre à zéro pour retrouver la
+              // liste complète.
+              if (!active) {
+                ref.read(rechercheListeProvider(liste.id).notifier).state = '';
+              }
+            },
+          ),
           PopupMenuButton<SortMode>(
             icon: const Icon(Icons.sort),
             tooltip: 'Trier',
@@ -1283,28 +1308,19 @@ class DetailListeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: articlesListeAsync.when(
+      // Saisie rapide en une ligne (« 3 pommes », « lait »…) toujours à
+      // portée de pouce, sans ouvrir de feuille.
+      bottomNavigationBar: _BarreAjoutRapide(listeId: liste.id),
+      body: Column(
+        children: [
+          if (rechercheActive) _BarreRechercheListe(listeId: liste.id),
+          Expanded(
+            child: articlesListeAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text(messageErreurLisible(e, 'Erreur'))),
         data: (items) {
           if (items.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add_shopping_cart,
-                      size: 64,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .outline
-                          .withValues(alpha: 0.5)),
-                  const SizedBox(height: 16),
-                  const Text('Liste vide'),
-                  const SizedBox(height: 8),
-                  const Text('Appuyez sur + pour ajouter des articles'),
-                ],
-              ),
-            );
+            return _EtatListeVide(onAjouter: () => _ajouterDepuisCatalogue(context, ref));
           }
 
           return articlesAsync.when(
@@ -1335,6 +1351,17 @@ class DetailListeScreen extends ConsumerWidget {
                         })
                         .whereType<({ArticleListe item, Article article})>()
                         .toList();
+
+                    // Filtre de recherche : ne garder que les articles dont le
+                    // nom contient la saisie (insensible à la casse/accents non
+                    // gérés, suffisant pour un usage courant).
+                    if (query.isNotEmpty) {
+                      itemsEnrichis.retainWhere((e) =>
+                          e.article.nom.toLowerCase().contains(query));
+                      if (itemsEnrichis.isEmpty) {
+                        return _EtatAucunResultat(query: query);
+                      }
+                    }
 
                     // Trier selon sortMode
                     if (sortMode == SortMode.alphabetique) {
@@ -1501,6 +1528,9 @@ class DetailListeScreen extends ConsumerWidget {
             },
           );
         },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: Row(
         mainAxisAlignment: MainAxisAlignment.end,
@@ -1564,6 +1594,254 @@ class DetailListeScreen extends ConsumerWidget {
         items: items,
         catalogue: catalogue,
         rayons: rayons,
+      ),
+    );
+  }
+}
+
+// ================================================================
+// BARRE DE RECHERCHE — filtre la liste ouverte (bascule via la loupe)
+// ================================================================
+class _BarreRechercheListe extends ConsumerStatefulWidget {
+  final String listeId;
+  const _BarreRechercheListe({required this.listeId});
+
+  @override
+  ConsumerState<_BarreRechercheListe> createState() =>
+      _BarreRechercheListeState();
+}
+
+class _BarreRechercheListeState extends ConsumerState<_BarreRechercheListe> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    // Repartir de la valeur courante (si la recherche était déjà ouverte).
+    _ctrl = TextEditingController(
+        text: ref.read(rechercheListeProvider(widget.listeId)));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: TextField(
+        controller: _ctrl,
+        autofocus: true,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'Filtrer les articles…',
+          prefixIcon: const Icon(Icons.search),
+          isDense: true,
+          filled: true,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          suffixIcon: _ctrl.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.clear),
+                  tooltip: 'Effacer',
+                  onPressed: () {
+                    _ctrl.clear();
+                    ref
+                        .read(rechercheListeProvider(widget.listeId).notifier)
+                        .state = '';
+                    setState(() {});
+                  },
+                ),
+        ),
+        onChanged: (v) {
+          ref.read(rechercheListeProvider(widget.listeId).notifier).state = v;
+          setState(() {}); // (dé)masquer le bouton d'effacement
+        },
+      ),
+    );
+  }
+}
+
+// ================================================================
+// BARRE D'AJOUT RAPIDE — saisie en une ligne (« 3 pommes », « lait »…)
+// ================================================================
+class _BarreAjoutRapide extends ConsumerStatefulWidget {
+  final String listeId;
+  const _BarreAjoutRapide({required this.listeId});
+
+  @override
+  ConsumerState<_BarreAjoutRapide> createState() => _BarreAjoutRapideState();
+}
+
+class _BarreAjoutRapideState extends ConsumerState<_BarreAjoutRapide> {
+  final _ctrl = TextEditingController();
+  final _focus = FocusNode();
+  bool _envoi = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _ajouter() async {
+    final texte = _ctrl.text.trim();
+    if (texte.isEmpty || _envoi) return;
+    setState(() => _envoi = true);
+    try {
+      final nom = await ref
+          .read(articlesListeProvider(widget.listeId).notifier)
+          .ajouterParTexte(texte);
+      _ctrl.clear();
+      if (mounted && nom != null) {
+        afficherMessage(context, '« $nom » ajouté');
+      }
+    } catch (e) {
+      if (mounted) {
+        afficherMessage(context, 'Ajout impossible',
+            couleur: couleurDanger(context));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _envoi = false);
+        _focus.requestFocus(); // enchaîner les ajouts sans reprendre le champ
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vide = _ctrl.text.trim().isEmpty;
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border(
+            top: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                focusNode: _focus,
+                textInputAction: TextInputAction.done,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  hintText: 'Ajouter un article  (ex. « 3 pommes »)',
+                  isDense: true,
+                  filled: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _ajouter(),
+              ),
+            ),
+            const SizedBox(width: 4),
+            IconButton.filled(
+              onPressed: vide || _envoi ? null : _ajouter,
+              tooltip: 'Ajouter',
+              icon: _envoi
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.add),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ================================================================
+// ÉTATS VIDES — liste sans article / recherche sans résultat
+// ================================================================
+class _EtatListeVide extends StatelessWidget {
+  final VoidCallback onAjouter;
+  const _EtatListeVide({required this.onAjouter});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.add_shopping_cart,
+              size: 64,
+              color: Theme.of(context)
+                  .colorScheme
+                  .outline
+                  .withValues(alpha: 0.5)),
+          const SizedBox(height: 16),
+          Text('Liste vide', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              'Tapez un article en bas (ex. « 3 pommes »), '
+              'ou piochez dans votre catalogue.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.outline),
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton.tonalIcon(
+            onPressed: onAjouter,
+            icon: const Icon(Icons.list_alt),
+            label: const Text('Choisir dans le catalogue'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EtatAucunResultat extends StatelessWidget {
+  final String query;
+  const _EtatAucunResultat({required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off,
+                size: 56,
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: 0.5)),
+            const SizedBox(height: 12),
+            Text('Aucun article ne correspond',
+                style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text('pour « $query »',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline)),
+          ],
+        ),
       ),
     );
   }

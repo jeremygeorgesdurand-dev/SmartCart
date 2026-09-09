@@ -655,6 +655,14 @@ class ListesNotifier extends AsyncNotifier<List<ListeCourses>> {
 final articleListeSortProvider =
     StateProvider<SortMode>((ref) => SortMode.rayon);
 
+// Recherche dans une liste ouverte. `family` par listeId + autoDispose :
+// chaque liste garde son propre filtre, remis à zéro dès que l'écran de
+// détail est fermé (plus aucun widget ne l'observe).
+final rechercheListeActiveProvider =
+    StateProvider.autoDispose.family<bool, String>((ref, _) => false);
+final rechercheListeProvider =
+    StateProvider.autoDispose.family<String, String>((ref, _) => '');
+
 final articlesListeProvider = AsyncNotifierProviderFamily<
     ArticlesListeNotifier,
     List<ArticleListe>,
@@ -687,6 +695,51 @@ class ArticlesListeNotifier
     // donnait l'impression d'un ajout d'article très lent alors que
     // l'écriture locale (ce qui compte pour l'UI) est instantanée.
     unawaited(_syncSilencieux(() => ref.read(syncServiceProvider).sauvegarderArticleListe(marque)));
+  }
+
+  /// Ajoute un article à partir d'un texte libre saisi rapidement
+  /// ("3 pommes", "lait", "2 bouteilles de lait"). Détecte la quantité et
+  /// l'unité (via [VocalService.nettoyer]), réutilise l'article du catalogue
+  /// s'il existe déjà (insensible à la casse) sinon le crée, et si l'article
+  /// est déjà dans la liste incrémente sa quantité au lieu de le dupliquer.
+  /// Retourne le nom de l'article ajouté, ou null si le texte est vide.
+  Future<String?> ajouterParTexte(String texte) async {
+    final parse = VocalService.nettoyer(texte);
+    final nom = parse.nomArticle.trim();
+    if (nom.isEmpty) return null;
+
+    final catalogue = await ref.read(articlesNotifierProvider.future);
+    final cle = nom.toLowerCase();
+    var article =
+        catalogue.where((a) => a.nom.toLowerCase() == cle).firstOrNull;
+    if (article == null) {
+      article = Article(
+        id: 'article_${DateTime.now().millisecondsSinceEpoch}',
+        nom: nom,
+      );
+      await ref.read(articlesNotifierProvider.notifier).ajouter(article);
+    }
+
+    // Déjà dans la liste ? on additionne la quantité plutôt que de créer un
+    // doublon.
+    final actuels = state.valueOrNull ?? await future;
+    final existant =
+        actuels.where((al) => al.articleId == article!.id).firstOrNull;
+    if (existant != null) {
+      await modifierQuantite(existant, existant.quantite + parse.quantite);
+      return article.nom;
+    }
+
+    await ajouter(
+      ArticleListe(
+        id: 'al_${DateTime.now().millisecondsSinceEpoch}',
+        listeId: arg,
+        articleId: article.id,
+        quantite: parse.quantite,
+        unite: parse.unite,
+      ),
+    );
+    return article.nom;
   }
 
   Future<void> cocher(ArticleListe al, bool valeur) async {

@@ -51,6 +51,20 @@ class PartageService {
     await Clipboard.setData(ClipboardData(text: texte));
   }
 
+  /// Partage une invitation à rejoindre une liste collaborative : message
+  /// pré-rempli (nom + code) envoyé via le menu natif (SMS, WhatsApp…). En
+  /// attendant un vrai lien profond (nécessite une config Play Store), on
+  /// guide le destinataire vers « Rejoindre une liste » + le code.
+  Future<void> partagerInvitation({
+    required String nomListe,
+    required String code,
+  }) async {
+    final texte = 'Rejoins ma liste de courses « $nomListe » sur SmartCart 🛒\n\n'
+        'Dans l\'app : menu ⋮ → « Rejoindre une liste », puis saisis le code :\n'
+        '$code';
+    await Share.share(texte, subject: '🛒 Rejoins « $nomListe » sur SmartCart');
+  }
+
   /// Génère un PDF de la liste, regroupé par rayon (ordre du magasin),
   /// avec cases à cocher pour une utilisation papier en magasin.
   Future<Uint8List> genererPdf({
