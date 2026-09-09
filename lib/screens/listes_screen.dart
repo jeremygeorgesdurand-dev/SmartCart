@@ -13,9 +13,13 @@ import '../widgets/animated_list_item.dart';
 import '../widgets/import_liste_dialog.dart';
 import '../widgets/prix_article_badge.dart';
 import '../widgets/vocal_button.dart';
+import '../services/preferences_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/messages.dart';
 import '../utils/theme_utils.dart';
+import 'doublons_screen.dart';
+import 'frigo_screen.dart';
+import 'profils_screen.dart';
 import 'recherche_globale_screen.dart';
 
 // Provider local pour le tri des listes
@@ -58,6 +62,9 @@ class ListesScreen extends ConsumerWidget {
         // plupart des utilisateurs et diluaient la primauté du bouton "+"
         // (seule vraie action principale de cet écran).
         actions: [
+          // Profil magasin actif — bascule en un tap (masqué s'il n'y en a
+          // qu'un seul, inutile alors).
+          const _SelecteurProfilMagasin(),
           // Recherche globale (catalogue + listes)
           IconButton(
             icon: const Icon(Icons.search),
@@ -88,6 +95,12 @@ class ListesScreen extends ConsumerWidget {
                     MaterialPageRoute(
                         builder: (_) => const ListesArchiveesScreen()),
                   );
+                case 'frigo':
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const FrigoScreen()));
+                case 'doublons':
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const DoublonsScreen()));
               }
             },
             itemBuilder: (_) => [
@@ -106,6 +119,23 @@ class ListesScreen extends ConsumerWidget {
                   value: 'rejoindre', child: Text('Rejoindre une liste')),
               const PopupMenuItem(
                   value: 'importer', child: Text('Importer une liste')),
+              const PopupMenuDivider(),
+              // Outils autrefois enfouis dans d'autres onglets, désormais
+              // accessibles depuis l'accueil.
+              const PopupMenuItem(
+                  value: 'frigo',
+                  child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.kitchen_outlined),
+                      title: Text('Mon frigo'))),
+              const PopupMenuItem(
+                  value: 'doublons',
+                  child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.copy_all_outlined),
+                      title: Text('Doublons du catalogue'))),
               const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'archivees',
@@ -515,6 +545,75 @@ const _nomsCouleursListe = [
 ];
 
 // ================================================================
+// SÉLECTEUR DE PROFIL MAGASIN — bascule l'ordre/les couleurs des rayons
+// ================================================================
+class _SelecteurProfilMagasin extends ConsumerWidget {
+  const _SelecteurProfilMagasin();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profils = ref.watch(profilsNotifierProvider).valueOrNull ?? [];
+    // Inutile d'encombrer la barre s'il n'y a pas de choix à faire.
+    if (profils.length < 2) return const SizedBox.shrink();
+    final actif = ref.watch(profilActifProvider).valueOrNull;
+
+    return PopupMenuButton<String>(
+      tooltip: 'Profil magasin',
+      onSelected: (id) async {
+        if (id == '__gerer__') {
+          Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const ProfilsScreen()));
+          return;
+        }
+        await ref.read(profilsNotifierProvider.notifier).activer(id);
+        if (context.mounted) {
+          final nom = profils.where((p) => p.id == id).firstOrNull?.nom;
+          afficherMessage(
+              context, 'Profil ${nom != null ? '« $nom »' : ''} activé');
+        }
+      },
+      itemBuilder: (_) => [
+        for (final p in profils)
+          CheckedPopupMenuItem(
+            value: p.id,
+            checked: p.actif,
+            child: Text(p.nom),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: '__gerer__',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.tune),
+            title: Text('Gérer les profils'),
+          ),
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.storefront_outlined, size: 20),
+            const SizedBox(width: 4),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 84),
+              child: Text(
+                actif?.nom ?? 'Profil',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ================================================================
 // CARTE D'UNE LISTE
 // ================================================================
 class _ListeCard extends ConsumerWidget {
@@ -537,7 +636,10 @@ class _ListeCard extends ConsumerWidget {
           Container(width: 5, height: 72, color: Color(liste.couleur)),
           Expanded(
             child: InkWell(
-              onTap: () => Navigator.push(
+              onTap: () {
+                // Mémoriser pour rouvrir l'app directement sur cette liste.
+                PreferencesService().sauvegarderDerniereListe(liste.id);
+                Navigator.push(
                 context,
                 PageRouteBuilder(
                   pageBuilder: (_, __, ___) => DetailListeScreen(liste: liste),
@@ -551,7 +653,8 @@ class _ListeCard extends ConsumerWidget {
                   ),
                   transitionDuration: const Duration(milliseconds: 300),
                 ),
-              ),
+              );
+              },
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(

@@ -669,6 +669,20 @@ final articlesListeProvider = AsyncNotifierProviderFamily<
     List<ArticleListe>,
     String>(ArticlesListeNotifier.new);
 
+// Nombre total d'articles restant à acheter (non cochés) sur toutes les
+// listes actives — alimente le badge de l'onglet Listes. Se recalcule tout
+// seul quand une liste ou ses articles changent (chaque liste est observée).
+final articlesRestantsProvider = Provider<int>((ref) {
+  final listes = ref.watch(listesNotifierProvider).valueOrNull ?? [];
+  var total = 0;
+  for (final liste in listes) {
+    if (liste.archivee) continue;
+    final items = ref.watch(articlesListeProvider(liste.id)).valueOrNull ?? [];
+    total += items.where((i) => !i.coche).length;
+  }
+  return total;
+});
+
 class ArticlesListeNotifier
     extends FamilyAsyncNotifier<List<ArticleListe>, String> {
   @override

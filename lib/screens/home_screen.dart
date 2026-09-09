@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../services/preferences_service.dart';
 import '../services/widget_service.dart';
 import '../widgets/background_logo.dart';
 import 'budget_screen.dart';
@@ -50,6 +51,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         _rejoindreDepuisLien(codePartage);
       } else if (listeId.isNotEmpty) {
         _ouvrirDepuisWidget(intent['action'] ?? '', listeId);
+      } else {
+        // Ni widget ni invitation : rouvrir directement sur la dernière liste.
+        unawaited(_ouvrirDerniereListe());
       }
       // Au démarrage à froid, l'écoute temps réel a pu rater des articles de
       // liste collaborative (compteur incomplet / liste vide à l'ouverture) :
@@ -159,11 +163,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final listes = await ref.read(listesNotifierProvider.future);
     final liste = listes.where((l) => l.id == listeId).firstOrNull;
     if (liste == null || !mounted) return;
+    unawaited(PreferencesService().sauvegarderDerniereListe(liste.id));
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => action == 'mode_courses'
           ? ModeCoursesScreen(liste: liste)
           : DetailListeScreen(liste: liste),
     ));
+  }
+
+  // Rouvre l'app directement sur la dernière liste consultée (au démarrage à
+  // froid uniquement). Silencieux si aucune, ou si elle a été archivée/
+  // supprimée depuis.
+  Future<void> _ouvrirDerniereListe() async {
+    final id = await PreferencesService().derniereListe();
+    if (id == null || id.isEmpty || !mounted) return;
+    final listes = await ref.read(listesNotifierProvider.future);
+    final liste = listes.where((l) => l.id == id && !l.archivee).firstOrNull;
+    if (liste == null || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => DetailListeScreen(liste: liste)),
+    );
   }
 
   // Évite qu'un même code soit traité deux fois (l'intent de démarrage à froid
@@ -247,6 +266,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     final afficherBudget = ref.watch(afficherBudgetProvider);
     final afficherRecettes = ref.watch(afficherRecettesProvider);
+    // Nombre d'articles restant à acheter, pour le badge de l'onglet Listes.
+    final restants = ref.watch(articlesRestantsProvider);
     final fondActif = ref.watch(fondActiveProvider);
     final fondOpacite = ref.watch(fondOpaciteProvider);
 
@@ -267,9 +288,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // (voir RecettesScreen.onDeborderGauche/Droite).
     final ecrans = <({NavigationDestination dest, Widget page})>[
       (
-        dest: const NavigationDestination(
-          icon: Icon(Icons.shopping_cart_outlined),
-          selectedIcon: Icon(Icons.shopping_cart),
+        dest: NavigationDestination(
+          icon: Badge(
+            isLabelVisible: restants > 0,
+            label: Text('$restants'),
+            child: const Icon(Icons.shopping_cart_outlined),
+          ),
+          selectedIcon: Badge(
+            isLabelVisible: restants > 0,
+            label: Text('$restants'),
+            child: const Icon(Icons.shopping_cart),
+          ),
           label: 'Listes',
         ),
         page: const ListesScreen(),
