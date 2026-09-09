@@ -277,11 +277,17 @@ class SyncService {
               .collection('articles')
               .snapshots()
               .listen((itemsSnap) async {
+            // Coches faites sur le widget et pas encore poussées : on ne laisse
+            // PAS l'instantané cloud (coche périmée) les écraser tant qu'elles
+            // n'ont pas été synchronisées.
+            final cochesEnAttente =
+                (await _localDb.getCochesWidget()).map((c) => c.id).toSet();
             for (final itemChange in itemsSnap.docChanges) {
               if (itemChange.doc.metadata.hasPendingWrites) continue;
               if (itemChange.type == DocumentChangeType.removed) {
                 await _localDb.deleteArticleListe(itemChange.doc.id);
               } else {
+                if (cochesEnAttente.contains(itemChange.doc.id)) continue;
                 try {
                   final item = ArticleListe.fromMap(itemChange.doc.data()!);
                   await _localDb.insertArticleListe(item);
@@ -332,11 +338,15 @@ class SyncService {
               .collection('articles')
               .snapshots()
               .listen((itemsSnap) async {
+            // Coches widget en attente de synchro : ne pas les écraser.
+            final cochesEnAttente =
+                (await _localDb.getCochesWidget()).map((c) => c.id).toSet();
             for (final itemChange in itemsSnap.docChanges) {
               if (itemChange.doc.metadata.hasPendingWrites) continue;
               if (itemChange.type == DocumentChangeType.removed) {
                 await _localDb.deleteArticleListe(itemChange.doc.id);
               } else {
+                if (cochesEnAttente.contains(itemChange.doc.id)) continue;
                 try {
                   final data = itemChange.doc.data()!;
                   var item = ArticleListe.fromMap(data);
@@ -977,6 +987,47 @@ class SyncService {
         await sauvegarderArticleListe(item);
       }
       await _localDb.supprimerAjoutWidget(ajout.id);
+    }
+  }
+
+  // Pousse vers Firestore les COCHES faites depuis le widget (file d'attente
+  // sync_coches_widget). Comme pour les ajouts, le natif ne peut pas écrire au
+  // cloud : sans cette poussée, l'article coché sur le widget redevenait
+  // décoché en ouvrant la liste (l'instantané temps réel, coche périmée,
+  // écrasait la valeur locale). sauvegarderArticleListe route correctement
+  // (liste perso vs collaborative) et n'envoie QUE cette ligne (pas de
+  // re-poussée globale qui écraserait l'état des autres membres).
+  Future<void> reconcilierCochesWidget() async {
+    if (!_estConnecte) return;
+    final pend = await _localDb.getCochesWidget();
+    for (final c in pend) {
+      final row = await _localDb.getArticleListeParId(c.id);
+      if (row != null) {
+        // On applique la valeur VOULUE par le widget (la file), au cas où
+        // l'instantané cloud aurait déjà écrasé la ligne locale, puis on la
+        // pousse. Ainsi local ET cloud reflètent bien l'action du widget.
+        final voulu = row.copyWith(coche: c.coche);
+        await _localDb.updateArticleListe(voulu);
+        await sauvegarderArticleListe(voulu);
+      }
+      await _localDb.supprimerCocheWidget(c.id);
+    }
+  }
+
+  // Pousse vers Firestore les SUPPRESSIONS faites depuis le widget (bouton
+  // « Terminer les courses » : le natif a déjà retiré les lignes cochées en
+  // local, on répercute la suppression au cloud). Ciblé, sans re-poussée globale.
+  Future<void> reconcilierSuppressionsWidget() async {
+    if (!_estConnecte) return;
+    final pend = await _localDb.getSuppressionsWidget();
+    for (final s in pend) {
+      try {
+        await supprimerArticleListe(s.listeId, s.id);
+      } catch (_) {
+        // On retentera au prochain démarrage.
+        continue;
+      }
+      await _localDb.supprimerSuppressionWidget(s.id);
     }
   }
 

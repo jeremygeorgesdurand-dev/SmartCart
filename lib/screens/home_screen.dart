@@ -118,6 +118,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       // D'abord POUSSER mes items locaux, puis TIRER tout le cloud (filet de
       // sécurité contre un compteur incomplet sur une liste collaborative).
       await sync.reconcilierListesPartagees();
+      // Pousse les coches faites depuis le widget AVANT de tirer le cloud, pour
+      // qu'elles ne soient pas écrasées par un instantané périmé.
+      await sync.reconcilierCochesWidget();
+      // Puis les suppressions du bouton « Terminer » du widget (avant le pull,
+      // qui sinon ré-insèrerait les lignes encore présentes côté cloud).
+      await sync.reconcilierSuppressionsWidget();
       await sync.reconcilierPullListesPartagees();
       // Le pull a pu RECRÉER des articles de catalogue manquants (pour qu'une
       // ligne de liste collaborative soit affichable). Le détail d'une liste

@@ -31,7 +31,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 18,
+      version: 20,
       onCreate: _onCreate,
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 2) {
@@ -320,6 +320,30 @@ class DatabaseService {
             });
           }
         }
+        if (oldV < 19) {
+          // File d'attente des COCHES faites depuis le widget (le natif ne peut
+          // pas écrire vers Firestore) : poussées ciblées au retour dans l'app,
+          // sinon l'instantané temps réel (coche périmée) les écrasait au
+          // (re)démarrage — les articles cochés sur le widget redevenaient
+          // décochés en ouvrant la liste.
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS sync_coches_widget (
+              id TEXT PRIMARY KEY,
+              coche INTEGER
+            )
+          ''');
+        }
+        if (oldV < 20) {
+          // File d'attente des SUPPRESSIONS faites depuis le widget (bouton
+          // « Terminer les courses » : retire les articles cochés) — poussées
+          // vers Firestore au retour dans l'app.
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS sync_suppr_widget (
+              id TEXT PRIMARY KEY,
+              listeId TEXT NOT NULL
+            )
+          ''');
+        }
       },
     );
   }
@@ -471,6 +495,22 @@ class DatabaseService {
         donnees TEXT,
         actif INTEGER DEFAULT 0,
         ordre INTEGER DEFAULT 0
+      )
+    ''');
+
+    // File d'attente des coches faites depuis le widget (voir migration v19).
+    await db.execute('''
+      CREATE TABLE sync_coches_widget (
+        id TEXT PRIMARY KEY,
+        coche INTEGER
+      )
+    ''');
+
+    // File d'attente des suppressions widget « Terminer » (voir migration v20).
+    await db.execute('''
+      CREATE TABLE sync_suppr_widget (
+        id TEXT PRIMARY KEY,
+        listeId TEXT NOT NULL
       )
     ''');
 
@@ -948,6 +988,43 @@ class DatabaseService {
   Future<void> supprimerAjoutWidget(String id) async {
     final d = await db;
     await d.delete('sync_ajouts_widget', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ─── FILE D'ATTENTE DES COCHES WIDGET (à pousser vers Firestore) ────
+  Future<List<({String id, bool coche})>> getCochesWidget() async {
+    final d = await db;
+    final rows = await d.query('sync_coches_widget');
+    return rows
+        .map((r) => (id: r['id'] as String, coche: (r['coche'] as int? ?? 0) == 1))
+        .toList();
+  }
+
+  Future<void> supprimerCocheWidget(String id) async {
+    final d = await db;
+    await d.delete('sync_coches_widget', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ─── FILE D'ATTENTE DES SUPPRESSIONS WIDGET (« Terminer ») ──────────
+  Future<List<({String id, String listeId})>> getSuppressionsWidget() async {
+    final d = await db;
+    final rows = await d.query('sync_suppr_widget');
+    return rows
+        .map((r) => (id: r['id'] as String, listeId: r['listeId'] as String))
+        .toList();
+  }
+
+  Future<void> supprimerSuppressionWidget(String id) async {
+    final d = await db;
+    await d.delete('sync_suppr_widget', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Une ligne de liste par son id (pour pousser une coche widget en attente).
+  Future<ArticleListe?> getArticleListeParId(String id) async {
+    final d = await db;
+    final rows = await d.query('articles_liste',
+        where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return null;
+    return ArticleListe.fromMap(rows.first);
   }
 
   Future<void> updateArticleListe(ArticleListe al) async {

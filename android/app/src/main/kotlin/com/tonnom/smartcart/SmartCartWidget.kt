@@ -214,6 +214,19 @@ class SmartCartWidget : AppWidgetProvider() {
                 PendingIntent.getActivity(context, 3, iCourses,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
 
+            // Tap ✓ = « Terminer les courses » : confirmation native puis retrait
+            // des articles cochés (TerminerCoursesActivity, dialogue léger).
+            val iTerminer = Intent(context, TerminerCoursesActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_NO_ANIMATION
+                putExtra("liste_id", listeId ?: "")
+            }
+            views.setOnClickPendingIntent(R.id.widget_btn_terminer,
+                PendingIntent.getActivity(context, 4, iTerminer,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+            // Sur un widget étroit, on masque ✓ comme le tri, pour ne pas serrer.
+            if (etroit) views.setViewVisibility(R.id.widget_btn_terminer, View.GONE)
+
             // Tap + = petite boîte de dialogue native pour ajouter un
             // article directement, sans jamais ouvrir l'app (QuickAddActivity
             // est une Activity au thème transparent/dialogue, pas le moteur
@@ -397,6 +410,22 @@ class SmartCartWidget : AppWidgetProvider() {
             db.execSQL(
                 "UPDATE articles_liste SET coche = CASE coche WHEN 1 THEN 0 ELSE 1 END WHERE id = ?",
                 arrayOf(articleListeId))
+            // File d'attente de synchro : le natif ne peut pas écrire vers
+            // Firestore. On note la NOUVELLE valeur de coche pour que l'app la
+            // pousse à son prochain démarrage (sinon l'instantané temps réel,
+            // avec l'ancienne coche, l'écrasait au (re)démarrage).
+            try {
+                val c = db.rawQuery(
+                    "SELECT coche FROM articles_liste WHERE id = ? LIMIT 1",
+                    arrayOf(articleListeId))
+                val coche = if (c.moveToFirst()) c.getInt(0) else 0
+                c.close()
+                db.execSQL(
+                    "INSERT OR REPLACE INTO sync_coches_widget (id, coche) VALUES (?, ?)",
+                    arrayOf(articleListeId, coche))
+            } catch (e: Exception) {
+                Log.e(TAG, "file d'attente coche widget: $e")
+            }
             db.close()
         } catch (e: Exception) {
             Log.e(TAG, "cocherEnBase error: $e")

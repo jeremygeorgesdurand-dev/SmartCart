@@ -68,6 +68,19 @@
             android:layout_marginEnd="6dp"
             android:background="@drawable/widget_btn_background"/>
 
+        <!-- Termine les courses : retire les articles cochés (confirmation via
+             TerminerCoursesActivity) -->
+        <TextView
+            android:id="@+id/widget_btn_terminer"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:text="✓"
+            android:textSize="16sp"
+            android:textColor="#FFFFFF"
+            android:gravity="center"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/widget_btn_background"/>
+
         <!-- Bascule le tri alphabétique / par rayon (voir SmartCartWidget.ACTION_TRI) -->
         <TextView
             android:id="@+id/widget_btn_tri"

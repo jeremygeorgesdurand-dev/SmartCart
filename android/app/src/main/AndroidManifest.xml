@@ -56,6 +56,15 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Confirmation « Terminer les courses » depuis le widget : Activity
+             native légère au thème dialogue, ne charge pas le moteur Flutter. -->
+        <activity
+            android:name=".TerminerCoursesActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
