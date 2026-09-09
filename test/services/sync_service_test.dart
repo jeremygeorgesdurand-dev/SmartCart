@@ -496,4 +496,50 @@ void main() {
       expect(await localDb.getAjoutsWidget(), isEmpty);
     });
   });
+
+  group('demarrerEcouteTempsReel : rendre une liste collaborative', () {
+    test(
+        'ne vide pas les articles en local (l\'écouteur de la liste '
+        'personnelle ne doit pas effacer ce que partagerListe migre)',
+        () async {
+      final liste = ListeCourses(id: 'liste_race', nom: 'Courses');
+      await localDb.insertListe(liste);
+      final items = [
+        ArticleListe(id: 'al_race_1', listeId: 'liste_race', articleId: 'a1', quantite: 1),
+        ArticleListe(id: 'al_race_2', listeId: 'liste_race', articleId: 'a2', quantite: 3),
+      ];
+      for (final item in items) {
+        await localDb.insertArticleListe(item);
+      }
+
+      // Simule la copie personnelle déjà présente côté cloud (comme après un
+      // uploadTout / sauvegarde normale), pour que l'écouteur de la liste
+      // personnelle ait bien une sous-collection "articles" à observer.
+      await serviceA.sauvegarderListe(liste);
+      for (final item in items) {
+        await serviceA.sauvegarderArticleListe(item);
+      }
+
+      // Démarre l'écoute temps réel (comme au lancement de l'app) et laisse
+      // le listener s'attacher à la sous-collection d'articles personnelle.
+      serviceA.demarrerEcouteTempsReel(() {});
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      // Marquage optimiste AVANT l'appel réseau, comme le fait
+      // ListesNotifier.partager côté app.
+      await localDb.updateListe(liste.copyWith(partagee: true));
+
+      // partagerListe supprime la sous-collection personnelle côté cloud :
+      // sans le garde-fou, l'écouteur encore actif sur cette sous-collection
+      // effaçait ces articles en local avant que listes_partagees ne les
+      // reprenne.
+      await serviceA.partagerListe(liste, items);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final locaux = await localDb.getArticlesListe('liste_race');
+      expect(locaux.map((a) => a.id).toSet(), {'al_race_1', 'al_race_2'});
+
+      serviceA.arreterEcouteTempsReel();
+    });
+  });
 }

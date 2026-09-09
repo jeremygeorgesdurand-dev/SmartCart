@@ -277,6 +277,20 @@ class SyncService {
               .collection('articles')
               .snapshots()
               .listen((itemsSnap) async {
+            // Rendre une liste collaborative (partagerListe) déplace ses
+            // articles vers listes_partagees et supprime cette sous-collection
+            // personnelle dans la foulée : ce listener reçoit alors des
+            // suppressions pour des articles qui viennent d'être dénormalisés
+            // ailleurs. Comme la ligne locale est marquée `partagee` de façon
+            // optimiste AVANT l'appel réseau (ListesNotifier.partager), on
+            // s'en sert ici pour ignorer ces événements — sans ce garde-fou,
+            // la liste se vidait localement pendant la course avec l'écouteur
+            // listes_partagees qui reprend la main juste après.
+            final locale = await _localDb.getListes();
+            final existanteListe =
+                locale.where((l) => l.id == listeId).firstOrNull;
+            if (existanteListe != null && existanteListe.partagee) return;
+
             // Coches faites sur le widget et pas encore poussées : on ne laisse
             // PAS l'instantané cloud (coche périmée) les écraser tant qu'elles
             // n'ont pas été synchronisées.

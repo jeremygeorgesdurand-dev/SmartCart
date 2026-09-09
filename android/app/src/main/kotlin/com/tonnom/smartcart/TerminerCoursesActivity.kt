@@ -1,19 +1,22 @@
 package com.tonnom.smartcart
 
 import android.app.Activity
-import android.app.AlertDialog
-import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import android.os.Bundle
 import android.util.Log
+import android.widget.TextView
 
-// Petite confirmation native (pas de moteur Flutter) déclenchée par le bouton
-// « ✓ Terminer » du widget : retire de la liste les articles COCHÉS (achetés),
-// garde les non cochés pour la prochaine fois — même comportement que « Terminer
-// les courses » dans l'app. Écrit directement dans la base SQLite partagée et
-// note les suppressions dans une file d'attente (sync_suppr_widget) pour que
-// l'app les répercute vers Firestore à sa prochaine ouverture (le natif ne peut
-// pas écrire au cloud). Une confirmation évite les suppressions accidentelles.
+// Confirmation « ✓ Terminer » du widget : retire de la liste les articles
+// COCHÉS (achetés), garde les non cochés pour la prochaine fois — même
+// comportement que « Terminer les courses » dans l'app. Écrit directement
+// dans la base SQLite partagée et note les suppressions dans une file
+// d'attente (sync_suppr_widget) pour que l'app les répercute vers Firestore
+// à sa prochaine ouverture (le natif ne peut pas écrire au cloud).
+//
+// Carte stylée (activity_terminer_courses.xml, même habillage que
+// QuickAddActivity) plutôt qu'un AlertDialog générique Android : celui-ci
+// prenait l'apparence brute du thème système (souvent un popup gris terne),
+// qui jurait avec le reste de l'app.
 class TerminerCoursesActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -23,28 +26,36 @@ class TerminerCoursesActivity : Activity() {
             return
         }
 
+        setContentView(R.layout.activity_terminer_courses)
+
+        val titre = findViewById<TextView>(R.id.tc_titre)
+        val message = findViewById<TextView>(R.id.tc_message)
+        val icone = findViewById<TextView>(R.id.tc_icone)
+        val btnAnnuler = findViewById<TextView>(R.id.tc_annuler)
+        val btnValider = findViewById<TextView>(R.id.tc_valider)
+
         val coches = compterCoches(listeId)
         if (coches == 0) {
-            AlertDialog.Builder(this)
-                .setTitle("Terminer les courses")
-                .setMessage("Aucun article coché pour l'instant.")
-                .setPositiveButton("OK") { _, _ -> finish() }
-                .setOnCancelListener { finish() }
-                .show()
+            icone.text = "🛒"
+            titre.text = "Rien à terminer"
+            message.text = "Aucun article coché pour l'instant."
+            btnAnnuler.visibility = android.view.View.GONE
+            btnValider.text = "OK"
+            btnValider.setOnClickListener { finish() }
             return
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("Terminer les courses")
-            .setMessage("Retirer les $coches article(s) coché(s) de la liste ? " +
-                "Les articles non cochés sont gardés.")
-            .setNegativeButton("Annuler") { _, _ -> finish() }
-            .setPositiveButton("Terminer") { _, _ ->
-                terminer(listeId)
-                finish()
-            }
-            .setOnCancelListener { finish() }
-            .show()
+        message.text = "Retirer les $coches article(s) coché(s) de la liste ?\n" +
+            "Les articles non cochés sont gardés."
+        btnAnnuler.setOnClickListener { finish() }
+        btnValider.setOnClickListener {
+            terminer(listeId)
+            finish()
+        }
+    }
+
+    override fun onBackPressed() {
+        finish()
     }
 
     private fun compterCoches(listeId: String): Int {
