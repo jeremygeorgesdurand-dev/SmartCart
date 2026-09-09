@@ -62,6 +62,7 @@ void main() {
     await d.delete('listes');
     await d.delete('sync_ajouts_widget');
     await d.delete('sync_coches_widget');
+    await d.delete('sync_suppr_widget');
 
     serviceA = SyncService(localDb, firestore: firestore, auth: authA);
     serviceB = SyncService(localDb, firestore: firestore, auth: authB);
@@ -413,6 +414,38 @@ void main() {
       expect(doc.data()!['coche'], 1);
       // File d\'attente vidée.
       expect(await localDb.getCochesWidget(), isEmpty);
+    });
+  });
+
+  group('reconcilierSuppressionsWidget (bouton Terminer)', () {
+    test('supprime au cloud les articles retirés depuis le widget', () async {
+      final liste = ListeCourses(id: 'lp', nom: 'Perso');
+      await localDb.insertListe(liste);
+      // Le doc existe au cloud (liste personnelle) ; le natif a déjà retiré la
+      // ligne locale et l\'a mise en file de suppression.
+      await firestore
+          .collection('users')
+          .doc('uidA')
+          .collection('listes')
+          .doc('lp')
+          .collection('articles')
+          .doc('al1')
+          .set({'id': 'al1', 'listeId': 'lp', 'articleId': 'art1', 'coche': 1});
+      final d = await localDb.db;
+      await d.insert('sync_suppr_widget', {'id': 'al1', 'listeId': 'lp'});
+
+      await serviceA.reconcilierSuppressionsWidget();
+
+      final doc = await firestore
+          .collection('users')
+          .doc('uidA')
+          .collection('listes')
+          .doc('lp')
+          .collection('articles')
+          .doc('al1')
+          .get();
+      expect(doc.exists, isFalse);
+      expect(await localDb.getSuppressionsWidget(), isEmpty);
     });
   });
 

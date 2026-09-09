@@ -3,11 +3,20 @@ class VersionInfo {
   // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
   // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
   // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
-  static const String version = '1.25.3';
-  static const String buildNumber = '55';
+  static const String version = '1.26.0';
+  static const String buildNumber = '56';
   static const String dateMiseAJour = '9 septembre 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.26.0',
+      date: '9 septembre 2026',
+      changements: [
+        'Widget : nouveau bouton ✓ « Terminer les courses » — retire les '
+            'articles cochés (après confirmation), garde les autres, et se '
+            'synchronise avec l\'app et l\'autre téléphone',
+      ],
+    ),
     Release(
       version: '1.25.3',
       date: '9 septembre 2026',
