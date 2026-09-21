@@ -15,6 +15,7 @@ import '../services/stats_service.dart';
 import '../services/export_service.dart';
 import '../services/auth_service.dart';
 import '../services/fcm_service.dart';
+import '../services/comparaison_magasins_service.dart';
 import '../services/recipe_import_service.dart';
 import '../services/ticket_ocr_service.dart';
 import '../services/sync_service.dart';
@@ -668,6 +669,19 @@ final articlesListeProvider = AsyncNotifierProviderFamily<
     ArticlesListeNotifier,
     List<ArticleListe>,
     String>(ArticlesListeNotifier.new);
+
+// Compare le coût estimé d'une liste selon les magasins pour lesquels on
+// connaît des prix (saisis à la main ou via un ticket scanné). Provider
+// synchrone (comme articlesRestantsProvider) : traite les dépendances encore
+// en chargement comme vides plutôt que de propager un état async.
+final comparaisonMagasinsProvider =
+    Provider.family<List<ComparaisonMagasin>, String>((ref, listeId) {
+  final items = ref.watch(articlesListeProvider(listeId)).valueOrNull ?? [];
+  final catalogue = ref.watch(articlesNotifierProvider).valueOrNull ?? [];
+  final prix = ref.watch(prixArticlesNotifierProvider).valueOrNull ?? [];
+  return ComparaisonMagasinsService.calculer(
+      items: items, catalogue: catalogue, prix: prix);
+});
 
 // Nombre total d'articles restant à acheter (non cochés) sur toutes les
 // listes actives — alimente le badge de l'onglet Listes. Se recalcule tout

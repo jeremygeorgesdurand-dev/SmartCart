@@ -1387,18 +1387,42 @@ class DetailListeScreen extends ConsumerWidget {
               }
             },
           ),
-          PopupMenuButton<SortMode>(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.sort),
             tooltip: 'Trier',
-            onSelected: (mode) =>
-                ref.read(articleListeSortProvider.notifier).state = mode,
+            onSelected: (v) {
+              switch (v) {
+                case 'alphabetique':
+                  ref.read(articleListeSortProvider.notifier).state =
+                      SortMode.alphabetique;
+                case 'categorie':
+                  ref.read(articleListeSortProvider.notifier).state =
+                      SortMode.categorie;
+                case 'rayon':
+                  ref.read(articleListeSortProvider.notifier).state =
+                      SortMode.rayon;
+                case 'comparer':
+                  showModalBottomSheet(
+                    context: context,
+                    useSafeArea: true,
+                    builder: (_) => _ComparaisonMagasinsSheet(liste: liste),
+                  );
+              }
+            },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: SortMode.alphabetique, child: Text('A → Z')),
+              PopupMenuItem(value: 'alphabetique', child: Text('A → Z')),
               PopupMenuItem(
-                  value: SortMode.categorie,
-                  child: Text('Par catégorie maison')),
+                  value: 'categorie', child: Text('Par catégorie maison')),
+              PopupMenuItem(value: 'rayon', child: Text('Par rayon magasin')),
+              PopupMenuDivider(),
               PopupMenuItem(
-                  value: SortMode.rayon, child: Text('Par rayon magasin')),
+                value: 'comparer',
+                child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.compare_arrows),
+                    title: Text('Comparer les magasins')),
+              ),
             ],
           ),
           IconButton(
@@ -1949,6 +1973,110 @@ class _EtatAucunResultat extends StatelessWidget {
             Text('pour « $query »',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.outline)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ================================================================
+// COMPARAISON DES MAGASINS — coût estimé de la liste selon les prix connus
+// (saisis à la main ou via un ticket scanné) pour chaque enseigne.
+// ================================================================
+class _ComparaisonMagasinsSheet extends ConsumerWidget {
+  final ListeCourses liste;
+  const _ComparaisonMagasinsSheet({required this.liste});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final resultats = ref.watch(comparaisonMagasinsProvider(liste.id));
+    final moinsCher = resultats.firstOrNull;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outline,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Comparer les magasins',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Coût estimé de « ${liste.nom} » à partir des prix déjà '
+              'enregistrés (saisis à la main ou via un ticket scanné).',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.outline),
+            ),
+            const SizedBox(height: 16),
+            if (resultats.length < 2)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline,
+                        color: Theme.of(context).colorScheme.outline),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        resultats.isEmpty
+                            ? 'Pas encore de prix par magasin pour les '
+                                'articles de cette liste. Ajoute-en dans '
+                                'Budget, ou scanne un ticket de caisse.'
+                            : 'Un seul magasin connu (${resultats.first.magasin}) '
+                                '— ajoute des prix pour un autre magasin pour '
+                                'comparer.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              for (final r in resultats)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: r == moinsCher
+                      ? Theme.of(context).colorScheme.primaryContainer
+                      : null,
+                  child: ListTile(
+                    leading: Icon(
+                      r == moinsCher ? Icons.star : Icons.storefront_outlined,
+                      color: r == moinsCher
+                          ? couleurAvertissement(context)
+                          : null,
+                    ),
+                    title: Text(r.magasin),
+                    subtitle: r.articlesManquants.isEmpty
+                        ? null
+                        : Text(
+                            '${r.articlesManquants.length} article(s) sans '
+                            'prix connu ici (non comptés)',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                    trailing: Text(
+                      '${r.total.toStringAsFixed(2)} €',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: r == moinsCher
+                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                : null,
+                          ),
+                    ),
+                  ),
+                ),
           ],
         ),
       ),
