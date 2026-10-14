@@ -3,11 +3,24 @@ class VersionInfo {
   // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
   // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
   // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
-  static const String version = '1.30.0';
-  static const String buildNumber = '61';
-  static const String dateMiseAJour = '21 septembre 2026';
+  static const String version = '1.30.1';
+  static const String buildNumber = '62';
+  static const String dateMiseAJour = '14 octobre 2026';
 
   static const List<Release> historique = [
+    Release(
+      version: '1.30.1',
+      date: '14 octobre 2026',
+      changements: [
+        'Catalogue : changer de catégorie, de rayon ou de tri remonte la liste '
+            'tout en haut (à la lettre A) au lieu de rester sur la position '
+            'précédente',
+        'Mode courses : le récapitulatif de fin (articles achetés, non '
+            'trouvés, « tout coché ») prend maintenant en compte les articles '
+            'ajoutés depuis un autre appareil sur une liste collaborative, au '
+            'lieu de n\'afficher que l\'ancienne liste',
+      ],
+    ),
     Release(
       version: '1.30.0',
       date: '21 septembre 2026',

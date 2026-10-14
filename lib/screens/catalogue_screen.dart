@@ -27,12 +27,20 @@ class CatalogueScreen extends ConsumerStatefulWidget {
 
 class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
   final _searchController = TextEditingController();
+  // Partagé par toutes les listes du catalogue (une seule visible à la fois) :
+  // permet de remonter en haut (lettre A) quand on change de catégorie/rayon.
+  final _scrollController = ScrollController();
   bool _searchVisible = false;
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _remonterEnHaut() {
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
   }
 
   void _ouvrirVocal() {
@@ -362,6 +370,11 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Changer de catégorie, de rayon ou de tri repart du haut de la liste
+    // (lettre A) au lieu de rester sur la position de la sélection précédente.
+    ref.listen(filterCategorieProvider, (_, __) => _remonterEnHaut());
+    ref.listen(filterRayonProvider, (_, __) => _remonterEnHaut());
+    ref.listen(sortModeProvider, (_, __) => _remonterEnHaut());
     final articlesAsync = ref.watch(catalogueArticlesFiltresProvider);
     final listesAsync = ref.watch(listesNotifierProvider);
     final listeSelectionnee = ref.watch(listeSelectionneeProvider);
@@ -751,6 +764,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
 
                 if (sort == SortMode.alphabetique) {
                   return ListView.builder(
+                    controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(0, 4, 0, 100),
                     itemCount: articles.length,
                     itemBuilder: (_, i) => AnimatedListItem(
@@ -883,6 +897,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
 
     if (sort == SortMode.alphabetique) {
       return ListView.builder(
+        controller: _scrollController,
         padding: const EdgeInsets.fromLTRB(8, 4, 8, 100),
         itemCount: articles.length,
         itemBuilder: (_, i) => buildTile(articles[i], i),
@@ -932,6 +947,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
           int globalIndex = 0;
 
           return ListView.builder(
+            controller: _scrollController,
             padding: const EdgeInsets.fromLTRB(0, 4, 0, 100),
             itemCount: cles.length,
             itemBuilder: (_, i) {

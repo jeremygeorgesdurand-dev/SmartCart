@@ -2527,10 +2527,17 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
   // lignes fantômes est nécessaire pour que "tout est coché" redevienne
   // vrai et que le compte affiché corresponde à ce qui est réellement à
   // l'écran (sinon "20/21" alors que les 20 articles visibles sont cochés).
+  //
+  // MÊME règle que l'affichage du mode courses (articlePourLigne) : une ligne
+  // d'une liste collaborative dont l'article n'est pas dans MON catalogue (ajoutée
+  // depuis un autre appareil) reste valide tant qu'elle porte son nom. Sans ça,
+  // le récap et le « tout coché » ignoraient ces articles et ne reflétaient que
+  // l'ancienne liste.
   List<ArticleListe> _itemsValides(List<ArticleListe> items) {
     final catalogue = ref.read(articlesNotifierProvider).valueOrNull ?? [];
-    final idsValides = catalogue.map((a) => a.id).toSet();
-    return items.where((i) => idsValides.contains(i.articleId)).toList();
+    return items
+        .where((i) => articlePourLigne(i, catalogue) != null)
+        .toList();
   }
 
   void _afficherRecap(ListeCourses liste) {
@@ -2540,7 +2547,7 @@ class _ModeCoursesScreenState extends ConsumerState<ModeCoursesScreen> {
     final coches = items.where((i) => i.coche).toList();
     final nonTrouves = items
         .where((i) => !i.coche)
-        .map((i) => catalogue.where((a) => a.id == i.articleId).firstOrNull?.nom)
+        .map((i) => articlePourLigne(i, catalogue)?.nom)
         .whereType<String>()
         .toList();
     final afficherPrix = ref.read(afficherPrixProvider);
