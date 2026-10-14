@@ -1,6 +1,6 @@
 # Politique de confidentialité — SmartCart
 
-**Dernière mise à jour : 18 août 2026**
+**Dernière mise à jour : 14 octobre 2026**
 
 SmartCart (« l'application ») est une application de listes de courses. Cette
 politique explique quelles données l'application traite, pourquoi, et vos
@@ -45,6 +45,11 @@ L'éditeur de SmartCart. Contact : `VOTRE_EMAIL`.
   reconnaissance de texte hors-ligne). Elles **ne sont pas envoyées** sur nos
   serveurs ni conservées après l'analyse.
 
+### f) Microphone
+- Le micro sert uniquement à ajouter un article à la voix. La reconnaissance
+  vocale est assurée par le service de reconnaissance vocale d'Android
+  (Google) ; SmartCart **ne conserve aucun enregistrement**.
+
 ## 3. Services tiers
 - **Google Firebase** (Authentication, Firestore, Cloud Messaging, Crashlytics,
   App Check) — hébergement, synchronisation, notifications, diagnostics.
@@ -53,7 +58,10 @@ L'éditeur de SmartCart. Contact : `VOTRE_EMAIL`.
   ces bases communautaires pour obtenir des informations. Aucune donnée
   personnelle n'y est jointe.
 - **Recettes** — le dataset de recettes est embarqué dans l'app ; sa mise à
-  jour télécharge un fichier public depuis le dépôt du projet.
+  jour télécharge un fichier public depuis le dépôt du projet (GitHub, qui voit
+  votre adresse IP comme tout site web).
+- **Sites de recettes** — uniquement si vous importez vous-même l'adresse d'une
+  recette.
 
 ## 4. Partage des données
 Nous **ne vendons pas** vos données. Elles sont partagées uniquement :
@@ -65,7 +73,15 @@ Nous **ne vendons pas** vos données. Elles sont partagées uniquement :
 - Les données locales restent sur votre appareil tant que l'app est installée.
 - Les données synchronisées restent tant que votre compte existe.
 - Vous pouvez **supprimer votre compte et toutes vos données cloud** depuis
-  l'application (Réglages → Compte → Supprimer le compte), conformément au RGPD.
+  l'application (Réglages → Compte → Supprimer mon compte), conformément au RGPD.
+  Cela supprime aussi le catalogue et les profils magasin que vous aviez
+  partagés, et les listes collaboratives dont vous êtes le dernier membre. Les
+  listes partagées avec d'autres personnes restent disponibles pour elles (vous
+  les quittez, la propriété est transmise à un autre membre). Page publique
+  dédiée : `suppression-compte.html`.
+- Les données stockées sur votre téléphone ne sont effacées que par la
+  désinstallation de l'application. Les rapports de plantage sont supprimés
+  automatiquement par Google Firebase après une durée limitée.
 
 ## 6. Sécurité
 Les échanges avec Firebase sont chiffrés (HTTPS/TLS). L'accès aux données cloud

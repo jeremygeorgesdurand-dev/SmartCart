@@ -23,6 +23,7 @@ données à des tiers (Open Food Facts / Open Prices).
 | **Adresse e-mail** (compte Google) | Oui | Non | Gestion du compte / connexion | Non |
 | **Photo de profil** (compte Google) | Oui | Non | Affichée aux membres d'une liste partagée | Non |
 | **Contenu utilisateur : listes, articles, prix, recettes** | Oui (si connecté) | Non | Fonctionnalité de l'app, synchronisation, partage de liste | Non |
+| **ID utilisateur** (identifiant Firebase du compte) | Oui | Non | Fonctionnalité de l'app ; rattache les données au compte et aux listes partagées | Non |
 | **Identifiants (jeton de notification)** | Oui | Non | Notifications de listes collaboratives | Non |
 | **Journaux de plantage** | Oui | Non | Diagnostics / stabilité | Non |
 | **Diagnostics / performances** | Oui | Non | Diagnostics / stabilité | Non |
@@ -43,6 +44,9 @@ appel à un service tiers, décrit dans la politique de confidentialité.
 
 ## Pratiques de sécurité (cases à cocher)
 - Données chiffrées en transit : **Oui**.
-- Mécanisme de suppression des données : **Oui** (compte + données cloud).
+- Mécanisme de suppression des données : **Oui** (compte + données cloud :
+  catalogue, listes, prix, catalogue et profils partagés, listes dont on est le
+  dernier membre). URL de suppression à renseigner dans la Play Console :
+  `…/suppression-compte.html` (voir `docs/suppression-compte.html`).
 - Engagement à respecter les règles Play « Familles » : sans objet (app non
   destinée aux enfants).

@@ -3,16 +3,28 @@ class VersionInfo {
   // correctif, mineur (1.2.0 → 1.3.0) pour une nouvelle fonctionnalité. Garder
   // `version` et `buildNumber` alignés avec le champ `version:` du pubspec
   // (buildNumber = numéro après le +), et ajouter une entrée dans historique.
-  static const String version = '1.31.0';
-  static const String buildNumber = '63';
+  static const String version = '1.31.1';
+  static const String buildNumber = '64';
   static const String dateMiseAJour = '14 octobre 2026';
 
   static const List<Release> historique = [
     Release(
+      version: '1.31.1',
+      date: '14 octobre 2026',
+      changements: [
+        'Suppression de compte plus complète : le catalogue et les profils '
+            'magasin partagés, ainsi que les listes collaboratives dont tu es '
+            'le dernier membre, sont supprimés avec ton compte',
+        'Correction : le propriétaire d\'une liste partagée avec d\'autres '
+            'personnes peut maintenant supprimer son compte (la propriété de '
+            'la liste est transmise à un autre membre)',
+      ],
+    ),
+    Release(
       version: '1.31.0',
       date: '14 octobre 2026',
       changements: [
-        'VERSION DE TEST (interface) : écran d\'une liste épuré — un seul '
+        'Interface : écran d\'une liste épuré — un seul '
             'bouton flottant « Mode courses », ajout via la barre du bas '
             '(catalogue et micro intégrés)',
         'Quantité toujours visible sur chaque ligne (« ×1 ») : touche-la pour '

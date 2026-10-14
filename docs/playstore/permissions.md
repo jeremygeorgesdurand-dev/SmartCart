@@ -29,11 +29,15 @@ fonction est utilisée**, jamais au démarrage.
 
 ## Permissions ajoutées automatiquement par les bibliothèques
 
-### Accès aux photos / stockage (image_picker, file_picker)
-- **Android 13+** : `READ_MEDIA_IMAGES` — choisir une photo de ticket/recette
-  depuis la galerie et importer/exporter un fichier de sauvegarde `.json`.
-- **Texte utilisateur suggéré :** « L'accès aux photos permet de choisir une
-  image de ticket ou de recette, et d'importer/exporter vos sauvegardes. »
+### Photos et fichiers (image_picker, file_picker)
+- **Aucune permission déclarée** : le choix d'une photo de ticket/recette et
+  l'import/export d'une sauvegarde `.json` passent par les sélecteurs du système
+  (vérifié sur l'APK construit : pas de `READ_MEDIA_IMAGES` ni de stockage).
+
+### Autres permissions ajoutées par Firebase (non sensibles)
+- `ACCESS_NETWORK_STATE`, `WAKE_LOCK`, `com.google.android.c2dm.permission.RECEIVE`
+  (réception des notifications), `READ_GSERVICES` : techniques, sans demande à
+  l'utilisateur.
 
 ### Notifications (`android.permission.POST_NOTIFICATIONS`, Android 13+)
 - **Pourquoi :** prévenir quand une **liste collaborative** est modifiée par un

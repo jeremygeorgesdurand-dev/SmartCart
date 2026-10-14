@@ -542,4 +542,109 @@ void main() {
       serviceA.arreterEcouteTempsReel();
     });
   });
+
+  group('supprimerToutesLesDonneesCloud : suppression de compte complète', () {
+    test('dernier membre d\'une liste collaborative : liste, articles et code supprimés',
+        () async {
+      final liste = ListeCourses(id: 'liste_solo', nom: 'Solo');
+      await localDb.insertListe(liste);
+      final item = ArticleListe(
+          id: 'al_solo', listeId: 'liste_solo', articleId: 'a1', nomArticle: 'Lait');
+      await localDb.insertArticleListe(item);
+      final code = await serviceA.partagerListe(liste, [item]);
+
+      await serviceA.supprimerToutesLesDonneesCloud();
+
+      expect(
+          (await firestore.collection('listes_partagees').doc('liste_solo').get())
+              .exists,
+          isFalse);
+      expect(
+          (await firestore
+                  .collection('listes_partagees')
+                  .doc('liste_solo')
+                  .collection('articles')
+                  .get())
+              .docs,
+          isEmpty);
+      expect((await firestore.collection('codes_partage').doc(code).get()).exists,
+          isFalse);
+    });
+
+    test(
+        'propriétaire d\'une liste partagée avec d\'autres : la propriété est '
+        'transmise puis il quitte la liste (qui reste pour les autres)',
+        () async {
+      final liste = ListeCourses(id: 'liste_duo', nom: 'Duo');
+      await localDb.insertListe(liste);
+      final code = await serviceA.partagerListe(liste, []);
+      await serviceB.rejoindreListeParCode(code);
+
+      await serviceA.supprimerToutesLesDonneesCloud();
+
+      final doc =
+          await firestore.collection('listes_partagees').doc('liste_duo').get();
+      expect(doc.exists, isTrue);
+      expect(doc.data()!['membres'], ['uidB']);
+      expect(doc.data()!['proprietaireId'], 'uidB');
+    });
+
+    test('simple membre : il est retiré, le propriétaire reste', () async {
+      final liste = ListeCourses(id: 'liste_membre', nom: 'Membre');
+      await localDb.insertListe(liste);
+      final code = await serviceA.partagerListe(liste, []);
+      await serviceB.rejoindreListeParCode(code);
+
+      await serviceB.supprimerToutesLesDonneesCloud();
+
+      final doc = await firestore
+          .collection('listes_partagees')
+          .doc('liste_membre')
+          .get();
+      expect(doc.data()!['membres'], ['uidA']);
+      expect(doc.data()!['proprietaireId'], 'uidA');
+    });
+
+    test('catalogue partagé : doc, sous-collections et code supprimés', () async {
+      final code = await serviceA.partagerMonCatalogue();
+      await firestore
+          .collection('catalogues_partages')
+          .doc('uidA')
+          .collection('articles')
+          .doc('art1')
+          .set({'nom': 'Pain'});
+
+      await serviceA.supprimerToutesLesDonneesCloud();
+
+      expect(
+          (await firestore.collection('catalogues_partages').doc('uidA').get())
+              .exists,
+          isFalse);
+      expect(
+          (await firestore
+                  .collection('catalogues_partages')
+                  .doc('uidA')
+                  .collection('articles')
+                  .get())
+              .docs,
+          isEmpty);
+      expect(
+          (await firestore.collection('codes_catalogue').doc(code).get()).exists,
+          isFalse);
+    });
+
+    test('profil magasin partagé : instantané et code supprimés', () async {
+      final code = await serviceA.partagerProfil(
+          Profil(id: 'prof1', nom: 'Lidl', donnees: '{}'));
+
+      await serviceA.supprimerToutesLesDonneesCloud();
+
+      expect(
+          (await firestore.collection('profils_partages').doc('prof1').get())
+              .exists,
+          isFalse);
+      expect((await firestore.collection('codes_profil').doc(code).get()).exists,
+          isFalse);
+    });
+  });
 }

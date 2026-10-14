@@ -1175,17 +1175,99 @@ class SyncService {
       await listeDoc.reference.delete();
     }
 
-    final listesPartageesSnap = await _listesPartageesCol
-        .where('membres', arrayContains: uid)
-        .get();
-    for (final doc in listesPartageesSnap.docs) {
-      await doc.reference.update({
-        'membres': FieldValue.arrayRemove([uid]),
-      });
-    }
+    // Données partagées : chaque étape est « au mieux » (un échec isolé, par
+    // exemple une liste déjà supprimée par un autre membre entre-temps, ne doit
+    // pas empêcher de supprimer le compte lui-même).
+    await _quitterOuSupprimerListesPartagees(uid);
+    await _supprimerMonCataloguePartage(uid);
+    await _supprimerMesProfilsPartages(uid);
 
     await _db.collection('profils_publics').doc(uid).delete();
     await _db.collection('users').doc(uid).delete();
+  }
+
+  // Listes collaboratives : si je suis le DERNIER membre, la liste est supprimée
+  // (avec son code et ses articles) ; sinon je la quitte. Un propriétaire ne
+  // peut pas se retirer selon les règles Firestore (« le propriétaire ne peut
+  // jamais être retiré ») : avant de partir, il transmet donc la propriété au
+  // premier autre membre — sans ça, supprimer son compte échouait en cours de
+  // route dès qu'il possédait une liste partagée avec quelqu'un.
+  Future<void> _quitterOuSupprimerListesPartagees(String uid) async {
+    final snap =
+        await _listesPartageesCol.where('membres', arrayContains: uid).get();
+    for (final doc in snap.docs) {
+      try {
+        final data = doc.data() as Map<String, dynamic>;
+        final membres = List<String>.from(data['membres'] ?? const []);
+        final autres = membres.where((m) => m != uid).toList();
+
+        if (autres.isEmpty) {
+          final code = data['code'] as String?;
+          if (code != null) await _codesPartageCol.doc(code).delete();
+          final items = await doc.reference.collection('articles').get();
+          for (final item in items.docs) {
+            await item.reference.delete();
+          }
+          await doc.reference.delete();
+          continue;
+        }
+
+        if (data['proprietaireId'] == uid) {
+          await doc.reference.update({'proprietaireId': autres.first});
+        }
+        await doc.reference.update({
+          'membres': FieldValue.arrayRemove([uid]),
+        });
+      } catch (_) {
+        // Au mieux : on passe à la liste suivante.
+      }
+    }
+  }
+
+  // Mon catalogue partagé (doc d'id = mon uid) : supprimé avec ses
+  // sous-collections et son code ; et je quitte les catalogues des autres.
+  Future<void> _supprimerMonCataloguePartage(String uid) async {
+    try {
+      final docRef = _cataloguesPartagesCol.doc(uid);
+      final snap = await docRef.get();
+      if (snap.exists) {
+        for (final sous in ['categories', 'rayons', 'articles']) {
+          final docs = await docRef.collection(sous).get();
+          for (final d in docs.docs) {
+            await d.reference.delete();
+          }
+        }
+        final code = (snap.data() as Map<String, dynamic>)['code'] as String?;
+        if (code != null) await _codesCatalogueCol.doc(code).delete();
+        await docRef.delete();
+      }
+    } catch (_) {}
+
+    try {
+      final autres = await _cataloguesPartagesCol
+          .where('membres', arrayContains: uid)
+          .get();
+      for (final doc in autres.docs) {
+        if (doc.id == uid) continue;
+        await doc.reference.update({
+          'membres': FieldValue.arrayRemove([uid]),
+        });
+      }
+    } catch (_) {}
+  }
+
+  // Profils magasin que j'ai partagés : instantané + code supprimés.
+  Future<void> _supprimerMesProfilsPartages(String uid) async {
+    try {
+      final snap = await _profilsPartagesCol
+          .where('proprietaireId', isEqualTo: uid)
+          .get();
+      for (final doc in snap.docs) {
+        final code = (doc.data() as Map<String, dynamic>)['code'] as String?;
+        if (code != null) await _codesProfilCol.doc(code).delete();
+        await doc.reference.delete();
+      }
+    } catch (_) {}
   }
 
   // ── ÉCRITURES INDIVIDUELLES (appelées après chaque modif locale) ─
