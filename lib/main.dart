@@ -159,7 +159,11 @@ class SmartCartApp extends ConsumerWidget {
       surfaceContainerHighest: neutre.surfaceContainerHighest,
       onSurface: neutre.onSurface,
       onSurfaceVariant: neutre.onSurfaceVariant,
-      outline: neutre.outline,
+      // `outline` sert aussi de couleur de texte secondaire : tel quel il
+      // tombait vers 4,2:1 de contraste (sous le seuil 4,5:1 de WCAG AA).
+      // On le rapproche de onSurfaceVariant pour rester lisible, sans
+      // alourdir les bordures au point de changer l'allure de l'appli.
+      outline: Color.lerp(neutre.outline, neutre.onSurfaceVariant, 0.5),
       outlineVariant: neutre.outlineVariant,
     );
 

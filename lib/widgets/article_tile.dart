@@ -49,7 +49,7 @@ class ArticleTile extends ConsumerWidget {
               Text('Supprimer',
                   style: TextStyle(
                       color: texteContrastant(danger),
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold)),
             ],
           ),
@@ -349,7 +349,7 @@ class _Chip extends StatelessWidget {
           ],
           Text(label,
               style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 12,
                   color: color,
                   fontWeight: FontWeight.w600)),
         ],

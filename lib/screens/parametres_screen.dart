@@ -225,7 +225,7 @@ class _SectionCompte extends ConsumerWidget {
             subtitle: Text(
               user != null
                   ? (user.email ?? 'Synchronisation active')
-                  : 'Sauvegarder vos données sur le cloud',
+                  : 'Sauvegarder tes données sur le cloud',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             trailing: user != null

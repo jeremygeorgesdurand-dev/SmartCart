@@ -4,6 +4,7 @@ import '../providers/providers.dart';
 import '../services/widget_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
+import '../utils/messages.dart';
 
 class WidgetConfigScreen extends ConsumerStatefulWidget {
   const WidgetConfigScreen({super.key});
@@ -54,10 +55,7 @@ class _WidgetConfigScreenState extends ConsumerState<WidgetConfigScreen> {
     });
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('"$listeNom" configurée pour le widget'),
-        backgroundColor: couleurSucces(context),
-      ));
+      afficherMessage(context, '"$listeNom" configurée pour le widget', couleur: couleurSucces(context));
     }
   }
 
@@ -92,7 +90,7 @@ class _WidgetConfigScreenState extends ConsumerState<WidgetConfigScreen> {
                                     .firstOrNull
                                     ?.nom ??
                                 'Ma liste')
-                            : 'Sélectionnez une liste',
+                            : 'Choisis une liste',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -127,13 +125,13 @@ class _WidgetConfigScreenState extends ConsumerState<WidgetConfigScreen> {
                     )),
                 const SizedBox(height: 4),
                 const Text('+ 2 articles',
-                    style: TextStyle(color: Color(0xAAFFFFFF), fontSize: 11)),
+                    style: TextStyle(color: Color(0xAAFFFFFF), fontSize: 12)),
               ],
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Aperçu du widget (la vraie liste s\'affichera sur votre écran d\'accueil)',
+            'Aperçu du widget (la vraie liste s\'affichera sur ton écran d\'accueil)',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.outline,
                 ),
@@ -230,7 +228,7 @@ class _WidgetConfigScreenState extends ConsumerState<WidgetConfigScreen> {
                               child: Center(
                                 child: Text(step.$1,
                                     style: TextStyle(
-                                      fontSize: 10,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                       color: Theme.of(context).colorScheme.primary,
                                     )),

@@ -15,7 +15,7 @@ class DoublonsScreen extends ConsumerWidget {
     final groupes = ref.watch(doublonsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Doublons du catalogue')),
+      appBar: AppBar(title: const Text('Articles en double')),
       body: groupes.isEmpty
           ? Center(
               child: Column(

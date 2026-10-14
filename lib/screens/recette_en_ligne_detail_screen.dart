@@ -8,6 +8,7 @@ import '../services/recettes_dataset_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 import 'listes_screen.dart';
+import '../utils/messages.dart';
 
 // ================================================================
 // DÉTAIL D'UNE RECETTE (dataset local) — image, ingrédients, étapes,
@@ -126,8 +127,7 @@ class _Contenu extends ConsumerWidget {
                 InkWell(
                   onLongPress: () {
                     Clipboard.setData(ClipboardData(text: recette.url));
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Lien de la source copié')));
+                    afficherMessage(context, 'Lien de la source copié');
                   },
                   child: Text(
                     'Recette : $attribution.\n${recette.url}',
@@ -253,13 +253,9 @@ class _BoutonCreerListeState extends ConsumerState<_BoutonCreerListe> {
           .genererListe(recetteLocale, listeIdExistante: liste.id);
       if (!mounted) return;
       final incomplet = reussis < total;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(incomplet
+      afficherMessage(context, incomplet
             ? 'Liste créée, $reussis/$total ingrédient(s) ajoutés'
-            : 'Liste créée avec $total ingrédient(s)'),
-        backgroundColor:
-            incomplet ? couleurAvertissement(context) : couleurSucces(context),
-      ));
+            : 'Liste créée avec $total ingrédient(s)', couleur: incomplet ? couleurAvertissement(context) : couleurSucces(context));
       // pushReplacement : "Retour" ramène à l'écran Recettes (pas à la
       // recette) et empêche de recréer plusieurs fois la même liste.
       Navigator.pushReplacement(
@@ -268,8 +264,7 @@ class _BoutonCreerListeState extends ConsumerState<_BoutonCreerListe> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(messageErreurLisible(e, 'Une erreur est survenue'))));
+        afficherMessage(context, messageErreurLisible(e, 'Une erreur est survenue'));
       }
     } finally {
       if (mounted) setState(() => _generation = false);

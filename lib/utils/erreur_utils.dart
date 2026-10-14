@@ -15,8 +15,16 @@ String messageErreurLisible(Object e, String contexte) {
     return '$contexte : accès refusé. Vérifie que tu es bien connecté et '
         'membre de cette liste.';
   }
-  if (e is FirebaseException) {
-    return '$contexte : ${e.message ?? e.code}';
+  // Pas de message technique à l'écran (ni `Exception: …` ni le texte brut de
+  // Firebase) : l'utilisateur sait ce qui a échoué et quoi faire ; le détail
+  // reste disponible dans les journaux/Crashlytics.
+  return _probleme(contexte);
+}
+
+String _probleme(String contexte) {
+  final c = contexte.trim();
+  if (c.isEmpty || c == 'Erreur') {
+    return 'Un problème est survenu. Réessaie dans un instant.';
   }
-  return '$contexte : $e';
+  return '$c. Réessaie dans un instant.';
 }

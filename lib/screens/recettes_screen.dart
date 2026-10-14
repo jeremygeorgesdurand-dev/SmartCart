@@ -6,6 +6,7 @@ import '../services/vocal_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 import 'recettes_en_ligne_screen.dart';
+import '../utils/messages.dart';
 
 // ================================================================
 // ÉCRAN RECETTES — une page à barre fixe avec 3 sous-onglets (Explorer /
@@ -328,14 +329,11 @@ class _BoutonGenererListeState extends ConsumerState<_BoutonGenererListe> {
                   Navigator.pop(context);
                   final (reussis, total) = resultat;
                   final incomplet = reussis < total;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(incomplet
+                  afficherMessage(context, incomplet
                         ? 'Liste "${recette.nom}" créée, mais seulement $reussis/$total ingrédient(s) ajoutés — vérifie la liste'
-                        : 'Liste "${recette.nom}" créée avec $total ingrédient(s)'),
-                    backgroundColor: incomplet
+                        : 'Liste "${recette.nom}" créée avec $total ingrédient(s)', couleur: incomplet
                         ? couleurAvertissement(context)
-                        : couleurSucces(context),
-                  ));
+                        : couleurSucces(context));
                 }
               },
         icon: generation
@@ -473,10 +471,8 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
     setState(() => _import = false);
 
     if (recette == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(
-            "Impossible de récupérer cette recette (site non compatible ou page invalide)"),
-      ));
+      afficherMessage(context, 
+            "Impossible de récupérer cette recette (site non compatible ou page invalide)");
       return;
     }
 
@@ -503,14 +499,11 @@ class _RecetteFormScreenState extends ConsumerState<RecetteFormScreen> {
           : [_LigneIngredient.vide()];
     });
     final nbEtapes = recette.etapes.length;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
+    afficherMessage(context, 
           '"${recette.nom}" importée : ${recette.ingredientsBruts.length} '
           'ingrédient(s)${nbEtapes > 0 ? ", $nbEtapes étape(s)" : ""}'
           '${recette.imageUrl != null ? ", photo" : ""} — vérifie avant '
-          'd\'enregistrer'),
-      backgroundColor: couleurSucces(context),
-    ));
+          'd\'enregistrer', couleur: couleurSucces(context));
   }
 
   @override

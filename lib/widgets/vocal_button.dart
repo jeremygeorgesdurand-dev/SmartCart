@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/vocal_service.dart';
 import '../utils/theme_utils.dart';
+import '../utils/messages.dart';
 
 // ================================================================
 // POINT D'ENTRÉE : ouvrir le sheet vocal depuis n'importe où
@@ -180,11 +181,7 @@ class _VocalSheetState extends ConsumerState<VocalSheet>
         : '$ajoutes article(s) ajouté(s) $cible'
             '${dejaPresents > 0 ? ' ($dejaPresents déjà présent(s))' : ''}';
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: couleurSucces(context),
-      duration: const Duration(seconds: 2),
-    ));
+    afficherMessage(context, msg, couleur: couleurSucces(context), duree: const Duration(seconds: 2));
   }
 
   // ── UI ────────────────────────────────────────────────────────

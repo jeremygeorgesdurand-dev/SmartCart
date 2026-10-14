@@ -127,7 +127,7 @@ class _HistoriquePrixScreenState extends ConsumerState<HistoriquePrixScreen> {
                       reservedSize: 44,
                       getTitlesWidget: (value, meta) =>
                           Text('${value.toStringAsFixed(2)} €',
-                              style: TextStyle(fontSize: 10, color: couleurAxes)),
+                              style: TextStyle(fontSize: 12, color: couleurAxes)),
                     ),
                   ),
                   bottomTitles: AxisTitles(
@@ -140,7 +140,7 @@ class _HistoriquePrixScreenState extends ConsumerState<HistoriquePrixScreen> {
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
                             '${date.day}/${date.month}',
-                            style: TextStyle(fontSize: 10, color: couleurAxes),
+                            style: TextStyle(fontSize: 12, color: couleurAxes),
                           ),
                         );
                       },

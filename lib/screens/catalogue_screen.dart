@@ -174,11 +174,8 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     ref.invalidate(categoriesNotifierProvider);
     ref.invalidate(rayonsNotifierProvider);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Ajouté à ton catalogue : ${res.articles} article(s), '
-            '${res.categories} catégorie(s)'),
-        backgroundColor: couleurSucces(context),
-      ));
+      afficherMessage(context, 'Ajouté à ton catalogue : ${res.articles} article(s), '
+            '${res.categories} catégorie(s)', couleur: couleurSucces(context));
     }
   }
 
@@ -299,8 +296,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Échec : $e')));
+        afficherMessage(context, 'Échec : $e');
       }
     }
   }
@@ -354,16 +350,12 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
       final ok = await ref.read(syncServiceProvider).suivreCatalogue(code);
       if (!mounted) return;
       if (ok) ref.invalidate(cataloguesSuivisProvider);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ok
+      afficherMessage(context, ok
             ? 'Catalogue suivi : « Mon catalogue ▾ » en haut pour le voir'
-            : 'Code invalide'),
-        backgroundColor: ok ? couleurSucces(context) : null,
-      ));
+            : 'Code invalide', couleur: ok ? couleurSucces(context) : null);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Échec : $e')));
+        afficherMessage(context, 'Échec : $e');
       }
     }
   }
@@ -540,7 +532,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                             child: Text(
                               '${ref.watch(doublonsProvider).length}',
                               style: TextStyle(
-                                  fontSize: 10, color: texteContrastant(fond)),
+                                  fontSize: 12, color: texteContrastant(fond)),
                             ),
                           );
                         }),
@@ -696,7 +688,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                                   ? 'Par catégorie'
                                   : 'Par rayon',
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 12,
                                 color: Theme.of(context)
                                     .colorScheme
                                     .onPrimaryContainer,
@@ -744,7 +736,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                                 ?.copyWith(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         Text(
-                          'Ajoutez vos premiers articles\nvia le bouton + ou le scanner',
+                          'Ajoute tes premiers articles\navec le bouton + ou le scanner',
                           textAlign: TextAlign.center,
                           style: Theme.of(context)
                               .textTheme
@@ -1052,7 +1044,7 @@ class _GroupHeader extends StatelessWidget {
             child: Text(
               '$count',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: couleur,
               ),
@@ -1092,11 +1084,11 @@ class _SelecteurQuantite extends StatelessWidget {
           children: [
             IconButton(
               visualDensity: VisualDensity.compact,
-              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               iconSize: 24,
               icon: Icon(Icons.remove_circle, color: couleur),
               onPressed: quantite > 1 ? () => onChange(quantite - 1) : null,
-              tooltip: 'Moins',
+              tooltip: 'Diminuer la quantité (actuellement $quantite)',
             ),
             SizedBox(
               width: 24,
@@ -1107,11 +1099,11 @@ class _SelecteurQuantite extends StatelessWidget {
             ),
             IconButton(
               visualDensity: VisualDensity.compact,
-              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               iconSize: 24,
               icon: Icon(Icons.add_circle, color: couleur),
               onPressed: () => onChange(quantite + 1),
-              tooltip: 'Plus',
+              tooltip: 'Augmenter la quantité (actuellement $quantite)',
             ),
           ],
         ),

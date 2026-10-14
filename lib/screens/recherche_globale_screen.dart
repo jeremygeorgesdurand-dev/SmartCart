@@ -158,7 +158,7 @@ class _RechercheGlobaleScreenState
                       const Divider(),
                     ],
                     if (_resultatsListes.isNotEmpty) ...[
-                      Text('Dans vos listes',
+                      Text('Dans tes listes',
                           style: Theme.of(context).textTheme.titleSmall),
                       for (final r in _resultatsListes)
                         ListTile(

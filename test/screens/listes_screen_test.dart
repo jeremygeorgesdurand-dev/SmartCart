@@ -177,7 +177,8 @@ void main() {
       await tester.tap(find.text('Rejoindre'));
       await _laisserRetomber(tester);
 
-      expect(find.text('Code invalide ou liste introuvable'), findsOneWidget);
+      expect(find.textContaining('Ce code ne correspond à aucune liste'),
+          findsOneWidget);
     });
   });
 }

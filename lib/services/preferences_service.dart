@@ -4,6 +4,7 @@ class PreferencesService {
   static const _keyAfficherStats = 'afficher_stats';
   static const _keyCouleurTheme = 'couleur_theme';
   static const _keyDerniereListe = 'derniere_liste_id';
+  static const _keyAstuceQuantite = 'astuce_quantite_vue';
 
   // Dernière liste ouverte : pour rouvrir l'app directement dessus.
   Future<void> sauvegarderDerniereListe(String? id) async {
@@ -13,6 +14,17 @@ class PreferencesService {
     } else {
       await prefs.setString(_keyDerniereListe, id);
     }
+  }
+
+  // Indice « touche ×1 pour changer la quantité » : affiché une seule fois.
+  Future<bool> astuceQuantiteVue() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyAstuceQuantite) ?? false;
+  }
+
+  Future<void> marquerAstuceQuantiteVue() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyAstuceQuantite, true);
   }
 
   Future<String?> derniereListe() async {

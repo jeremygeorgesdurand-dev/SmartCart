@@ -193,7 +193,7 @@ class _CarteRecette extends StatelessWidget {
                   Text(
                     '${recette.categorie} · ${recette.ingredients.length} ingrédients',
                     style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 12,
                         color: Theme.of(context).colorScheme.outline),
                   ),
                 ],

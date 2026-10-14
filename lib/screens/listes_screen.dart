@@ -135,7 +135,7 @@ class ListesScreen extends ConsumerWidget {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(Icons.copy_all_outlined),
-                      title: Text('Doublons du catalogue'))),
+                      title: Text('Articles en double'))),
               const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'archivees',
@@ -170,7 +170,7 @@ class ListesScreen extends ConsumerWidget {
                   Text('Aucune liste',
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
-                  const Text('Créez votre première liste de courses'),
+                  const Text('Crée la première pour commencer tes courses.'),
                 ],
               ),
             );
@@ -231,15 +231,11 @@ class ListesScreen extends ConsumerWidget {
             if (!dialogCtx.mounted) return;
             Navigator.pop(dialogCtx);
             final message = !resultat.ok
-                ? 'Code invalide ou liste introuvable'
+                ? 'Ce code ne correspond à aucune liste. Vérifie-le avec la personne qui t\'a invité.'
                 : resultat.dejaMembre
-                    ? 'Vous étiez déjà dans cette liste'
+                    ? 'Tu es déjà dans cette liste'
                     : 'Liste rejointe !';
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(message),
-              backgroundColor:
-                  resultat.ok ? Theme.of(context).colorScheme.primary : null,
-            ));
+            afficherMessage(context, message, couleur: resultat.ok ? Theme.of(context).colorScheme.primary : null);
           }
 
           return AlertDialog(
@@ -1021,7 +1017,7 @@ class _ListeCard extends ConsumerWidget {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogCtx, true),
-              child: const Text('Continuer'),
+              child: const Text('Rendre collaborative'),
             ),
           ],
         ),
@@ -1054,7 +1050,7 @@ class _ListeCard extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Partagez ce code pour inviter quelqu\'un :'),
+              const Text('Partage ce code pour inviter quelqu\'un :'),
               const SizedBox(height: 16),
               Center(
                 child: Container(
@@ -1127,7 +1123,7 @@ class _ListeCard extends ConsumerWidget {
                 ? TextButton(
                     onPressed: null,
                     child: Text(
-                      'Vous êtes propriétaire',
+                      'Tu es propriétaire',
                       style: TextStyle(
                           color: Theme.of(dialogCtx).colorScheme.outline),
                     ),
@@ -1430,20 +1426,15 @@ class DetailListeScreen extends ConsumerWidget {
             tooltip: 'Partager la liste',
             onPressed: () => _partagerDepuisDetail(context, ref),
           ),
-          IconButton(
-            icon: const Icon(Icons.shopping_bag),
-            tooltip: 'Mode courses',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => ModeCoursesScreen(liste: liste)),
-            ),
-          ),
         ],
       ),
       // Saisie rapide en une ligne (« 3 pommes », « lait »…) toujours à
       // portée de pouce, sans ouvrir de feuille.
-      bottomNavigationBar: _BarreAjoutRapide(listeId: liste.id),
+      bottomNavigationBar: _BarreAjoutRapide(
+        listeId: liste.id,
+        onCatalogue: () => _ajouterDepuisCatalogue(context, ref),
+        onVocal: () => _ouvrirVocalPourListe(context, ref),
+      ),
       body: Column(
         children: [
           if (rechercheActive) _BarreRechercheListe(listeId: liste.id),
@@ -1665,24 +1656,16 @@ class DetailListeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Bouton vocal : dicter directement dans la liste
-          FloatingActionButton(
-            heroTag: 'vocal_${liste.id}',
-            onPressed: () => _ouvrirVocalPourListe(context, ref),
-            tooltip: 'Ajouter par la voix',
-            child: const Icon(Icons.mic),
-          ),
-          const SizedBox(width: 12),
-          FloatingActionButton.extended(
-            heroTag: 'add_${liste.id}',
-            onPressed: () => _ajouterDepuisCatalogue(context, ref),
-            icon: const Icon(Icons.add),
-            label: const Text('Ajouter des articles'),
-          ),
-        ],
+      // Un seul bouton flottant : l'action principale en magasin. Ajouter des
+      // articles passe par la barre du bas (saisie, catalogue, voix).
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'courses_${liste.id}',
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ModeCoursesScreen(liste: liste)),
+        ),
+        icon: const Icon(Icons.shopping_bag_outlined),
+        label: const Text('Mode courses'),
       ),
     );
   }
@@ -1806,7 +1789,14 @@ class _BarreRechercheListeState extends ConsumerState<_BarreRechercheListe> {
 // ================================================================
 class _BarreAjoutRapide extends ConsumerStatefulWidget {
   final String listeId;
-  const _BarreAjoutRapide({required this.listeId});
+  // Raccourcis intégrés à la barre : piocher dans le catalogue / dicter.
+  final VoidCallback onCatalogue;
+  final VoidCallback onVocal;
+  const _BarreAjoutRapide({
+    required this.listeId,
+    required this.onCatalogue,
+    required this.onVocal,
+  });
 
   @override
   ConsumerState<_BarreAjoutRapide> createState() => _BarreAjoutRapideState();
@@ -1865,6 +1855,12 @@ class _BarreAjoutRapideState extends ConsumerState<_BarreAjoutRapide> {
         ),
         child: Row(
           children: [
+            // Piocher dans le catalogue (remplace l'ancien gros bouton flottant).
+            IconButton(
+              onPressed: widget.onCatalogue,
+              tooltip: 'Choisir dans le catalogue',
+              icon: const Icon(Icons.list_alt_outlined),
+            ),
             Expanded(
               child: TextField(
                 controller: _ctrl,
@@ -1881,6 +1877,12 @@ class _BarreAjoutRapideState extends ConsumerState<_BarreAjoutRapide> {
                   ),
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  // Dicter un article (remplace l'ancien bouton micro flottant).
+                  suffixIcon: IconButton(
+                    onPressed: widget.onVocal,
+                    tooltip: 'Ajouter par la voix',
+                    icon: const Icon(Icons.mic_none),
+                  ),
                 ),
                 onChanged: (_) => setState(() {}),
                 onSubmitted: (_) => _ajouter(),
@@ -1929,8 +1931,8 @@ class _EtatListeVide extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              'Tapez un article en bas (ex. « 3 pommes »), '
-              'ou piochez dans votre catalogue.',
+              'Ta liste est vide. Tape un article en bas (ex. « 3 pommes »), '
+              'ou choisis-en dans ton catalogue.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.outline),
@@ -2085,6 +2087,65 @@ class _ComparaisonMagasinsSheet extends ConsumerWidget {
 }
 
 // ================================================================
+// BADGE DE QUANTITÉ — « ×1 » toujours visible, touche pour modifier
+// ================================================================
+class _BadgeQuantite extends StatelessWidget {
+  final int quantite;
+  final String? unite;
+  final VoidCallback onTap;
+  const _BadgeQuantite({
+    required this.quantite,
+    required this.unite,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final personnalise = quantite > 1 || unite != null;
+    final texte = unite != null ? '×$quantite $unite' : '×$quantite';
+    return Semantics(
+      button: true,
+      label: 'Quantité : $quantite${unite != null ? ' $unite' : ''}. '
+          'Toucher pour modifier',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        // Zone tactile de 48 dp même si le badge visible est plus petit.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: personnalise
+                    ? scheme.primaryContainer
+                    : Colors.transparent,
+                border: personnalise
+                    ? null
+                    : Border.all(color: scheme.outlineVariant),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                texte,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: personnalise
+                      ? scheme.onPrimaryContainer
+                      : scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ================================================================
 // TILE ARTICLE DANS LA LISTE — appui simple = cocher, long = options
 // ================================================================
 class _ArticleListeTile extends ConsumerWidget {
@@ -2098,9 +2159,28 @@ class _ArticleListeTile extends ConsumerWidget {
     required this.listeId,
   });
 
+  // Une seule fois, au premier article coché : explique que le badge « ×1 »
+  // permet de changer la quantité (fonction auparavant cachée derrière un
+  // appui long).
+  Future<void> _indiceQuantiteUneFois(BuildContext context) async {
+    final prefs = PreferencesService();
+    if (await prefs.astuceQuantiteVue()) return;
+    await prefs.marquerAstuceQuantiteVue();
+    if (!context.mounted) return;
+    afficherMessage(
+      context,
+      'Astuce : touche « ×1 » pour changer la quantité ou l\'unité.',
+      duree: const Duration(seconds: 4),
+    );
+  }
+
   void _afficherOptions(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
       context: context,
+      // Défilable : avec un grand réglage de taille de texte ou un écran peu
+      // haut, le contenu débordait en bas (zones « Retirer » inatteignables).
+      isScrollControlled: true,
+      useSafeArea: true,
       // StatefulBuilder pour mettre à jour la quantité sans fermer
       builder: (sheetCtx) => Consumer(
         builder: (ctx, r, _) {
@@ -2111,7 +2191,7 @@ class _ArticleListeTile extends ConsumerWidget {
               items.where((i) => i.id == articleListe.id).firstOrNull ??
                   articleListe;
 
-          return Padding(
+          return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2323,7 +2403,7 @@ class _ArticleListeTile extends ConsumerWidget {
               : null,
           child: Text(initiale,
               style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.onPrimaryContainer)),
         ),
@@ -2354,31 +2434,22 @@ class _ArticleListeTile extends ConsumerWidget {
         children: [
           _avatarModifiePar(context, ref),
           PrixArticleBadge(article: article),
-          if (articleListe.quantite > 1 || articleListe.unite != null) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                articleListe.unite != null
-                    ? '×${articleListe.quantite} ${articleListe.unite}'
-                    : '×${articleListe.quantite}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
-              ),
-            ),
-          ],
+          // Quantité toujours visible ET touchable : avant, la modifier
+          // demandait un appui long invisible pour un nouvel utilisateur.
+          const SizedBox(width: 4),
+          _BadgeQuantite(
+            quantite: articleListe.quantite,
+            unite: articleListe.unite,
+            onTap: () => _afficherOptions(context, ref),
+          ),
         ],
       ),
-      onTap: () => ref
-          .read(articlesListeProvider(listeId).notifier)
-          .cocher(articleListe, !articleListe.coche),
+      onTap: () {
+        ref
+            .read(articlesListeProvider(listeId).notifier)
+            .cocher(articleListe, !articleListe.coche);
+        _indiceQuantiteUneFois(context);
+      },
       onLongPress: () => _afficherOptions(context, ref),
       ),
     );
@@ -2882,7 +2953,7 @@ class _RayonHeader extends StatelessWidget {
             child: Text(
               '$nbRestants',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: Theme.of(context).colorScheme.onPrimaryContainer,
               ),

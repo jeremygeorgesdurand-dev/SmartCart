@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../widgets/ajouter_article_dialog.dart';
 import '../utils/theme_utils.dart';
+import '../utils/messages.dart';
 
 class ScannerScreen extends ConsumerStatefulWidget {
   const ScannerScreen({super.key});
@@ -101,7 +102,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Produit non trouvé'),
-        content: Text('Code "$code" introuvable.\nVoulez-vous l\'ajouter manuellement ?'),
+        content: Text('Code "$code" introuvable.\nVeux-tu l\'ajouter manuellement ?'),
         actions: [
           TextButton(
             onPressed: () {
@@ -160,10 +161,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           if (!mounted) return;
           Navigator.pop(context); // dialog
           Navigator.pop(context); // scanner
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${article.nom} ajouté au catalogue'),
-            backgroundColor: couleurSucces(context),
-          ));
+          afficherMessage(context, '${article.nom} ajouté au catalogue', couleur: couleurSucces(context));
         },
       ),
     ).then((_) {
@@ -367,7 +365,7 @@ class _ArticleTrouveDialog extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: 12),
-          const Text('Voulez-vous ajouter ce produit au catalogue ?',
+          const Text('Ajouter ce produit au catalogue ?',
               style: TextStyle(fontSize: 13)),
         ],
       ),

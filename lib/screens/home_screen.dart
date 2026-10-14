@@ -12,6 +12,7 @@ import 'catalogue_screen.dart';
 import 'listes_screen.dart';
 import 'parametres_screen.dart';
 import 'recettes_screen.dart';
+import '../utils/messages.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -202,13 +203,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         icon: const Icon(Icons.group_add),
         title: const Text('Rejoindre une liste ?'),
         content: Text(
-          'Vous avez ouvert une invitation (code $code). '
-          'Voulez-vous rejoindre cette liste collaborative ?',
+          'Tu as été invité(e) à rejoindre une liste collaborative '
+          '(code $code). Rejoindre ?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, false),
-            child: const Text('Annuler'),
+            child: const Text('Plus tard'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogCtx, true),
@@ -225,18 +226,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           await ref.read(listesNotifierProvider.notifier).rejoindre(code);
     } catch (_) {
       if (mounted) {
-        _messageVert('Impossible de rejoindre (réseau ?)', succes: false);
+        _messageVert('Impossible de rejoindre la liste. Vérifie ta connexion et réessaie.', succes: false);
       }
       return;
     }
     if (!mounted) return;
 
     if (!resultat.ok) {
-      _messageVert('Code invalide ou liste introuvable', succes: false);
+      _messageVert('Ce code ne correspond à aucune liste. Vérifie-le avec la personne qui t\'a invité.', succes: false);
       return;
     }
     _messageVert(resultat.dejaMembre
-        ? 'Vous étiez déjà dans cette liste'
+        ? 'Tu es déjà dans cette liste'
         : 'Liste rejointe !');
     // Atterrir directement sur la liste rejointe.
     final liste = resultat.liste;
@@ -248,14 +249,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   void _messageVert(String texte, {bool succes = true}) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(
-        content: Text(texte),
-        backgroundColor:
-            succes ? Theme.of(context).colorScheme.primary : null,
-        duration: const Duration(seconds: 3),
-      ));
+    afficherMessage(context, texte, couleur: succes ? Theme.of(context).colorScheme.primary : null, duree: const Duration(seconds: 3));
   }
 
   @override

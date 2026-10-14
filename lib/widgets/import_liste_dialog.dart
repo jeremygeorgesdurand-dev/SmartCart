@@ -7,6 +7,7 @@ import '../providers/providers.dart';
 import '../services/export_service.dart';
 import '../services/liste_partage_service.dart';
 import '../utils/theme_utils.dart';
+import '../utils/messages.dart';
 
 class ImportListeDialog extends ConsumerStatefulWidget {
   final String? listeId;
@@ -187,10 +188,7 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
           '${_apercu!.articles.length} article(s)'
           '${nbImportes > 0 ? " ($nbImportes nouveaux)" : ""}';
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: couleurSucces(context),
-    ));
+    afficherMessage(context, message, couleur: couleurSucces(context));
   }
 
   @override
@@ -216,7 +214,7 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Collez le texte d\'une liste SmartCart partagée\nou un format simple (nom;catégorie;rayon)',
+              'Colle le texte d\'une liste SmartCart partagée\nou un format simple (nom;catégorie;rayon)',
               style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: Theme.of(context).colorScheme.outline),
             ),
@@ -225,7 +223,7 @@ class _ImportListeDialogState extends ConsumerState<ImportListeDialog> {
               controller: _ctrl,
               maxLines: 7,
               decoration: InputDecoration(
-                hintText: 'Collez ici...',
+                hintText: 'Colle ici...',
                 filled: true,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -386,8 +384,7 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                         : () async {
                             await Clipboard.setData(ClipboardData(text: _texte));
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                                  content: Text('Copié dans le presse-papier')));
+                              afficherMessage(context, 'Copié dans le presse-papier');
                               Navigator.pop(context);
                             }
                           },

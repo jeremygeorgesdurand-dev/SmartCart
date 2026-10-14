@@ -10,6 +10,7 @@ import '../services/suggestions_service.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
 import 'listes_screen.dart';
+import '../utils/messages.dart';
 
 // Contenu des statistiques SANS Scaffold ni défilement propre : un Column que
 // l'on peut poser aussi bien dans l'écran Budget (où les stats ont été
@@ -189,7 +190,7 @@ class _TitreSection extends StatelessWidget {
             child: Text(
               badge!,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: badgeColor ?? Theme.of(context).colorScheme.primary,
               ),
@@ -439,7 +440,7 @@ class _CarteEvolutionBudget extends ConsumerWidget {
                         reservedSize: 44,
                         getTitlesWidget: (value, meta) => Text(
                             '${value.toStringAsFixed(0)} €',
-                            style: TextStyle(fontSize: 10, color: couleurAxes)),
+                            style: TextStyle(fontSize: 12, color: couleurAxes)),
                       ),
                     ),
                     bottomTitles: AxisTitles(
@@ -452,7 +453,7 @@ class _CarteEvolutionBudget extends ConsumerWidget {
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(_moisAbreges[mois[i].month - 1],
-                                style: TextStyle(fontSize: 10, color: couleurAxes)),
+                                style: TextStyle(fontSize: 12, color: couleurAxes)),
                           );
                         },
                       ),
@@ -547,10 +548,10 @@ class _CarteActivite extends StatelessWidget {
 
   String _messageCompletion(double taux) {
     if (taux == 0) return 'Aucune liste complétée pour l\'instant';
-    if (taux >= 90) return 'Excellent ! Vous finissez presque toutes vos courses.';
+    if (taux >= 90) return 'Excellent ! Tu finis presque toutes tes courses.';
     if (taux >= 70) return 'Très bien, quelques articles restent parfois non cochés.';
     if (taux >= 50) return 'La moitié des articles sont cochés en moyenne.';
-    return 'Beaucoup d\'articles restent non cochés — pensez à nettoyer vos listes.';
+    return 'Beaucoup d\'articles restent non cochés — pense à nettoyer tes listes.';
   }
 }
 
@@ -826,16 +827,19 @@ class _CarteSuggestions extends ConsumerWidget {
     }
 
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('Liste "$nom" créée avec ${suggestions.length} article'
-          '${suggestions.length > 1 ? "s" : ""}'),
-      backgroundColor: couleurSucces(context),
+    afficherMessage(
+      context,
+      'Liste "$nom" créée avec ${suggestions.length} article'
+      '${suggestions.length > 1 ? "s" : ""}',
+      couleur: couleurSucces(context),
+      // Bouton d'action : on laisse un peu plus de temps pour le toucher.
+      duree: const Duration(seconds: 4),
       action: SnackBarAction(
         label: 'Voir',
         onPressed: () => Navigator.push(context,
             MaterialPageRoute(builder: (_) => DetailListeScreen(liste: liste))),
       ),
-    ));
+    );
   }
 
   Future<void> _ajouterSuggestion(
@@ -845,9 +849,7 @@ class _CarteSuggestions extends ConsumerWidget {
         .toList();
 
     if (listesActives.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Créez d\'abord une liste de courses'),
-      ));
+      afficherMessage(context, 'Crée d\'abord une liste de courses');
       return;
     }
 
@@ -875,9 +877,7 @@ class _CarteSuggestions extends ConsumerWidget {
         await ref.read(dbServiceProvider).getArticlesListe(cible.id);
     if (itemsExistants.any((i) => i.articleId == article.id)) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('"${article.nom}" est déjà dans "${cible.nom}"'),
-        ));
+        afficherMessage(context, '"${article.nom}" est déjà dans "${cible.nom}"');
       }
       return;
     }
@@ -891,10 +891,7 @@ class _CarteSuggestions extends ConsumerWidget {
         );
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('"${article.nom}" ajouté à "${cible.nom}"'),
-        backgroundColor: couleurSucces(context),
-      ));
+      afficherMessage(context, '"${article.nom}" ajouté à "${cible.nom}"', couleur: couleurSucces(context));
     }
   }
 }

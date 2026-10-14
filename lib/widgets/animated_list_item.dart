@@ -332,7 +332,7 @@ class DismissibleCard extends StatelessWidget {
               Text('Supprimer',
                   style: TextStyle(
                       color: texteContrastant(danger),
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold)),
             ],
           ),

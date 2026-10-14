@@ -5,6 +5,7 @@ import '../providers/providers.dart';
 import '../providers/recettes_en_ligne_provider.dart';
 import '../utils/erreur_utils.dart';
 import '../utils/theme_utils.dart';
+import '../utils/messages.dart';
 
 // ================================================================
 // ÉCRAN SAUVEGARDE / RESTAURATION MANUELLE (fichier .json local)
@@ -191,12 +192,9 @@ class _SauvegardeScreenState extends ConsumerState<SauvegardeScreen> {
         ref.invalidate(rayonsNotifierProvider);
         ref.invalidate(articlesNotifierProvider);
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ok
+      afficherMessage(context, ok
             ? 'Catalogue suivi : il se mettra à jour en direct'
-            : 'Code invalide'),
-        backgroundColor: ok ? couleurSucces(context) : null,
-      ));
+            : 'Code invalide', couleur: ok ? couleurSucces(context) : null);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -260,11 +258,8 @@ class _SauvegardeScreenState extends ConsumerState<SauvegardeScreen> {
       } catch (_) {}
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Catalogue importé : ${res.articles} article(s), '
-              '${res.categories} catégorie(s), ${res.rayons} rayon(s)'),
-          backgroundColor: couleurSucces(context),
-        ));
+        afficherMessage(context, 'Catalogue importé : ${res.articles} article(s), '
+              '${res.categories} catégorie(s), ${res.rayons} rayon(s)', couleur: couleurSucces(context));
       }
     } catch (e) {
       if (mounted) {
@@ -363,15 +358,10 @@ class _SauvegardeScreenState extends ConsumerState<SauvegardeScreen> {
       // Recharge les recettes affichées avec la nouvelle version.
       ref.invalidate(toutesRecettesProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Recettes à jour ($n recettes)'),
-        backgroundColor: couleurSucces(context),
-      ));
+      afficherMessage(context, 'Recettes à jour ($n recettes)', couleur: couleurSucces(context));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(messageErreurLisible(e, 'Mise à jour impossible')),
-      ));
+      afficherMessage(context, messageErreurLisible(e, 'Mise à jour impossible'));
     } finally {
       if (mounted) setState(() => _majRecettes = false);
     }

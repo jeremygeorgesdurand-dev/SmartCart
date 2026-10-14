@@ -35,7 +35,7 @@ class VocalService {
     }
     if (status.isPermanentlyDenied) {
       await openAppSettings();
-      return 'Permission microphone refusée. Activez-la dans les paramètres.';
+      return 'Permission microphone refusée. Active-la dans les paramètres.';
     }
     if (!status.isGranted) {
       return 'Permission microphone refusée.';

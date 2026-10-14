@@ -50,15 +50,15 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       if (!mounted) return;
       setState(() {
         _syncing = false;
-        _message = 'Connecté ! Utilisez "Sauvegarder" ou "Restaurer" '
-            'ci-dessous pour synchroniser vos données.';
+        _message = 'Connecté ! Utilise "Sauvegarder" ou "Restaurer" '
+            'ci-dessous pour synchroniser tes données.';
         _messageOk = true;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _syncing = false;
-        _message = messageErreurLisible(e, 'Erreur de connexion');
+        _message = messageErreurLisible(e, 'Connexion impossible');
         _messageOk = false;
       });
     }
@@ -91,7 +91,7 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       setState(() { _syncing = false; _message = 'Synchronisation réussie !'; _messageOk = true; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _syncing = false; _message = messageErreurLisible(e, 'Erreur sync'); _messageOk = false; });
+      setState(() { _syncing = false; _message = messageErreurLisible(e, 'Synchronisation impossible'); _messageOk = false; });
     }
   }
 
@@ -107,7 +107,7 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       setState(() { _syncing = false; _message = 'Données restaurées depuis le cloud !'; _messageOk = true; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _syncing = false; _message = messageErreurLisible(e, 'Erreur restauration'); _messageOk = false; });
+      setState(() { _syncing = false; _message = messageErreurLisible(e, 'Restauration impossible'); _messageOk = false; });
     }
   }
 
@@ -117,9 +117,9 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       builder: (dialogCtx) => AlertDialog(
         title: const Text('Supprimer le compte ?'),
         content: const Text(
-          'Toutes vos données cloud seront définitivement supprimées '
-          '(catalogue, listes, prix). Vous quitterez aussi vos listes '
-          'collaboratives. Vos données locales sur cet appareil restent '
+          'Toutes tes données cloud seront définitivement supprimées '
+          '(catalogue, listes, prix). Tu quitteras aussi tes listes '
+          'collaboratives. Tes données locales sur cet appareil restent '
           'intactes. Cette action est irréversible.',
         ),
         actions: [
@@ -147,7 +147,7 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
       setState(() { _syncing = false; _message = 'Compte supprimé'; _messageOk = true; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _syncing = false; _message = messageErreurLisible(e, 'Erreur suppression'); _messageOk = false; });
+      setState(() { _syncing = false; _message = messageErreurLisible(e, 'Suppression impossible'); _messageOk = false; });
     }
   }
 
@@ -212,7 +212,7 @@ class _CompteScreenState extends ConsumerState<CompteScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Connectez-vous pour sauvegarder vos données\net y accéder sur tous vos appareils.',
+                        'Connecte-toi pour sauvegarder tes données\net y accéder sur tous tes appareils.',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: Theme.of(context).colorScheme.outline,

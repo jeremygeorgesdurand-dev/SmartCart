@@ -8,6 +8,7 @@ import '../utils/theme_utils.dart';
 import 'historique_prix_screen.dart';
 import 'scanner_ticket_screen.dart';
 import 'stats_screen.dart';
+import '../utils/messages.dart';
 
 // ================================================================
 // ÉCRAN BUDGET — prix estimés des articles + suivi des dépenses
@@ -34,10 +35,7 @@ class BudgetScreen extends ConsumerWidget {
                 MaterialPageRoute(builder: (_) => const ScannerTicketScreen()),
               );
               if (msg != null && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(msg),
-                  backgroundColor: couleurSucces(context),
-                ));
+                afficherMessage(context, msg, couleur: couleurSucces(context));
               }
             },
           ),
@@ -369,20 +367,14 @@ class _ArticlePrixTile extends ConsumerWidget {
       if (!context.mounted) return;
       Navigator.pop(context); // ferme le loader
       if (estime != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Prix estimé : ${estime.prix.toStringAsFixed(2)} € '
-              '(${estime.magasin})'),
-          action: SnackBarAction(
+        afficherMessage(context, 'Prix estimé : ${estime.prix.toStringAsFixed(2)} € '
+              '(${estime.magasin})', action: SnackBarAction(
             label: 'Utiliser',
             onPressed: () => _editerPrix(context, ref, prixSuggere: estime.prix),
-          ),
-          duration: const Duration(seconds: 6),
-        ));
+          ), duree: const Duration(seconds: 6));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Aucun prix trouvé en ligne pour ce produit '
-              '(base communautaire Open Prices)'),
-        ));
+        afficherMessage(context, 'Aucun prix trouvé en ligne pour ce produit '
+              '(base communautaire Open Prices)');
       }
       return;
     }
